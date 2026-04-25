@@ -1,11 +1,53 @@
 @import "tailwindcss";
 
+/* Shell layout: spacing + type scale (rem follows ui-prefs / root font-size). */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --radius-shell: 1rem;
+  --radius-shell-lg: 1.25rem;
+  --shadow-shell: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -4px rgb(0 0 0 / 0.07);
+}
+
 :root {
   color-scheme: light dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Page rhythm (used by AppScaffold + sections) */
+  --hd-page-pad-x: 1.5rem;
+  --hd-page-pad-y: 1.75rem;
+  --hd-stack-gap: 1.5rem;
+  --hd-content-max: 40rem;
+}
+
+@layer components {
+  /* Light-first frosted surface; dark: keeps similar depth */
+  .hd-glass {
+    @apply rounded-[var(--radius-shell-lg)] border border-white/60 bg-white/50 shadow-[var(--shadow-shell)] backdrop-blur-md;
+    @apply dark:border-zinc-700/50 dark:bg-zinc-900/50;
+  }
+  .hd-glass-subtle {
+    @apply rounded-2xl border border-zinc-200/70 bg-white/40 backdrop-blur-sm;
+    @apply dark:border-zinc-800/80 dark:bg-zinc-900/40;
+  }
+  /* Titles: one scale app-wide (adjust per page with text-3xl if needed) */
+  .hd-page-title {
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50;
+  }
+  .hd-lead {
+    @apply text-base sm:text-lg leading-relaxed text-zinc-600 dark:text-zinc-400;
+  }
+  .hd-section-title {
+    @apply text-sm font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400;
+  }
+  .hd-meta {
+    @apply text-xs leading-relaxed text-zinc-500 dark:text-zinc-500;
+  }
+  /* “Hermes 式” 提示条：小表情 + 短句，不强依赖调色 */
+  .hd-hint {
+    @apply inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400;
+  }
 }
 
 html, body, #root { height: 100%; margin: 0; }

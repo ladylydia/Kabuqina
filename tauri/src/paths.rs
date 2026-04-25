@@ -32,28 +32,50 @@ pub fn ensure_data_dir(app: &AppHandle) -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Find the bundled Python runtime. In dev: `python/dist/runtime`.
-/// In prod: alongside the .exe under `resources/runtime/`.
+/// Find the bundled Python runtime. In dev: `python/dist/runtime` at the repo root
+/// (see `../python/dist/runtime` in `tauri.conf.json` for release bundles).
+/// In prod: `resources/runtime` next to the installed app.
+///
+/// Set `HERMESDESK_RUNTIME_DIR` to an absolute path to force the bundle (e.g. after
+/// `build_bundle.ps1` when automatic discovery fails).
 pub fn resolve_runtime_dir(app: &AppHandle) -> Result<PathBuf> {
+    if let Ok(force) = std::env::var("HERMESDESK_RUNTIME_DIR") {
+        let p = PathBuf::from(force.trim());
+        if p.join("python").join("python.exe").exists() {
+            return Ok(p);
+        }
+        anyhow::bail!(
+            "HERMESDESK_RUNTIME_DIR is set but python.exe not found under {}",
+            p.display()
+        );
+    }
+
+    // `cargo run` / `cargo run --release` puts the binary at `repo/tauri/target/{debug,release}/`.
+    // Tauri also copies `../python/dist/runtime` into `target/.../resources/runtime`, but that
+    // copy is easy to get **stale** (missing new files like `tools/.../file_sync.py`) after
+    // `build_bundle` without a full tauri rebuild. Prefer the repo's canonical runtime first.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(repo_root) = exe
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+        {
+            let from_repo = repo_root.join("python").join("dist").join("runtime");
+            if from_repo.join("python").join("python.exe").exists() {
+                return Ok(from_repo);
+            }
+        }
+    }
+
     let res = app.path().resource_dir().context("resource dir")?;
     let candidate = res.join("runtime");
     if candidate.join("python").join("python.exe").exists() {
         return Ok(candidate);
     }
-    // dev fallback: ../../python/dist/runtime relative to the binary
-    let exe = std::env::current_exe()?;
-    let dev = exe
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .map(|p| p.join("python").join("dist").join("runtime"));
-    if let Some(d) = dev {
-        if d.join("python").join("python.exe").exists() {
-            return Ok(d);
-        }
-    }
     anyhow::bail!(
-        "Could not locate runtime/. Looked at {}", candidate.display()
+        "Could not locate runtime/. Looked at {}",
+        candidate.display()
     )
 }
 
@@ -125,9 +147,10 @@ pub fn cmd_get_power_user(app: AppHandle) -> Result<bool, String> {
     Ok(is_power_user(&app))
 }
 
-#[tauri::command]
-pub fn cmd_set_power_user(app: AppHandle, enabled: bool) -> Result<(), String> {
-    write_setting(&app, SETTING_POWER_USER, if enabled { "1" } else { "0" })
+/// Persist the flag; callers that need new `HERMESDESK_POWER_USER` in the child
+/// must restart embedded Python (see `lib::respawn_embedded_hermes_python`).
+pub fn set_power_user_enabled(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    write_setting(app, SETTING_POWER_USER, if enabled { "1" } else { "0" })
         .map_err(|e| e.to_string())
 }
 

@@ -1,13 +1,11 @@
 import { useNavigate } from "react-router-dom";
+import { useI18n } from "../../lib/i18n";
 import { updateDraft, useDraft, type Personality } from "../../lib/store";
 
-const VIBES: { id: Personality; title: string; body: string }[] = [
-  { id: "helpful",  title: "Helpful",  body: "Neutral, clear, gets things done. The default." },
-  { id: "friendly", title: "Friendly", body: "Warmer and more conversational. Says hi back." },
-  { id: "concise",  title: "Concise",  body: "Short answers. No fluff. Cuts to the chase." },
-];
+const VIBE_IDS: Personality[] = ["helpful", "friendly", "concise"];
 
 export function PickVibe() {
+  const { t } = useI18n();
   const nav = useNavigate();
   const draft = useDraft();
 
@@ -19,18 +17,23 @@ export function PickVibe() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pick a vibe</h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">How should HermesDesk talk to you? You can change this later.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("vibe.title")}</h1>
+        <p className="mt-2 text-zinc-600 dark:text-zinc-400">{t("vibe.lead")}</p>
       </div>
       <div className="space-y-3">
-        {VIBES.map((v) => (
-          <button key={v.id} onClick={() => pick(v.id)}
-            className={"w-full text-left rounded-2xl border p-5 transition hover:border-zinc-400 dark:hover:border-zinc-500 " +
-              (draft.personality === v.id
+        {VIBE_IDS.map((id) => (
+          <button
+            key={id}
+            onClick={() => pick(id)}
+            className={
+              "w-full text-left rounded-2xl border p-5 transition hover:border-zinc-400 dark:hover:border-zinc-500 " +
+              (draft.personality === id
                 ? "border-zinc-900 dark:border-zinc-200 ring-1 ring-zinc-900/10 dark:ring-zinc-100/10"
-                : "border-zinc-200 dark:border-zinc-800")}>
-            <div className="font-medium">{v.title}</div>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{v.body}</p>
+                : "border-zinc-200 dark:border-zinc-800")
+            }
+          >
+            <div className="font-medium">{t(`vibe.${id}.title`)}</div>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t(`vibe.${id}.body`)}</p>
           </button>
         ))}
       </div>

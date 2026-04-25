@@ -188,6 +188,20 @@ fn write_provider_cfg(app: &AppHandle, cfg: &ProviderConfig) -> Result<()> {
     Ok(())
 }
 
+/// Remove the saved provider row so we never treat a keyless `settings.json` as "configured".
+fn clear_provider_cfg(app: &AppHandle) -> Result<()> {
+    let f = settings_file(app)?;
+    let mut v: serde_json::Value = std::fs::read_to_string(&f)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Some(obj) = v.as_object_mut() {
+        obj.remove("provider");
+    }
+    std::fs::write(&f, serde_json::to_vec_pretty(&v)?)?;
+    Ok(())
+}
+
 fn entry_for(provider: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE, provider).map_err(|e| e.to_string())
 }
@@ -253,6 +267,7 @@ pub async fn cmd_clear_secret(app: AppHandle) -> Result<(), String> {
     if let Some(cfg) = read_provider_cfg(&app) {
         let _ = entry_for(&cfg.provider).and_then(|e| e.delete_credential().map_err(|e| e.to_string()));
     }
+    clear_provider_cfg(&app).map_err(|e| e.to_string())?;
     let _ = write_bool_setting(&app, VENDOR_LLM_DISABLED, true);
     Ok(())
 }
@@ -264,7 +279,7 @@ pub async fn cmd_validate_endpoint(
 ) -> Result<(), String> {
     log::info!("cmd_validate_endpoint called: url={}", url);
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
         .no_proxy()
         .build()
         .map_err(|e| format!("client build error: {}", e))?;

@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { findProvider } from "../../lib/providers";
+import { useI18n } from "../../lib/i18n";
 import { validateKey, validateCustomEndpoint, normalizeOpenAiBaseUrl } from "../../lib/validate";
-import { updateDraft, useDraft } from "../../lib/store";
+import { clearDraft, updateDraft, useDraft } from "../../lib/store";
 
 export function GetAccessPass() {
+  const { t } = useI18n();
   const nav = useNavigate();
   const draft = useDraft();
   const [key, setKey] = useState(draft.apiKey);
@@ -39,12 +41,12 @@ export function GetAccessPass() {
       if (isCustom) {
         const mid = modelId.trim();
         if (!mid) {
-          setError("Please enter the model name your vendor expects (for example gpt-4o-mini).");
+          setError(t("pass.errModel"));
           return;
         }
         const r = await validateCustomEndpoint(baseUrl, key);
         if (!r.ok) {
-          setError(r.message ?? "That didn't work.");
+          setError(r.message ?? t("pass.errGeneric"));
           return;
         }
         const normalized = normalizeOpenAiBaseUrl(baseUrl);
@@ -61,7 +63,7 @@ export function GetAccessPass() {
       } else {
         const r = await validateKey(provider.id, key);
         if (!r.ok) {
-          setError(r.message ?? "That didn't work.");
+          setError(r.message ?? t("pass.errGeneric"));
           return;
         }
         await invoke("cmd_save_secret", {
@@ -70,9 +72,15 @@ export function GetAccessPass() {
         });
         updateDraft({ apiKey: "" });
       }
-      nav("/onboarding/vibe");
+      try {
+        await invoke("cmd_set_personality", { name: draft.personality });
+      } catch {
+        /* best-effort */
+      }
+      clearDraft();
+      nav("/chat", { replace: true });
     } catch (e: unknown) {
-      setError(typeof e === "string" ? e : (e as Error)?.message ?? "Couldn't save the pass.");
+      setError(typeof e === "string" ? e : (e as Error)?.message ?? t("pass.errSave"));
     } finally {
       setBusy(false);
     }
@@ -82,52 +90,41 @@ export function GetAccessPass() {
     ? Boolean(key.trim() && baseUrl.trim() && modelId.trim())
     : Boolean(key.trim());
 
+  const fieldClass =
+    "w-full rounded-[var(--radius-shell)] border border-zinc-300/90 bg-white/90 px-4 py-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Get your access pass</h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          {isCustom ? (
-            <>
-              Paste the web address of your model API (OpenAI-style) and the access pass your vendor gave you.
-              We keep the pass in Windows&apos; built-in vault &mdash; never written to a file.
-            </>
-          ) : (
-            <>
-              {provider.label} gives you a long string of letters and numbers that lets HermesDesk
-              talk to its brain. We&apos;ll keep it locked in Windows&apos; built-in vault &mdash; never written to a file.
-            </>
-          )}
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <h1 className="hd-page-title">{t("pass.title")}</h1>
+        <p className="hd-lead max-w-prose">
+          {isCustom ? t("pass.customLead1") : t("pass.providerLead", { label: provider.label })}
         </p>
       </div>
 
       {!isCustom && (
-        <ol className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300 list-decimal pl-5">
-          <li>Click the button below. It opens {provider.label} in your browser.</li>
-          <li>Sign up or sign in. Click &quot;Create key&quot; (or similar).</li>
-          <li>Copy the long string. Come back here and paste it.</li>
+        <ol className="hd-glass-subtle list-decimal space-y-2.5 pl-6 pr-4 py-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+          <li>{t("pass.steps.s1", { label: provider.label })}</li>
+          <li>{t("pass.steps.s2")}</li>
+          <li>{t("pass.steps.s3")}</li>
         </ol>
       )}
 
-      {isCustom && (
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          The address usually looks like <span className="font-mono text-xs">https://something.example/v1</span>.
-          If you are not sure, copy it from your vendor&apos;s dashboard.
-        </p>
-      )}
+      {isCustom && <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{t("pass.customHint")}</p>}
 
       {!isCustom && (
         <button
+          type="button"
           onClick={openSignup}
-          className="w-full rounded-2xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
+          className="w-full rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-3 transition hover:bg-zinc-100/80 dark:border-zinc-700 dark:hover:bg-zinc-900/80"
         >
-          Open {provider.label} in browser
+          {t("pass.openVendor", { label: provider.label })}
         </button>
       )}
 
       {isCustom && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">API address (base URL)</label>
+          <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelApiUrl")}</label>
           <input
             type="url"
             autoComplete="off"
@@ -137,15 +134,15 @@ export function GetAccessPass() {
               setBaseUrl(e.target.value);
               updateDraft({ customBaseUrl: e.target.value });
             }}
-            placeholder="https://your-vendor.example/v1"
-            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 font-mono text-sm"
+            placeholder={t("pass.phApiUrl")}
+            className={fieldClass}
           />
         </div>
       )}
 
       {isCustom && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">Model name</label>
+          <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelModel")}</label>
           <input
             type="text"
             autoComplete="off"
@@ -155,15 +152,15 @@ export function GetAccessPass() {
               setModelId(e.target.value);
               updateDraft({ customModel: e.target.value });
             }}
-            placeholder="e.g. gpt-4o-mini or your vendor's model id"
-            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 font-mono text-sm"
+            placeholder={t("pass.phModel")}
+            className={fieldClass}
           />
         </div>
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">
-          {isCustom ? "Paste your access pass" : "Paste the long string here"}
+        <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          {isCustom ? t("pass.labelKeyCustom") : t("pass.labelKey")}
         </label>
         <input
           type="password"
@@ -172,19 +169,20 @@ export function GetAccessPass() {
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder={
-            provider.keyPrefixHint ? `${provider.keyPrefixHint}\u2026` : "paste your access pass"
+            provider.keyPrefixHint ? `${provider.keyPrefixHint}\u2026` : t("pass.phKey")
           }
-          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 font-mono text-sm"
+          className={fieldClass}
         />
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
 
       <button
+        type="button"
         onClick={onSave}
         disabled={busy || !canSubmit}
-        className="w-full rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-4 text-lg font-medium disabled:opacity-50 hover:opacity-90 transition"
+        className="w-full rounded-[var(--radius-shell-lg)] bg-zinc-900 px-6 py-4 text-lg font-medium text-white transition hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
       >
-        {busy ? "Checking\u2026" : "Save and continue"}
+        {busy ? t("pass.checkWait") : t("pass.cta")}
       </button>
     </div>
   );

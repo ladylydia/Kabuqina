@@ -1,8 +1,12 @@
 # Release QA checklist
 
-Run this whole checklist on **both** OS images before tagging a release.
-Ideally use clean VMs (Hyper-V or VirtualBox) so leftover state from
-previous runs doesn't mask install bugs.
+Run this whole checklist on **both** OS images before tagging a release. Ideally use clean VMs (Hyper-V or VirtualBox) so leftover state from previous runs does not mask install bugs.
+
+## Before you test (repo & build)
+
+- [ ] **Hermes submodule** is present and at the commit expected for this build. After clone, run `git submodule update --init --recursive`. Release notes and `CHANGES_*.md` may call out a specific **hermes** revision; a mismatch can break the Python bundle or the embedded web UI.
+- [ ] If you build from source, use the same **tag or branch** the release is cut from, not a random main checkout.
+- [ ] **Windows Defender / real-time scan** can hold file locks during bundling or first run (symptoms: `os error 32`, failed copy, or `python.exe` / build scripts failing to overwrite files). For **local dev** or **repeated bundle builds**, add exclusions for the repo path and, if needed, `%LOCALAPPDATA%\HermesDesk` and your `python\dist` build output—then retry from a clean tree if a run was interrupted mid-write.
 
 ## Target images
 
@@ -11,6 +15,12 @@ previous runs doesn't mask install bugs.
 | Windows 10 22H2 x64      | Lowest supported. Has WebView2 evergreen.  |
 | Windows 11 23H2 x64      | Default for new PCs.                       |
 | Windows 10 LTSC 2021     | (Optional) Stripped image; catches missing OS bits. |
+
+## What you are testing (current product)
+
+- **Shell (Tauri + `web/`)**: Splash, onboarding, Settings, system tray, locale toggle. The shell does **not** auto-open the Hermes web app on every return visit—you choose when to open it.
+- **Embedded Hermes web** (`http://127.0.0.1:<port>/`): Dashboard-style UI (status, config, sessions, etc.) served by the bundled Hermes Python stack. It is **not** a full standalone “chat app” in one screen; **桌面试聊** and deeper in-shell chat are **roadmap**, not a missing entry.
+- **Language**: When you open the dashboard from the shell, the app passes `hermesdesk_lang=zh|en` so the Hermes web first paint can match the shell language.
 
 ## A. Install
 
@@ -27,34 +37,32 @@ previous runs doesn't mask install bugs.
 
 ## B. First launch (cold)
 
-- [ ] App opens within 3 seconds (splash visible)
-- [ ] Splash transitions to onboarding (no chat UI yet, no key)
+- [ ] App opens within a few seconds (Splash visible)
+- [ ] If no API key yet: routes to **onboarding** (no Hermes web yet)
+- [ ] If a key already exists: Splash shows **returning** copy and a primary button to **open the Hermes dashboard** in the same window (does **not** auto-navigate by itself)
 - [ ] No console window flashes or stays open
 - [ ] Tray icon appears
-- [ ] `%LOCALAPPDATA%\HermesDesk\logs\hermesdesk.log` exists and contains
-      `python ready on port NNNN`
+- [ ] `%LOCALAPPDATA%\HermesDesk\logs\hermesdesk.log` exists and contains a line like `python ready on port` with a port number (Hermes is up)
 
 ## C. Onboarding wizard (zero-jargon happy path)
 
 - [ ] Welcome screen wording reads naturally to a non-tech tester
 - [ ] "Pick a brain" - tap "Free starter" -> "Get your access pass"
-- [ ] "Open OpenRouter in browser" - opens default browser, NOT in-app
+- [ ] "Open OpenRouter in browser" - opens default browser, **not** in-app
 - [ ] Paste a known-good key, hit "Save and continue":
-  - [ ] Validation succeeds within 3s
+  - [ ] Validation succeeds within a few seconds
   - [ ] No plaintext key in `%LOCALAPPDATA%\HermesDesk\settings.json`
   - [ ] `cmdkey /list:HermesDesk*` lists the credential
-- [ ] Pick "Helpful" vibe -> "Done" page renders
+- [ ] Pick a vibe -> **Done** page renders
 - [ ] "Open workspace folder" opens `Documents\HermesWork` in Explorer
-- [ ] "Start chatting" replaces window with chat UI
+- [ ] The Done primary CTA invokes **open dashboard** (navigates the main webview to `http://127.0.0.1:<port>/` with optional `hermesdesk_lang=...`), not a separate "chat-only" shell screen
 
-## D. Chat sanity
+## D. Hermes web (embedded dashboard) sanity
 
-- [ ] Send "hi" - replies within 5s on a typical home connection
-- [ ] Drop a `.txt` file into the workspace folder, ask the agent to
-      summarize "the file I just dropped" - succeeds
-- [ ] Ask the agent to delete a file outside the workspace
-      (e.g. `C:\Windows\notepad.exe`) - the jail rejects with a friendly
-      error, the file is untouched
+- [ ] After opening from Splash or Done, the main window shows the **Hermes** web UI (not a blank page). If you see "not ready", wait a few seconds and use **open dashboard** again.
+- [ ] **Smoke**: From the Hermes UI, run a minimal interaction your build supports (e.g. status page loads, or a short model-backed request if **桌面试聊** is enabled in that build). Expectations depend on the Hermes revision bundled for the release.
+- [ ] (When applicable) Drop a `.txt` file into the workspace folder and confirm Hermes/your test flow can see workspace-scoped tools—aligned with that release’s Hermes capabilities.
+- [ ] (When applicable) Ask for an action that should be **jailed** to the workspace; out-of-workspace paths should be denied with a clear error.
 
 ## E. Safety / Power user
 
@@ -62,21 +70,19 @@ previous runs doesn't mask install bugs.
 - [ ] Enable, then ask the agent to run `dir`:
   - [ ] Native Windows dialog appears with the command and CWD
   - [ ] "Deny" leaves the workspace untouched
-  - [ ] "Allow this once" runs it; output reaches chat
+  - [ ] "Allow this once" runs it; output reaches the chat or tool surface your build uses
   - [ ] Re-asking later still re-prompts (no implicit "always allow")
-- [ ] Disable Power user, restart - Power-user-only tools no longer
-      appear in the agent's tool list
+- [ ] Disable Power user, restart - Power-user-only tools no longer appear in the agent's tool list
 
 ## F. Persistence + restart
 
 - [ ] Quit via tray "Quit" - no orphan `python.exe` in Task Manager
-- [ ] Reopen - skips onboarding, lands directly in chat
+- [ ] Reopen - skips onboarding; Splash **returning** page appears (user taps **open dashboard** to load Hermes again)
 - [ ] Reboot the VM, open the app - same behavior, key still works
 
 ## G. Network allowlist
 
-- [ ] In Power-user mode, ask the agent to fetch `https://example.com`
-      - blocked with a clear error message
+- [ ] In Power-user mode, ask the agent to fetch `https://example.com` - blocked with a clear error message
 - [ ] Settings -> add `example.com` to extra hosts -> retry - succeeds
 
 ## H. Updates
@@ -92,23 +98,20 @@ previous runs doesn't mask install bugs.
 
 - [ ] Settings -> Apps -> HermesDesk -> Uninstall
 - [ ] No UAC prompt
-- [ ] Removes `%LOCALAPPDATA%\HermesDesk\` (or leaves only the workspace
-      folder under `Documents\` - confirm we never delete user docs)
+- [ ] Removes `%LOCALAPPDATA%\HermesDesk\` (or leaves only the workspace folder under `Documents\` - confirm we never delete user docs)
 - [ ] Tray icon disappears
-- [ ] Credential Manager entry is removed (or, if not, `Sign out` did it
-      before uninstall and we documented the split)
+- [ ] Credential Manager entry is removed (or, if not, `Sign out` did it before uninstall and we documented the split)
 
 ## J. Crash recovery
 
-- [ ] Kill `python.exe` from Task Manager - Tauri shows "Helper crashed,
-      restart?" within 5s
-- [ ] Click restart - chat resumes
+- [ ] Kill `python.exe` from Task Manager - Tauri shows a recovery path within a few seconds (e.g. helper restart prompt), consistent with current implementation
+- [ ] Confirm recovery restores normal operation after accepting the prompt
 
 ## K. Accessibility smoke
 
 - [ ] Tab order through onboarding is sensible
 - [ ] Screen reader (NVDA) reads each step's heading and primary action
-- [ ] System "high contrast" theme doesn't break the wizard
+- [ ] System "high contrast" theme does not break the wizard
 
 ---
 

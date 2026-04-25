@@ -1,29 +1,38 @@
 import { useNavigate } from "react-router-dom";
+import { useI18n } from "../../lib/i18n";
 
 export function Welcome() {
+  const { t } = useI18n();
   const nav = useNavigate();
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Hi there.</h1>
-        <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          HermesDesk is a friendly AI helper that lives on your PC.
-          Let's get you set up — it takes about two minutes.
-        </p>
+    <div className="space-y-10">
+      <div className="space-y-4">
+        <h1 className="hd-page-title">{t("welcome.title")}</h1>
+        <p className="hd-lead max-w-prose">{t("welcome.lead")}</p>
       </div>
 
-      <ul className="space-y-3 text-zinc-700 dark:text-zinc-300">
-        <li className="flex gap-3"><Bullet /> No accounts to make with us.</li>
-        <li className="flex gap-3"><Bullet /> No subscription, no monthly fee from us.</li>
-        <li className="flex gap-3"><Bullet /> Stays on your PC. Files never leave a folder you choose.</li>
+      <ul className="hd-glass-subtle space-y-3.5 p-5 text-zinc-700 dark:text-zinc-300">
+        <li className="flex gap-3">
+          <Bullet />
+          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li1")}</span>
+        </li>
+        <li className="flex gap-3">
+          <Bullet />
+          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li2")}</span>
+        </li>
+        <li className="flex gap-3">
+          <Bullet />
+          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li3")}</span>
+        </li>
       </ul>
 
-      <div className="pt-4">
+      <div className="pt-1">
         <button
+          type="button"
           onClick={() => nav("/onboarding/brain")}
-          className="w-full rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-4 text-lg font-medium hover:opacity-90 transition"
+          className="w-full rounded-[var(--radius-shell-lg)] bg-zinc-900 px-6 py-4 text-lg font-medium text-white transition hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          Let's get started
+          {t("welcome.cta")}
         </button>
       </div>
     </div>

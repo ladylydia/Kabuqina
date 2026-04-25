@@ -15,13 +15,15 @@
 #   .\python\build_bundle.ps1                # build
 #   .\python\build_bundle.ps1 -Verify        # build + smoke-test
 #   .\python\build_bundle.ps1 -Clean         # wipe and rebuild
+#   .\python\build_bundle.ps1 -SkipWebBuild  # faster: reuse existing hermes_cli/web_dist (risk: stale UI)
 
 [CmdletBinding()]
 param(
     [string]$PythonVersion = "3.11.15",
     [string]$PbsRelease    = "20260414",   # python-build-standalone tag (latest as of 2026-04-19)
     [switch]$Clean,
-    [switch]$Verify
+    [switch]$Verify,
+    [switch]$SkipWebBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,6 +92,7 @@ New-Item -ItemType Directory -Force -Path $bundledHermes | Out-Null
 $keep = @(
     "agent",
     "tools",
+    "gateway",                          # session_context, approval.py — required for terminal + desk
     "hermes_cli",
     "skills",
     "plugins",
@@ -124,7 +127,7 @@ $drop = @(
     "hermes_cli\gateway.py",
     "hermes_cli\curses_ui.py",     # POSIX termios-only, not used by web_server
     "hermes_cli\uninstall.py",     # POSIX geteuid; we have our own MSI uninstaller
-    "tools\environments\file_sync.py",
+    # Keep tools/environments/file_sync.py — ssh/modal/daytona import it; dropping it breaks agent init.
     "tools\rl_training_tool.py",
     "tools\send_message_tool.py",
     "tools\feishu_doc_tool.py",
@@ -144,9 +147,15 @@ foreach ($d in $drop) {
 # `<package>/web_dist/`. Without this, every HTTP path returns
 # {"error":"Frontend not built. Run: cd web && npm run build"}.
 # Hermes dashboard SPA lives under the submodule: hermes/web → hermes/hermes_cli/web_dist (see vite.config.ts).
+#
+# IMPORTANT: always run `npm run build` by default. A stale hermes_cli/web_dist
+# (e.g. from an older run) would previously skip the build and bundle an
+# outdated UI — users saw old behaviour (e.g. desk chat stuck on a fallback).
 $hermesWeb     = Join-Path $HermesDir "web" | Resolve-Path | Select-Object -ExpandProperty Path
 $hermesWebDist = Join-Path $HermesDir "hermes_cli\web_dist"
-if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
+if ($SkipWebBuild) {
+    Write-Host "  (skip) npm run build — using existing hermes_cli\web_dist" -ForegroundColor DarkYellow
+} else {
     if (-not (Test-Path (Join-Path $hermesWeb "node_modules"))) {
         Write-Host "  npm install (hermes/web)..." -ForegroundColor DarkGray
         Push-Location $hermesWeb
@@ -157,7 +166,7 @@ if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
     try { npm run build 2>&1 | Out-Null } finally { Pop-Location }
 }
 if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
-    throw "Hermes SPA build failed: $hermesWebDist\index.html not found"
+    throw "Hermes SPA build failed: $hermesWebDist\index.html not found (run without -SkipWebBuild to build)"
 }
 Copy-Item -Recurse -Force $hermesWebDist (Join-Path $bundledHermes "hermes_cli\web_dist")
 
@@ -169,6 +178,9 @@ New-Item -ItemType Directory -Force -Path $siteDir | Out-Null
 & $Py -m pip install `
     --target $siteDir `
     --no-warn-script-location `
+    --platform win_amd64 `
+    --python-version 3.11 `
+    --only-binary=:all: `
     -r (Join-Path $PSScriptRoot "requirements-desktop.txt")
 
 # ------------------------------------------------------------------ 6. Copy overlays + entrypoint

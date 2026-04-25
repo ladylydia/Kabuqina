@@ -25,16 +25,41 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 
+/// "Back to shell chat" redirect must use the same `http` vs `https` scheme as
+/// the main webview's `tauri.localhost` origin.  The default on Windows is
+/// `use_https_scheme: false` → `http://tauri.localhost`.  Hard-coding `https://`
+/// causes `NET::ERR_CERT_AUTHORITY_INVALID` when following the redirect from
+/// the embedded Hermes dashboard.
+fn shell_chat_redirect_target(app: &AppHandle) -> String {
+    if tauri::is_dev() {
+        return "http://localhost:5173/chat".to_string();
+    }
+    let use_https = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")
+        .map(|w| w.use_https_scheme)
+        .unwrap_or(false);
+    let scheme = if use_https { "https" } else { "http" };
+    format!("{scheme}://tauri.localhost/chat")
+}
+
 pub struct Bridge {
     pub addr: SocketAddr,
     pub secret_url: String,
     pub approval_url: String,
+    /// Shared with Python `HERMESDESK_BRIDGE_SECRET` for `X-HermesDesk-Auth` on Hermes `/api/*`.
+    pub desk_auth_token: String,
 }
 
 #[derive(Clone)]
 struct State {
     secret_token: String,
     approval_token: String,
+    /// Same as ``HERMESDESK_BRIDGE_SECRET`` / ``X-HermesDesk-Auth`` — used to auth ``/shell-chat/{token}``.
+    desk_auth_token: String,
     app: AppHandle,
 }
 
@@ -44,9 +69,11 @@ pub async fn spawn(app: AppHandle) -> Result<Bridge> {
 
     let secret_token = random_token();
     let approval_token = random_token();
+    let desk_auth_token = random_token();
     let state = Arc::new(State {
         secret_token: secret_token.clone(),
         approval_token: approval_token.clone(),
+        desk_auth_token: desk_auth_token.clone(),
         app,
     });
 
@@ -55,7 +82,12 @@ pub async fn spawn(app: AppHandle) -> Result<Bridge> {
 
     tauri::async_runtime::spawn(serve(listener, state));
 
-    Ok(Bridge { addr, secret_url, approval_url })
+    Ok(Bridge {
+        addr,
+        secret_url,
+        approval_url,
+        desk_auth_token,
+    })
 }
 
 fn random_token() -> String {
@@ -134,6 +166,16 @@ async fn handle_conn(mut stream: TcpStream, st: Arc<State>) -> std::io::Result<(
 
     log::info!("bridge req: {method} {path}");
 
+    // GET /shell-chat/<token> — redirect Tauri main webview back to the shell /chat (Hermes banner link).
+    if method == "GET" && path.starts_with("/shell-chat/") {
+        let tok = path.trim_start_matches("/shell-chat/").trim_start_matches('/');
+        if !tok.is_empty() && tok == st.desk_auth_token {
+            let target = shell_chat_redirect_target(&st.app);
+            return write_redirect(&mut stream, 302, &target).await;
+        }
+        return write_status(&mut stream, 403, "Forbidden").await;
+    }
+
     // GET /secret/<token>
     if method == "GET" && path == format!("/secret/{}", st.secret_token) {
         let body = crate::secrets::read_current_secret(&st.app).unwrap_or_default();
@@ -175,6 +217,17 @@ fn find_double_crlf(buf: &[u8]) -> Option<usize> {
 
 async fn write_status(stream: &mut TcpStream, code: u16, reason: &str) -> std::io::Result<()> {
     write_response(stream, code, reason, "text/plain", Vec::new()).await
+}
+
+async fn write_redirect(stream: &mut TcpStream, code: u16, location: &str) -> std::io::Result<()> {
+    let head = format!(
+        "HTTP/1.1 {code} Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(head.as_bytes()).await?;
+    stream.flush().await?;
+    let _ = stream.shutdown().await;
+    log::info!("bridge redirect {code} -> {location}");
+    Ok(())
 }
 
 async fn write_response(

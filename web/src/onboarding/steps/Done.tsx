@@ -1,8 +1,11 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getLocale } from "../../lib/i18n-core";
+import { useI18n } from "../../lib/i18n";
 import { clearDraft, useDraft } from "../../lib/store";
 
 export function Done() {
+  const { t } = useI18n();
   const draft = useDraft();
 
   useEffect(() => {
@@ -10,17 +13,31 @@ export function Done() {
   }, [draft.personality]);
 
   async function openWorkspace() {
-    try { await invoke("cmd_open_workspace"); }
-    catch (e) { console.error(e); }
+    try {
+      await invoke("cmd_open_workspace");
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   async function openChat() {
     clearDraft();
+    const loc = getLocale();
+    const langQ = loc === "en" || loc === "zh" ? `?hermesdesk_lang=${loc}` : "";
     try {
-      await invoke("cmd_open_hermes_dashboard");
+      await invoke("cmd_open_hermes_dashboard", { shellLocale: loc });
     } catch (e) {
       console.error(e);
-      window.location.replace("/");
+      try {
+        const port = await invoke<number | null>("cmd_get_hermes_port");
+        if (port) {
+          window.location.replace(`http://127.0.0.1:${port}${langQ}`);
+        } else {
+          window.location.replace("/");
+        }
+      } catch {
+        window.location.replace("/");
+      }
     }
   }
 
@@ -28,27 +45,26 @@ export function Done() {
     <div className="space-y-8">
       <div className="space-y-3">
         <div className="text-4xl">{"\u{1F44B}"}</div>
-        <h1 className="text-3xl font-semibold tracking-tight">You're set.</h1>
-        <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          HermesDesk is ready. Try asking it to write something, plan your week,
-          or summarize a file you drop into your workspace folder.
-        </p>
+        <h1 className="text-3xl font-semibold tracking-tight">{t("done.title")}</h1>
+        <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">{t("done.lead")}</p>
       </div>
 
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-2">
-        <div className="text-sm font-medium">Your workspace</div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          HermesDesk can only read and write files inside this folder. Drop things in here for it to work on.
-        </p>
-        <button onClick={openWorkspace}
-          className="text-sm underline underline-offset-4 hover:text-zinc-900 dark:hover:text-zinc-100">
-          Open workspace folder
+        <div className="text-sm font-medium">{t("done.workspaceTitle")}</div>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t("done.workspaceBody")}</p>
+        <button
+          onClick={openWorkspace}
+          className="text-sm underline underline-offset-4 hover:text-zinc-900 dark:hover:text-zinc-100"
+        >
+          {t("done.openFolder")}
         </button>
       </div>
 
-      <button onClick={() => void openChat()}
-        className="w-full rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-4 text-lg font-medium hover:opacity-90 transition">
-        Start chatting
+      <button
+        onClick={() => void openChat()}
+        className="w-full rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-4 text-lg font-medium hover:opacity-90 transition"
+      >
+        {t("done.cta")}
       </button>
     </div>
   );

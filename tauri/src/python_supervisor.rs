@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 
@@ -14,6 +14,10 @@ pub struct SpawnConfig {
     pub workspace: PathBuf,
     pub secret_url: String,
     pub approval_url: String,
+    /// Must match Tauri `X-HermesDesk-Auth` header for shell → Hermes HTTP.
+    pub desk_auth_token: String,
+    /// ``GET /shell-chat/{desk_auth_token}`` on the loopback bridge — “back to shell chat” in Hermes UI.
+    pub shell_chat_back_url: String,
     pub provider: String,
     pub llm_host: String,
     pub api_base_url: Option<String>,
@@ -60,6 +64,8 @@ impl Supervisor {
             )
             .env("HERMESDESK_SECRET_URL", &cfg.secret_url)
             .env("HERMESDESK_APPROVAL_URL", &cfg.approval_url)
+            .env("HERMESDESK_BRIDGE_SECRET", &cfg.desk_auth_token)
+            .env("HERMESDESK_SHELL_CHAT_URL", &cfg.shell_chat_back_url)
             .env(
                 "HERMESDESK_POWER_USER",
                 if cfg.power_user { "1" } else { "0" },

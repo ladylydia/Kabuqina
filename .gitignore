@@ -12,6 +12,7 @@ node_modules/
 /web/dist/
 /web/.vite/
 /web/build/
+/web/tsconfig.tsbuildinfo
 *.log
 
 # Python bundle artifacts (built, never committed)
@@ -43,3 +44,6 @@ Thumbs.db
 # Build report files
 audit-output.json
 windows-port-report.txt
+
+# Windows reserved name accident
+tauri/nul

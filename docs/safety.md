@@ -91,6 +91,10 @@ this document.
 - Side-channel data exfiltration through the LLM (the LLM provider sees
   whatever Hermes sends them). Use a self-hosted endpoint if this matters.
 
+## See also
+
+- [HermesDesk capability matrix](hermesdesk-capability-matrix.md) — toolsets, workspace jail, network allowlist, approval bridge, and L1 quick actions, aligned with the current overlays and Tauri env.
+
 ## Reporting security issues
 
 See [SECURITY.md](../SECURITY.md) (TBD).

@@ -43,15 +43,19 @@ def _noop(*_args: Any, **_kwargs: Any) -> None:
     return None
 
 
-def _empty_dict(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
-    return {}
-
-
 _STUBBED: Dict[str, Dict[str, Any]] = {
-    # web_server.py imports these at module load; they query a running
-    # messaging-gateway process. HermesDesk never runs that gateway, so
-    # both return "no gateway present".
-    "gateway": {},
+    # Do NOT stub the parent ``gateway`` package: ``tools/approval`` and
+    # ``gateway.session_context`` must load the real modules (ContextVar session
+    # keys for terminal approval). A full-package stub breaks
+    # ``from gateway.session_context import get_session_env`` and can surface as
+    # ``'function' object is not iterable`` when the stub's __getattr__ returns
+    # no-op callables.
+    #
+    # Do NOT stub ``gateway.config`` either: ``gateway/__init__.py`` imports
+    # real symbols from ``.config``; a pre-registered stub would make that import
+    # load the wrong module.
+    #
+    # web_server still needs no-op PIDs / status; keep only these leaf stubs:
     "gateway.status": {
         "get_running_pid": _noop,
         "read_runtime_status": _noop,
@@ -61,9 +65,6 @@ _STUBBED: Dict[str, Dict[str, Any]] = {
     },
     "gateway.run": {
         "main": _noop,
-    },
-    "gateway.config": {
-        "load_config": _empty_dict,
     },
     "gateway.platforms": {},
 }
@@ -98,7 +99,26 @@ class _StubModule(types.ModuleType):
         return _noop
 
 
+def _evict_legacy_full_gateway_stub() -> None:
+    """Remove the old empty ``gateway`` stub (pre-2025-04) from ``sys.modules``.
+
+    That stub had no ``__path__`` and broke ``import gateway.session_context``,
+    which ``tools/approval`` needs for terminal command checks
+    (``'function' object is not iterable`` from bogus submodule attrs).
+    """
+    m = sys.modules.get("gateway")
+    if m is None:
+        return
+    if not getattr(m, "__hermesdesk_stubbed__", False):
+        return
+    if getattr(m, "__path__", None):
+        return
+    del sys.modules["gateway"]
+    sys.modules.pop("gateway.session_context", None)
+
+
 def install() -> None:
+    _evict_legacy_full_gateway_stub()
     for name, attrs in _STUBBED.items():
         if name not in sys.modules:
             sys.modules[name] = _StubModule(name, attrs)

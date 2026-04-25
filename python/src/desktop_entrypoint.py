@@ -2,7 +2,7 @@
 
 Spawned by the Tauri shell. Responsibilities:
 
-  1. Configure logging to %LOCALAPPDATA%\\HermesDesk\\logs.
+  1. Configure logging under ``HERMESDESK_DATA_DIR`` (Tauri: e.g. ``%LOCALAPPDATA%\\com.hermesdesk.app``).
   2. Install runtime overlays (must happen before importing Hermes).
   3. Pick a free localhost port, write it to a handshake file the
      Tauri shell is polling.
@@ -22,6 +22,7 @@ Tauri sets these env vars before spawn:
     HERMESDESK_INFERENCE_PROVIDER  optional Hermes routing hint (e.g. "custom")
     HERMESDESK_SECRET_URL    one-shot loopback URL to fetch the API key
     HERMESDESK_APPROVAL_URL  loopback URL the approval bridge POSTs to
+    HERMESDESK_BRIDGE_SECRET shared with Tauri X-HermesDesk-Auth (shell /api)
     HERMESDESK_POWER_USER    "1" enables shell/code/browser/mcp tools
 """
 
@@ -136,20 +137,58 @@ def main() -> int:
         from overlays import apply_all  # type: ignore[no-redef]
     apply_all()
 
-    # 2. Pick port and tell Tauri.
-    port = _free_port()
-    _write_handshake(port)
-    log.info("bound port %d, handshake written", port)
+    # 1b. Eager-load real ``gateway.session_context`` so ``tools/approval`` + terminal
+    #     use ContextVar state (not a stale stub left in sys.modules).
+    try:
+        import importlib
 
-    # 3. Boot Hermes' web server.
-    #
-    # Upstream entrypoint as of v0.10.0 lives in hermes_cli.web_server:run().
-    # We call it programmatically with the port we picked.
+        importlib.import_module("gateway.session_context")
+        log.info("gateway.session_context import ok")
+    except Exception as e:
+        log.warning("gateway.session_context import failed: %s", e)
+
+    # 2. Import web_server before the port handshake. Import creates session state
+    #    (e.g. writes `hermes_web_session_token.txt` to HERMESDESK_DATA_DIR) that
+    #    the Tauri shell reads once `port.txt` is visible — if we wrote port first,
+    #    the shell could race and miss that file.
     try:
         from hermes_cli import web_server  # type: ignore
     except Exception:
         log.exception("failed to import hermes_cli.web_server; aborting")
         return 3
+
+    # Main agent must know about HermesDesk power-user mode (terminal/browser/code gated off by default).
+    try:
+        try:
+            from overlays.desk_system_prompt import install as _desk_system_prompt_install
+        except ImportError:
+            # Dev layout: `overlays/` lives under `python/`, not `python/src/`.
+            _root = str(Path(__file__).resolve().parent.parent)
+            if _root not in sys.path:
+                sys.path.insert(0, _root)
+            from overlays.desk_system_prompt import install as _desk_system_prompt_install
+        _desk_system_prompt_install()
+    except Exception as e:
+        log.warning("desk_system_prompt install: %s", e)
+
+    # Mirror SPA session token for the Tauri shell (reads same path as ``paths::ensure_data_dir``).
+    # web_server also writes this on import; we repeat here so an older bundled hermes without
+    # that block still works.
+    _dd = (os.environ.get("HERMESDESK_DATA_DIR") or "").strip()
+    if _dd:
+        try:
+            tok = getattr(web_server, "_SESSION_TOKEN", None)
+            if tok:
+                p = Path(_dd) / "hermes_web_session_token.txt"
+                p.write_text(str(tok), encoding="utf-8")
+                log.info("wrote %s (len=%d)", p, len(str(tok)))
+        except OSError as e:
+            log.warning("hermes_web_session_token.txt: %s", e)
+
+    # 3. Pick port and tell Tauri.
+    port = _free_port()
+    _write_handshake(port)
+    log.info("bound port %d, handshake written", port)
 
     # Upstream API (hermes >= 0.10): hermes_cli.web_server.start_server(host, port, ...)
     runner = (
@@ -166,9 +205,10 @@ def main() -> int:
 
     try:
         # Try a few common signatures so we tolerate small upstream churn.
+        # Prefer no auto-open browser: HermesDesk shell is the main UI; OS browser is confusing noise.
         for attempt in (
-            lambda: runner(host="127.0.0.1", port=port),
-            lambda: runner("127.0.0.1", port),
+            lambda: runner(host="127.0.0.1", port=port, open_browser=False),
+            lambda: runner("127.0.0.1", port, False),
             lambda: runner(port=port),
         ):
             try:

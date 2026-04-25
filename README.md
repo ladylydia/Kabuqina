@@ -26,7 +26,7 @@ Powered by the open-source [**Hermes Agent**](https://github.com/NousResearch/he
 | **Where files live** | A **single workspace folder** (safe-by-default mental model) |
 | **What’s inside** | **Tauri 2** shell + **embedded Python** running a **pruned Hermes** + Hermes’ own **React** UI in **WebView2** |
 
-> **Status: early alpha** — fine for developers **dogfooding from source**. The `.msi` path exists but expect rough edges. Full architecture: [**docs/architecture.md**](docs/architecture.md).
+> **Status: early alpha** — fine for developers **dogfooding from source**. The `.msi` path exists but expect rough edges. Full architecture: [**docs/architecture.md**](docs/architecture.md). **Product roadmap** (including chat UI + session/gateway as a separate track): [**docs/ROADMAP.md**](docs/ROADMAP.md).
 
 ### What this is
 
@@ -129,7 +129,7 @@ Hermes Agent is **MIT** as well; credit to [**Nous Research**](https://nousresea
 | **文件边界** | 默认围绕 **一个工作区文件夹** 做事，降低误操作面 |
 | **技术形态** | **Tauri 2** 壳 + **内嵌 Python** 跑裁剪后的 **Hermes**，界面用 **WebView2** 加载 Hermes 自带的 **React** 仪表盘 |
 
-> **当前阶段：early alpha（早期内测）** — 适合 **从源码自己编译体验**；安装包链路已有，但边角可能粗糙。架构说明见 [**docs/architecture.md**](docs/architecture.md)。
+> **当前阶段：early alpha（早期内测）** — 适合 **从源码自己编译体验**；安装包链路已有，但边角可能粗糙。架构说明见 [**docs/architecture.md**](docs/architecture.md)；**路线图**（含「聊天界面 + 后端会话/网关」独立排期）见 [**docs/ROADMAP.md**](docs/ROADMAP.md)。
 
 ### 能做什么 · 不做什么
 
