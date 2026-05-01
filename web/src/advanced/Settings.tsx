@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+type PlatformState = { state?: string; error_message?: string | null };
 type GatewayStatusResponse = {
   running: boolean;
   eligible: boolean;
   embeddedGatewayStartupSurvival?: boolean;
   diskGatewayState?: string | null;
   diskExitReason?: string | null;
+  platforms?: Record<string, PlatformState> | null;
 };
+
+function platformLabel(key: string): string {
+  const map: Record<string, string> = {
+    telegram: "Telegram",
+    feishu: "飞书",
+    qqbot: "QQ",
+    weixin: "微信",
+  };
+  return map[key] ?? key;
+}
 
 type ProxyStatusResponse = {
   system: { url: string | null; enabled: boolean };
@@ -66,6 +78,7 @@ export function Settings() {
   const [gatewayEmbedSurvival, setGatewayEmbedSurvival] = useState(true);
   const [gatewayStartError, setGatewayStartError] = useState<string | null>(null);
   const [gatewayStarting, setGatewayStarting] = useState(false);
+  const [gatewayPlatforms, setGatewayPlatforms] = useState<Record<string, PlatformState> | null>(null);
   const gatewayStartInFlight = useRef(false);
 
   // Proxy settings
@@ -82,6 +95,7 @@ export function Settings() {
       setGatewayDiskState(gs.diskGatewayState ?? null);
       setGatewayDiskExit(gs.diskExitReason ?? null);
       setGatewayEmbedSurvival(gs.embeddedGatewayStartupSurvival === true);
+      setGatewayPlatforms(gs.platforms ?? null);
     } catch {
       /* optional */
     }
@@ -417,7 +431,31 @@ export function Settings() {
                     : t("settings.gatewayStatusStopped")}
               </span>
             </div>
-            {gatewayEligible && gatewayStarting ? (
+            {gatewayEligible && gatewayStarting && gatewayPlatforms ? (
+              <div className="rounded-md border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
+                <p className="font-medium text-zinc-700 dark:text-zinc-200 mb-1.5">{t("settings.gatewayStartingHint")}</p>
+                {Object.entries(gatewayPlatforms).map(([key, p]) => (
+                  <p key={key} className="flex items-center gap-1.5 mt-0.5 font-mono text-[0.7rem]">
+                    <span className={
+                      p.state === "connected" ? "text-emerald-600 dark:text-emerald-400" :
+                      p.state === "retrying" ? "text-amber-600 dark:text-amber-400" :
+                      p.state === "fatal" ? "text-red-600 dark:text-red-400" :
+                      "text-zinc-500 dark:text-zinc-400"
+                    }>
+                      {p.state === "connected" ? "●" : p.state === "retrying" ? "◐" : p.state === "fatal" ? "✕" : "○"}
+                    </span>
+                    <span className="text-zinc-600 dark:text-zinc-300">{platformLabel(key)}</span>
+                    <span className="text-zinc-500 dark:text-zinc-500">
+                      {p.state === "connected" ? t("settings.gatewayPlatformConnected") :
+                       p.state === "retrying" ? t("settings.gatewayPlatformRetrying") :
+                       p.state === "fatal" ? p.error_message ?? t("settings.gatewayPlatformError") :
+                       t("settings.gatewayPlatformConnecting")}
+                    </span>
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {gatewayEligible && gatewayStarting && !gatewayPlatforms ? (
               <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {t("settings.gatewayStartingHint")}
               </p>

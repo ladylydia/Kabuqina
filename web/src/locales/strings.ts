@@ -237,6 +237,10 @@ export const MESSAGES = {
       gatewayStatusRunning: "网关：运行中",
       gatewayStatusStopped: "网关：未运行",
       gatewayStatusChecking: "网关：正在启动…",
+      gatewayPlatformConnecting: "连接中",
+      gatewayPlatformConnected: "已连接",
+      gatewayPlatformRetrying: "重试中",
+      gatewayPlatformError: "错误",
       gatewayShort: "消息网关",
       gatewayNotEligible:
         "尚未在 hermes-home/.env 中检测到消息平台凭据。请先在 Hermes 控制台「环境变量」中保存 TELEGRAM_BOT_TOKEN、FEISHU_APP_ID+FEISHU_APP_SECRET、QQ_APP_ID+QQ_CLIENT_SECRET、WEIXIN_* 等。",
@@ -650,6 +654,10 @@ export const MESSAGES = {
       gatewayStatusRunning: "Gateway: running",
       gatewayStatusStopped: "Gateway: not running",
       gatewayStatusChecking: "Gateway: starting…",
+      gatewayPlatformConnecting: "connecting",
+      gatewayPlatformConnected: "connected",
+      gatewayPlatformRetrying: "retrying",
+      gatewayPlatformError: "error",
       gatewayShort: "Messaging gateway",
       gatewayNotEligible:
         "No messaging credentials detected in hermes-home/.env yet. Save TELEGRAM_BOT_TOKEN, FEISHU_APP_ID+FEISHU_APP_SECRET, QQ_APP_ID+QQ_CLIENT_SECRET, WEIXIN_*, etc. under Keys in Hermes first.",

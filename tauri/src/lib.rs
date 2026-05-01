@@ -355,6 +355,9 @@ pub struct GatewayStatusPayload {
     /// Last ``exit_reason`` from the same file (truncated).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disk_exit_reason: Option<String>,
+    /// Platform connection states from ``gateway_state.json`` (per-adapter progress).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platforms: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[tauri::command]
@@ -364,6 +367,14 @@ async fn cmd_gateway_status(app: tauri::AppHandle) -> Result<GatewayStatusPayloa
     let eligible = gateway_supervisor::dotenv_suggests_messaging_gateway(&hh);
     let (disk_gateway_state, disk_exit_reason) =
         gateway_supervisor::read_gateway_state_snapshot(&hh);
+
+    let platforms: Option<serde_json::Map<String, serde_json::Value>> =
+        std::fs::read_to_string(hh.join("gateway_state.json"))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .and_then(|v| v.get("platforms").cloned())
+            .and_then(|p| p.as_object().cloned());
+
     let embedded_gateway_startup_survival =
         match resolve_spawn_config_for_children(&app).await {
             Ok(cfg) => gateway_supervisor::bundled_gateway_has_startup_survival(&cfg.bundle_dir),
@@ -388,6 +399,7 @@ async fn cmd_gateway_status(app: tauri::AppHandle) -> Result<GatewayStatusPayloa
         embedded_gateway_startup_survival,
         disk_gateway_state,
         disk_exit_reason,
+        platforms,
     })
 }
 
