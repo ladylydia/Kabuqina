@@ -29,7 +29,7 @@ pub fn bundled_gateway_has_startup_survival(bundle_dir: &Path) -> bool {
     let Ok(s) = std::fs::read_to_string(&p) else {
         return false;
     };
-    s.contains("keep the process alive") && s.contains("_platform_reconnect_watcher")
+    s.contains("_platform_reconnect_watcher")
 }
 
 /// Best-effort read of ``gateway_state.json`` (written by the messaging gateway) for diagnostics.
@@ -330,6 +330,41 @@ impl GatewaySupervisor {
         let hermes_home = hermes_home_path(&cfg.data_dir);
         std::fs::create_dir_all(&hermes_home).context("create hermes-home")?;
 
+        // Clean up stale token-scoped locks left by previous gateway instances.
+        // On Windows PID reuse makes Python-level stale detection unreliable
+        // (_get_process_start_time returns None — no /proc).  Deleting locks
+        // here ensures the new gateway always starts with a clean slate.
+        {
+            let lock_base = std::env::var("XDG_STATE_HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| {
+                    let home = std::env::var("USERPROFILE")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default();
+                    home.join(".local").join("state")
+                });
+            let lock_dir = lock_base.join("hermes").join("gateway-locks");
+            if lock_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&lock_dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.extension().map_or(false, |e| e == "lock") {
+                            let _ = std::fs::remove_file(&p);
+                        }
+                    }
+                }
+            }
+            // Also clean the gateway runtime lock + PID files from previous
+            // instances.  The upstream added a process-level file lock
+            // (gateway.lock, via msvcrt.locking) that, if stale, causes
+            // PermissionError on read during get_running_pid().
+            let _ = std::fs::remove_file(hermes_home.join("gateway.lock"));
+            let _ = std::fs::remove_file(hermes_home.join("gateway.pid"));
+            // Clear stale gateway_state so the frontend doesn't show a
+            // "running" state from a dead process.
+            let _ = std::fs::remove_file(hermes_home.join("gateway_state.json"));
+        }
+
         let mut cmd = Command::new(&py_exe);
         cmd.args([
        	        "-m",
@@ -419,8 +454,28 @@ impl GatewaySupervisor {
         Ok(Self { child, captured_stderr: captured })
     }
 
-    pub fn shutdown(mut self) -> Result<()> {
+    pub async fn shutdown(mut self) -> Result<()> {
         let _ = self.child.start_kill();
+        // Wait up to 3s for the process to exit so that token locks are
+        // released before a subsequent start.  Without this wait, a quick
+        // stop -> start cycle leaves stale locks held by the zombie child.
+        let start = tokio::time::Instant::now();
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if start.elapsed() > std::time::Duration::from_secs(3) {
+                        log::warn!("gateway child did not exit within 3s of kill");
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                Err(e) => {
+                    log::warn!("gateway child wait error: {}", e);
+                    break;
+                }
+            }
+        }
         Ok(())
     }
 

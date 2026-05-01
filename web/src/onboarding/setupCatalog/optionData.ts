@@ -160,91 +160,10 @@ export const CATALOG_GATEWAY: SetupCatalogOption[] = [
     ],
   },
   {
-    id: "discord",
-    name: L("Discord", "Discord"),
-    defaultHint: L("DISCORD_BOT_TOKEN", "DISCORD_BOT_TOKEN"),
-    configFields: [
-      F("DISCORD_BOT_TOKEN", L("DISCORD_BOT_TOKEN", "DISCORD_BOT_TOKEN"), L("Bot Token", "Bot token"), "password"),
-      F("DISCORD_HOME_CHANNEL", L("DISCORD_HOME_CHANNEL（可空）", "DISCORD_HOME_CHANNEL (optional)"), L("可空", "optional"), "text"),
-    ],
-  },
-  {
-    id: "slack",
-    name: L("Slack", "Slack"),
-    defaultHint: L("SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN"),
-    configFields: [F("SLACK_BOT_TOKEN", L("SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN"), L("OAuth Bot Token", "bot token"), "password")],
-  },
-  {
-    id: "signal",
-    name: L("Signal", "Signal"),
-    defaultHint: L("SIGNAL_HTTP_URL 等", "SIGNAL_HTTP_URL, …"),
-    configFields: [F("SIGNAL_HTTP_URL", L("SIGNAL_HTTP_URL 或网桥基址", "SIGNAL_HTTP_URL or bridge base"), L("选填", "optional"), "url")],
-  },
-  {
-    id: "email",
-    name: L("Email", "Email"),
-    defaultHint: L("EMAIL_ADDRESS 等", "EMAIL_ADDRESS, …"),
-    configFields: [F("EMAIL_ADDRESS", L("EMAIL_ADDRESS", "EMAIL_ADDRESS"), L("接收/发件用配置见文档", "see docs"), "text")],
-  },
-  {
-    id: "sms",
-    name: L("SMS (Twilio)", "SMS (Twilio)"),
-    defaultHint: L("TWILIO_ACCOUNT_SID 等", "TWILIO_*"),
-    configFields: [F("TWILIO_ACCOUNT_SID", L("TWILIO_ACCOUNT_SID", "TWILIO_ACCOUNT_SID"), L("选填", "optional"), "text")],
-  },
-  {
-    id: "matrix",
-    name: L("Matrix", "Matrix"),
-    defaultHint: L("MATRIX_ACCESS_TOKEN 或 MATRIX_PASSWORD", "MATRIX_ACCESS_TOKEN or MATRIX_PASSWORD"),
-    configFields: [
-      F("MATRIX_ACCESS_TOKEN", L("MATRIX_ACCESS_TOKEN", "MATRIX_ACCESS_TOKEN"), L("可二选一/见文档", "or password flow"), "password"),
-    ],
-  },
-  {
-    id: "mattermost",
-    name: L("Mattermost", "Mattermost"),
-    defaultHint: L("MATTERMOST_TOKEN", "MATTERMOST_TOKEN"),
-    configFields: [F("MATTERMOST_TOKEN", L("MATTERMOST_TOKEN", "MATTERMOST_TOKEN"), L("选填", "optional"), "password")],
-  },
-  {
-    id: "whatsapp",
-    name: L("WhatsApp", "WhatsApp"),
-    defaultHint: L("WHATSAPP_* 系列", "WHATSAPP_*"),
-    configFields: [F("WHATSAPP_ENABLED", L("WHATSAPP_ENABLED（可 true/false）", "WHATSAPP_ENABLED (e.g. true)"), L("可空", "optional"), "text")],
-  },
-  {
-    id: "ding",
-    name: L("钉钉", "DingTalk"),
-    defaultHint: L("DINGTALK_CLIENT_ID + SECRET", "DINGTALK_CLIENT_ID + SECRET"),
-    configFields: [
-      F("DINGTALK_CLIENT_ID", L("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_ID"), L("选填", "optional"), "text"),
-      F("DINGTALK_CLIENT_SECRET", L("DINGTALK_CLIENT_SECRET", "DINGTALK_CLIENT_SECRET"), L("选填", "optional"), "password"),
-    ],
-  },
-  {
     id: "feishu",
     name: L("飞书 / Lark", "Feishu / Lark"),
     defaultHint: L("扫码一键创建并绑定", "Scan to create & bind"),
     configUi: "feishu_route_c",
-  },
-  {
-    id: "wecom",
-    name: L("企业微信 机器人", "WeCom bot"),
-    defaultHint: L("WECOM_BOT_ID + SECRET", "WECOM_BOT_ID + SECRET"),
-    configFields: [
-      F("WECOM_BOT_ID", L("WECOM_BOT_ID", "WECOM_BOT_ID"), L("选填", "optional"), "text"),
-      F("WECOM_SECRET", L("WECOM_SECRET", "WECOM_SECRET"), L("选填", "optional"), "password"),
-    ],
-  },
-  {
-    id: "wecom_cb",
-    name: L("企业微信 回调", "WeCom callback"),
-    defaultHint: L("WECOM_CALLBACK_*", "WECOM_CALLBACK_*"),
-    configFields: [
-      F("WECOM_CALLBACK_CORP_ID", L("WECOM_CALLBACK_CORP_ID", "WECOM_CALLBACK_CORP_ID"), L("选填", "optional"), "text"),
-      F("WECOM_CALLBACK_CORP_SECRET", L("WECOM_CALLBACK_CORP_SECRET", "WECOM_CALLBACK_CORP_SECRET"), L("选填", "optional"), "password"),
-      F("WECOM_CALLBACK_AGENT_ID", L("WECOM_CALLBACK_AGENT_ID（可空）", "WECOM_CALLBACK_AGENT_ID (optional)"), L("选填", "optional"), "text"),
-    ],
   },
   {
     id: "weixin",
@@ -253,27 +172,10 @@ export const CATALOG_GATEWAY: SetupCatalogOption[] = [
     configUi: "weixin_route_c",
   },
   {
-    id: "bb",
-    name: L("BlueBubbles (iMessage)", "BlueBubbles (iMessage)"),
-    defaultHint: L("BLUEBUBBLES_SERVER_URL 等", "BLUEBUBBLES_*"),
-    configFields: [
-      F("BLUEBUBBLES_SERVER_URL", L("BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_SERVER_URL"), L("本机/局域网 URL", "local URL"), "url"),
-    ],
-  },
-  {
     id: "qq",
     name: L("QQ Bot", "QQ Bot"),
     defaultHint: L("扫码绑定机器人", "Scan to bind bot"),
     configUi: "qqbot_route_c",
-  },
-  {
-    id: "webhook",
-    name: L("Webhooks (GitHub/GitLab/…)", "Webhooks"),
-    defaultHint: L("WEBHOOK_PORT=8644 等", "WEBHOOK_PORT=8644, …"),
-    configFields: [
-      F("WEBHOOK_PORT", L("WEBHOOK_PORT", "WEBHOOK_PORT"), L("默认 8644", "default 8644"), "text"),
-      F("WEBHOOK_SECRET", L("WEBHOOK_SECRET（HMAC 等）", "WEBHOOK_SECRET (HMAC)"), L("选填", "optional"), "password"),
-    ],
   },
 ];
 

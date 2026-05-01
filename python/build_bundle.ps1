@@ -77,11 +77,22 @@ Write-Host "Using Python: " (& $Py --version)
 # ------------------------------------------------------------------ 2. pip
 & $Py -m pip install --upgrade pip wheel | Out-Null
 
-# ------------------------------------------------------------------ 3. Apply patches (none in v1, but keep the hook)
+# ------------------------------------------------------------------ 3. Apply patches
 $patchDir = Join-Path $Root "patches"
 foreach ($p in (Get-ChildItem -Path $patchDir -Filter *.patch -ErrorAction SilentlyContinue | Sort-Object Name)) {
+    # Check if patch is already applied (common when working from a dirty submodule)
+    $alreadyApplied = & git -C $HermesDir apply --reverse --check $p.FullName 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Patch already applied: $($p.Name) (skipping)"
+        continue
+    }
     Write-Host "Applying patch: $($p.Name)"
     & git -C $HermesDir apply --3way --ignore-whitespace $p.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Patch failed. The submodule working tree may have conflicting changes."
+        Write-Host "  Run: git -C hermes stash && .\python\build_bundle.ps1"
+        exit 1
+    }
 }
 
 # ------------------------------------------------------------------ 4. Prune Hermes into the bundle

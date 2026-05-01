@@ -24,6 +24,24 @@ pub fn cmd_weixin_env_status(app: AppHandle) -> Result<crate::gateway_supervisor
     Ok(crate::gateway_supervisor::read_weixin_env_snapshot(&hh))
 }
 
+/// Remove Weixin env vars from ``hermes-home/.env``.
+#[tauri::command]
+pub fn cmd_weixin_env_remove(app: AppHandle) -> Result<(), String> {
+    let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
+    let hh = crate::gateway_supervisor::hermes_home_path(&data_dir);
+    let env_path = hh.join(".env");
+    let content = std::fs::read_to_string(&env_path).unwrap_or_default();
+    let lines: Vec<String> = content
+        .lines()
+        .map(|l| l.to_string())
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.starts_with("WEIXIN_")
+        })
+        .collect();
+    std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())
+}
+
 async fn read_json_file(path: &PathBuf) -> Option<Value> {
     let s = tokio::fs::read_to_string(path).await.ok()?;
     serde_json::from_str(&s).ok()

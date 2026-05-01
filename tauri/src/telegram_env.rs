@@ -42,3 +42,36 @@ pub fn cmd_telegram_save_token(app: AppHandle, token: String) -> Result<(), Stri
 
     std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())
 }
+
+const TELEGRAM_ENV_PREFIXES: &[&str] = &[
+    "TELEGRAM_BOT_TOKEN=",
+    "TELEGRAM_BOT_TOKEN ",
+    "TELEGRAM_ALLOWED_USERS=",
+    "TELEGRAM_HOME_CHANNEL=",
+    "TELEGRAM_GROUP_ALLOWED_CHATS=",
+    "TELEGRAM_GROUP_ALLOWED_USERS=",
+    "TELEGRAM_REQUIRE_MENTION=",
+    "TELEGRAM_BOT_USERNAME=",
+    "TELEGRAM_ALLOW_ALL_USERS=",
+];
+
+#[tauri::command]
+pub fn cmd_telegram_remove_config(app: AppHandle) -> Result<(), String> {
+    let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
+    let hh = crate::gateway_supervisor::hermes_home_path(&data_dir);
+    let env_path: PathBuf = hh.join(".env");
+
+    let content = std::fs::read_to_string(&env_path).unwrap_or_default();
+    let lines: Vec<String> = content
+        .lines()
+        .map(|l| l.to_string())
+        .filter(|line| {
+            let trimmed = line.trim();
+            !TELEGRAM_ENV_PREFIXES
+                .iter()
+                .any(|prefix| trimmed.starts_with(prefix))
+        })
+        .collect();
+
+    std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())
+}

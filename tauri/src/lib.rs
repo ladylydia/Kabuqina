@@ -121,6 +121,10 @@ pub fn run() {
             feishu_env::cmd_feishu_env_status,
             telegram_env::cmd_telegram_env_status,
             telegram_env::cmd_telegram_save_token,
+            telegram_env::cmd_telegram_remove_config,
+            weixin_qr::cmd_weixin_env_remove,
+            qq_env::cmd_qq_env_remove,
+            feishu_env::cmd_feishu_env_remove,
             proxy::cmd_proxy_status,
             proxy::cmd_proxy_save,
             weixin_qr::cmd_weixin_qr_cancel,
@@ -252,7 +256,28 @@ async fn stop_gateway_service(app: &tauri::AppHandle) {
     let state: tauri::State<AppState> = app.state();
     let mut g = state.gateway_supervisor.lock().await;
     if let Some(gw) = g.take() {
-        let _ = gw.shutdown();
+        let _ = gw.shutdown().await;
+    }
+    drop(g);
+
+    // Clean up stale gateway state files that the Python process may not
+    // have had a chance to remove (atexit handlers don't run on SIGKILL).
+    let data_dir = match paths::ensure_data_dir(app) {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let hh = gateway_supervisor::hermes_home_path(&data_dir);
+    let _ = std::fs::remove_file(hh.join("gateway.lock"));
+    let _ = std::fs::remove_file(hh.join("gateway.pid"));
+    // Write gateway_state as "stopped" so frontend doesn't show stale state.
+    if let Ok(json) = serde_json::to_string(&serde_json::json!({
+        "gateway_state": "stopped",
+        "pid": null,
+        "exit_reason": "stopped_by_user",
+        "restart_requested": false,
+        "platforms": {},
+    })) {
+        let _ = std::fs::write(hh.join("gateway_state.json"), &json);
     }
 }
 

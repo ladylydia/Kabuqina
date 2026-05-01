@@ -219,7 +219,51 @@ if ($postUnexpected) {
 }
 Write-OK "All 7 expected files have modifications"
 
-# ── Step 8: Syntax verification ─────────────────────────────────────────────
+# ── Step 8: Core module audit ────────────────────────────────────────────────
+
+Write-Step "Core module audit"
+Write-Host "  Checking for new upstream functions that may interact with our patches..."
+
+$criticalModules = @(
+    "gateway/status.py",        # lock system, PID management
+    "gateway/run.py",           # gateway lifecycle, platform connections
+    "hermes_cli/web_server.py", # API endpoints, desk chat
+    "run_agent.py"              # AI agent loop, credential resolution
+)
+
+# Keywords that signal a function might need our attention
+$auditPatterns = @(
+    "def.*lock", "def.*pid", "def.*kill", "def.*clean",
+    "def.*auth", "def.*token", "def.*secret",
+    "def.*post|def.*get|def.*route|def.*endpoint",
+    "class.*Lock|class.*Guard|class.*Auth"
+)
+
+foreach ($mod in $criticalModules) {
+    $modPath = Join-Path $hermesDir $mod
+    if (-not (Test-Path $modPath)) { continue }
+    
+    $matches = Select-String -Path $modPath -Pattern $auditPatterns -AllMatches | 
+        Where-Object { $_.Line -notmatch '^\s*#' }  # skip comment-only lines
+    
+    if ($matches) {
+        Write-Host "  [$mod] potential interaction points: $($matches.Count)" -ForegroundColor DarkGray
+        foreach ($m in $matches | Select-Object -First 5) {
+            $trimmed = $m.Line.Trim()
+            if ($trimmed.Length -gt 100) { $trimmed = $trimmed.Substring(0, 100) + "..." }
+            Write-Host "    L$($m.LineNumber): $trimmed" -ForegroundColor DarkGray
+        }
+        if ($matches.Count -gt 5) {
+            Write-Host "    ... and $($matches.Count - 5) more" -ForegroundColor DarkGray
+        }
+    }
+}
+
+Write-Host "  Review the flagged lines above. If any handle locks, auth, or process"
+Write-Host "  lifecycle, verify they don't conflict with our patches."
+Write-Host ""
+
+# ── Step 9: Syntax verification ─────────────────────────────────────────────
 
 if ($py) {
     Write-Step "Syntax check"

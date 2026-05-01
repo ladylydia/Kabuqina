@@ -134,22 +134,18 @@ export const MESSAGES = {
       title: "对话从哪接入",
       lead: "选一种即可，以后在设置里还能换。",
       rec: "推荐",
-      starter: {
-        title: "免费试试",
-        price: "￥0",
-        body: "适合先体验，有时会慢一点。",
-      },
-      own: {
-        title: "我有自己的API",
-        price: "—",
-        body: "用对方给你的网址和密码串。",
-      },
+      recommended: "推荐",
+      showAll: "更多提供商 — OpenRouter、Mistral、Groq、自定义…",
+      customTitle: "自定义 OpenAI 兼容 API",
+      customBody: "任意兼容端点 — 填写你自己的服务地址、模型名称和 API Key。",
       selected: "已选：{{name}}",
     },
     pass: {
       title: "保存访问凭证",
       customLead1: "填对方网站地址和密码。密码只存在本机安全位置，不会写成普通文件。",
       providerLead: "{{label}} 会给你一长串密码。只存在本机，不会写成普通文件。",
+      labelProvider: "选择提供商",
+      selectProvider: "选择一个提供商…",
       steps: {
         s1: "点下面按钮，用浏览器打开 {{label}}。",
         s2: "登录后，找到「创建密钥」或类似入口。",
@@ -272,6 +268,8 @@ export const MESSAGES = {
         "存在 TELEGRAM_* 相关变量，但缺少 TELEGRAM_BOT_TOKEN。点击下方按钮设置。",
       telegramSetup: "设置 Telegram",
       telegramReconfigure: "重新设置",
+      telegramRemoveConfig: "撤销配置",
+      removePlatformConfig: "撤销配置",
       telegramFormLead:
         "请在 Telegram 中找 @BotFather，用 /newbot 创建一个机器人，然后将获得的 Token 粘贴到下方。",
       telegramFormPlaceholder: "粘贴 @BotFather 给的 Bot Token",
@@ -545,20 +543,16 @@ export const MESSAGES = {
       title: "Where replies come from",
       lead: "Pick one—you can change it later in Settings.",
       rec: "Recommended",
-      starter: {
-        title: "Try for free",
-        price: "$0",
-        body: "Good to explore; replies may be slower.",
-      },
-      own: {
-        title: "I have my own API",
-        price: "—",
-        body: "Use the web address and secret string from your provider.",
-      },
+      recommended: "Recommended",
+      showAll: "More providers — OpenRouter, Mistral, Groq, custom…",
+      customTitle: "Custom OpenAI-compatible API",
+      customBody: "Any compatible endpoint — enter your own base URL, model, and API key.",
       selected: "Selected: {{name}}",
     },
     pass: {
       title: "Save your access pass",
+      labelProvider: "Select provider",
+      selectProvider: "Select a provider…",
       customLead1:
         "Paste the service web address and your secret. It stays in Windows’ secure storage—not a normal file.",
       providerLead:
@@ -685,6 +679,8 @@ export const MESSAGES = {
         "Some TELEGRAM_* keys are set but TELEGRAM_BOT_TOKEN is missing. Click the button below to set it.",
       telegramSetup: "Setup Telegram",
       telegramReconfigure: "Reconfigure",
+      telegramRemoveConfig: "Remove",
+      removePlatformConfig: "Remove",
       telegramFormLead:
         "Talk to @BotFather on Telegram, create a bot with /newbot, then paste the token below.",
       telegramFormPlaceholder: "Paste bot token from @BotFather",

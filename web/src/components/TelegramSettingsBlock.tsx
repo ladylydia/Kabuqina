@@ -23,6 +23,7 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,6 +53,21 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    setRemoving(true);
+    try {
+      await invoke("cmd_telegram_remove_config");
+      await invoke<number>("cmd_restart_embedded_hermes");
+      setShowForm(false);
+      void refresh();
+    } catch {
+      // Silently refresh on error too — env file may have been partially cleared
+      void refresh();
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -91,9 +107,14 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
       ) : null}
 
       {env?.configured && !showForm ? (
-        <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
-          {t("settings.telegramReconfigure")}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+            {t("settings.telegramReconfigure")}
+          </button>
+          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+            {removing ? "…" : t("settings.telegramRemoveConfig")}
+          </button>
+        </div>
       ) : null}
 
       {showForm ? (

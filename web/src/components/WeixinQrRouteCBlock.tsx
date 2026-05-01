@@ -57,6 +57,7 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
   const [weixinInlineErr, setWeixinInlineErr] = useState<string | null>(null);
   const [restartBusy, setRestartBusy] = useState(false);
   const [restartErr, setRestartErr] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const weixinExitStreak = useRef(0);
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
@@ -71,6 +72,13 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
       setWeixinEnv(null);
     }
   }, []);
+
+  async function handleRemove() {
+    setRemoving(true);
+    try { await invoke("cmd_weixin_env_remove"); void refreshWeixinEnv(); }
+    catch { void refreshWeixinEnv(); }
+    finally { setRemoving(false); }
+  }
 
   useEffect(() => {
     void refreshWeixinEnv();
@@ -239,6 +247,11 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
         <button type="button" className={btnClass} onClick={() => void startWeixinQr()} disabled={weixinPolling}>
           {weixinEnv?.configured ? t("settings.weixinRescan") : t("settings.weixinStart")}
         </button>
+        {weixinEnv?.configured ? (
+          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+            {removing ? "…" : t("settings.removePlatformConfig")}
+          </button>
+        ) : null}
         <button type="button" className={btnClass} onClick={() => void cancelWeixinQr()} disabled={!weixinPolling}>
           {t("settings.weixinCancel")}
         </button>

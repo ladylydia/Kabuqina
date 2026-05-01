@@ -55,6 +55,7 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
   const [inlineErr, setInlineErr] = useState<string | null>(null);
   const [restartBusy, setRestartBusy] = useState(false);
   const [restartErr, setRestartErr] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const exitStreak = useRef(0);
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
@@ -69,6 +70,13 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
       setFeishuEnv(null);
     }
   }, []);
+
+  async function handleRemove() {
+    setRemoving(true);
+    try { await invoke("cmd_feishu_env_remove"); void refreshFeishuEnv(); }
+    catch { void refreshFeishuEnv(); }
+    finally { setRemoving(false); }
+  }
 
   useEffect(() => {
     void refreshFeishuEnv();
@@ -242,6 +250,11 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
         <button type="button" className={btnClass} onClick={() => void startFeishuQr()} disabled={polling}>
           {feishuEnv?.configured ? t("settings.feishuRescan") : t("settings.feishuStart")}
         </button>
+        {feishuEnv?.configured ? (
+          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+            {removing ? "…" : t("settings.removePlatformConfig")}
+          </button>
+        ) : null}
         <button type="button" className={btnClass} onClick={() => void cancelFeishuQr()} disabled={!polling}>
           {t("settings.feishuCancel")}
         </button>
