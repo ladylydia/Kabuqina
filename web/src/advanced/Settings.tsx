@@ -42,7 +42,7 @@ import { getLocale } from "../lib/i18n-core";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { cmdGetHermesPort } from "../chat/chat-api";
-import { type FontSizeOption, getStoredFontSize, setFontSize } from "../lib/ui-prefs";
+import { useFontSize } from "../lib/ui-prefs";
 import { clearAllowChatWithoutApi } from "../lib/apiKeyGate";
 
 interface Status {
@@ -57,7 +57,7 @@ export function Settings() {
   const [status, setStatus] = useState<Status | null>(null);
   const [powerUser, setPowerUser] = useState(false);
   const [showRecipeMarket, setShowRecipeMarket] = useState(false);
-  const [fontSize, setFontSizeState] = useState<FontSizeOption>(() => getStoredFontSize());
+  const { size: fontSize, setSize: setFontSize } = useFontSize();
   const [autoStartGateway, setAutoStartGateway] = useState(true);
   const [gatewayRunning, setGatewayRunning] = useState(false);
   const [gatewayEligible, setGatewayEligible] = useState(false);
@@ -137,7 +137,7 @@ export function Settings() {
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") void refreshGatewayStatus();
-    }, 4000);
+    }, 2000);
     return () => clearInterval(id);
   }, [refreshGatewayStatus]);
 
@@ -515,7 +515,6 @@ export function Settings() {
                 type="button"
                 onClick={() => {
                   setFontSize(id);
-                  setFontSizeState(id);
                 }}
                 className={cn(
                   "min-h-[2.25rem] flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition sm:flex-initial",

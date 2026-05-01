@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
@@ -72,6 +73,11 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
   }, []);
 
   async function handleRemove() {
+    const ok = await ask(t("settings.removeConfigAsk"), {
+      title: t("settings.removeConfigAskTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
     setRemoving(true);
     try { await invoke("cmd_feishu_env_remove"); void refreshFeishuEnv(); }
     catch { void refreshFeishuEnv(); }

@@ -432,7 +432,7 @@ async fn cmd_gateway_start(app: tauri::AppHandle) -> Result<(), String> {
                 }
                 let stderr_trimmed = stderr.trim();
                 if !stderr_trimmed.is_empty() {
-                    const MAX: usize = 600;
+                    const MAX: usize = 2000;
                     let capped: String = if stderr_trimmed.chars().count() > MAX {
                         let trunc: String = stderr_trimmed.chars().take(MAX).collect();
                         format!("{trunc}…")

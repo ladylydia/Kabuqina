@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
@@ -74,6 +75,11 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
   }, []);
 
   async function handleRemove() {
+    const ok = await ask(t("settings.removeConfigAsk"), {
+      title: t("settings.removeConfigAskTitle"),
+      kind: "warning",
+    });
+    if (!ok) return;
     setRemoving(true);
     try { await invoke("cmd_weixin_env_remove"); void refreshWeixinEnv(); }
     catch { void refreshWeixinEnv(); }

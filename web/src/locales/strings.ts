@@ -270,6 +270,8 @@ export const MESSAGES = {
       telegramReconfigure: "重新设置",
       telegramRemoveConfig: "撤销配置",
       removePlatformConfig: "撤销配置",
+      removeConfigAskTitle: "撤销消息渠道配置",
+      removeConfigAsk: "将删除本地存储的凭证和配置，后续可通过扫码或填表重新配置。确定撤销？",
       telegramFormLead:
         "请在 Telegram 中找 @BotFather，用 /newbot 创建一个机器人，然后将获得的 Token 粘贴到下方。",
       telegramFormPlaceholder: "粘贴 @BotFather 给的 Bot Token",
@@ -681,6 +683,8 @@ export const MESSAGES = {
       telegramReconfigure: "Reconfigure",
       telegramRemoveConfig: "Remove",
       removePlatformConfig: "Remove",
+      removeConfigAskTitle: "Remove platform configuration",
+      removeConfigAsk: "This will delete locally stored credentials. You can re-configure later via QR scan or form. Proceed?",
       telegramFormLead:
         "Talk to @BotFather on Telegram, create a bot with /newbot, then paste the token below.",
       telegramFormPlaceholder: "Paste bot token from @BotFather",

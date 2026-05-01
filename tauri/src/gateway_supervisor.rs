@@ -505,9 +505,15 @@ async fn forward<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
         log::info!("{}: {}", tag, line);
         if let Some(buf) = &capture {
             if let Ok(mut g) = buf.try_lock() {
-                if g.len() < 4096 {
-                    use std::fmt::Write;
-                    let _ = writeln!(g, "{line}");
+                use std::fmt::Write;
+                let _ = writeln!(g, "{line}");
+                // Keep only the last 8192 bytes — Python traceback errors
+                // print the exception at the END, and truncating from the
+                // front (first-N) cuts off the most useful part.
+                const MAX: usize = 8192;
+                if g.len() > MAX {
+                    let excess = g.len() - MAX;
+                    *g = g[excess..].to_string();
                 }
             }
         }
