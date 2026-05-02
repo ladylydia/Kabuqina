@@ -240,7 +240,21 @@ pub struct LlmConfigPreview {
 #[tauri::command]
 pub async fn cmd_llm_config_preview(app: AppHandle) -> Result<LlmConfigPreview, String> {
     let has_secret = read_current_secret(&app).is_some();
-    let cfg = read_provider_cfg(&app);
+    let mut cfg = read_provider_cfg(&app);
+
+    // Auto-migrate legacy config: provider=custom + deepseek base_url → provider=deepseek
+    if let Some(ref mut c) = cfg {
+        if c.provider == "custom"
+            && c.api_base_url
+                .as_deref()
+                .unwrap_or("")
+                .contains("deepseek.com")
+        {
+            c.provider = "deepseek".to_string();
+            write_provider_cfg(&app, c).ok();
+        }
+    }
+
     Ok(LlmConfigPreview {
         has_secret,
         provider: cfg.as_ref().map(|c| c.provider.clone()),
