@@ -1520,6 +1520,23 @@ class FeishuAdapter(BasePlatformAdapter):
             )
             return False
 
+        # Webhook mode security: warn when signature verification is not
+        # configured (encrypt_key and verification_token are optional but
+        # strongly recommended for production webhook endpoints).
+        if self._connection_mode == "webhook":
+            if not self._encrypt_key:
+                logger.warning(
+                    "[Feishu] SECURITY: Webhook mode is active but FEISHU_ENCRYPT_KEY "
+                    "is not set. Webhook requests will NOT be cryptographically "
+                    "verified. Set FEISHU_ENCRYPT_KEY in your .env file."
+                )
+            if not self._verification_token:
+                logger.warning(
+                    "[Feishu] SECURITY: Webhook mode is active but FEISHU_VERIFICATION_TOKEN "
+                    "is not set. The verification token check is skipped, allowing any "
+                    "POST to the webhook endpoint. Set FEISHU_VERIFICATION_TOKEN in your .env file."
+                )
+
         try:
             self._app_lock_identity = self._app_id
             acquired, existing = acquire_scoped_lock(

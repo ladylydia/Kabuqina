@@ -192,7 +192,7 @@ class WhatsAppAdapter(BasePlatformAdapter):
             if isinstance(configured, str):
                 return configured.lower() in ("true", "1", "yes", "on")
             return bool(configured)
-        return os.getenv("WHATSAPP_REQUIRE_MENTION", "false").lower() in ("true", "1", "yes", "on")
+        return os.getenv("WHATSAPP_REQUIRE_MENTION", "true").lower() not in ("false", "0", "no", "off")
 
     def _whatsapp_free_response_chats(self) -> set[str]:
         raw = self.config.extra.get("free_response_chats")

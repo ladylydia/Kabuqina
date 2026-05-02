@@ -10,11 +10,13 @@ Usage:
 """
 
 import asyncio
+import base64
 import hmac
 import importlib.util
 import json
 import logging
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -22,8 +24,9 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
 
@@ -223,14 +226,28 @@ async def host_header_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """Require the session token on all /api/ routes except the public list."""
+    """Require the session token on all /api/ routes except the public list.
+
+    When the Tauri shell calls Hermes over HTTP (no ``Authorization: Bearer`` in
+    the webview), it passes ``X-HermesDesk-Auth`` equal to
+    ``HERMESDESK_BRIDGE_SECRET``. Only the HermesDesk Python launcher sets that
+    per-run secret, so if it is non-empty we always validate the header.
+    """
     path = request.url.path
     if path.startswith("/api/") and path not in _PUBLIC_API_PATHS and not path.startswith("/api/plugins/"):
-        if not _has_valid_session_token(request):
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Unauthorized"},
-            )
+        if _has_valid_session_token(request):
+            return await call_next(request)
+        bridge_secret = (os.environ.get("HERMESDESK_BRIDGE_SECRET") or "").strip()
+        if bridge_secret:
+            desk_auth = (request.headers.get("x-hermesdesk-auth") or "").strip()
+            if desk_auth and hmac.compare_digest(
+                desk_auth.encode("utf-8"), bridge_secret.encode("utf-8")
+            ):
+                return await call_next(request)
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"},
+        )
     return await call_next(request)
 
 
@@ -713,6 +730,418 @@ async def update_hermes():
         "pid": proc.pid,
         "name": "hermes-update",
     }
+
+
+# ---------------------------------------------------------------------------
+# HermesDesk shell: track in-flight AIAgent for /api/desk/stop (interrupt).
+# ---------------------------------------------------------------------------
+_desk_active_agents: Dict[str, Any] = {}
+_desk_active_lock = threading.Lock()
+_DESK_MAX_ATTACHMENTS = 6
+_DESK_MAX_ATTR_BYTES = 12 * 1024 * 1024
+
+
+def _desk_register_active(session_id: str, agent: Any) -> None:
+    with _desk_active_lock:
+        _desk_active_agents[session_id] = agent
+
+
+def _desk_unregister_active(session_id: str) -> None:
+    with _desk_active_lock:
+        _desk_active_agents.pop(session_id, None)
+
+
+def _desk_parse_attachments_from_body(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw = body.get("attachments")
+    if not raw or not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for it in raw[:_DESK_MAX_ATTACHMENTS]:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name") or "file")
+        mime = (str(it.get("mime") or "application/octet-stream")).strip() or "application/octet-stream"
+        raw_d = it.get("data")
+        if raw_d in (None, ""):
+            continue
+        b64 = str(raw_d).strip()
+        if not b64:
+            continue
+        try:
+            rawb = base64.b64decode(b64, validate=False)
+        except Exception:
+            continue
+        if not rawb or len(rawb) > _DESK_MAX_ATTR_BYTES:
+            continue
+        out.append({"name": name, "mime": mime.lower(), "data": rawb})
+    return out
+
+
+def _desk_build_user_message(
+    plain: str, atts: List[Dict[str, Any]]
+) -> Optional[Tuple[Union[str, List[Dict[str, Any]]], Optional[str]]]:
+    """persist_user_message is a clean string for logs/memory when user_message is multimodal."""
+    plain = (plain or "").strip()
+    if not atts:
+        if not plain:
+            return None
+        return plain, None
+
+    text_buf = plain if plain else "Please answer based on the attachments."
+    image_parts: List[Dict[str, Any]] = []
+    for p in atts:
+        name = str(p.get("name") or "file")
+        mime = (str(p.get("mime") or "")).lower()
+        data: bytes = p.get("data") or b""
+        if not data:
+            continue
+        if mime.startswith("image/"):
+            b64d = base64.b64encode(data).decode("ascii")
+            data_url = f"data:{mime};base64,{b64d}"
+            image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        elif mime.startswith("text/") or mime in ("application/json", "application/xml"):
+            try:
+                t = data.decode("utf-8")
+            except UnicodeDecodeError:
+                t = data.decode("utf-8", errors="replace")
+            if len(t) > 200_000:
+                t = t[:200_000] + "\n[truncated]"
+            text_buf = f"{text_buf}\n\n--- {name} ---\n{t}".strip()
+        else:
+            text_buf = (
+                f"{text_buf}\n\n[file {name!r} type {mime!r} size {len(data)} bytes; "
+                f"not inlined as text -- use workspace tools if needed.]"
+            ).strip()
+
+    if not image_parts:
+        return text_buf, None
+    user_content: List[Dict[str, Any]] = [{"type": "text", "text": text_buf}, *image_parts]
+    n_img = len(image_parts)
+    persist = plain if plain else f"[{n_img} image(s)]"
+    return user_content, persist
+
+
+def _desk_chat_build_agent(session_id: str, db: Any) -> Any:
+    """Construct AIAgent using the same config + credentials as the CLI."""
+    from run_agent import AIAgent
+    from hermes_cli.config import load_config
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+    from hermes_cli.tools_config import _get_platform_tools
+
+    try:
+        from tools.terminal_tool import register_task_env_overrides
+    except Exception:
+        register_task_env_overrides = None
+    if register_task_env_overrides:
+        ws = (os.environ.get("HERMES_WORKSPACE") or os.environ.get("TERMINAL_CWD") or "").strip()
+        if ws:
+            try:
+                register_task_env_overrides(session_id, {"cwd": ws})
+            except Exception:
+                _log.debug("desk chat: register_task_env_overrides failed", exc_info=True)
+
+    config = load_config()
+    model_cfg = config.get("model")
+    default_model = ""
+    config_provider: Optional[str] = None
+    if isinstance(model_cfg, dict):
+        default_model = str(model_cfg.get("default") or model_cfg.get("model") or "")
+        config_provider = model_cfg.get("provider")
+        if isinstance(config_provider, str):
+            config_provider = config_provider.strip() or None
+    elif isinstance(model_cfg, str) and model_cfg.strip():
+        default_model = model_cfg.strip()
+
+    agent_section = config.get("agent") or {}
+    try:
+        max_turns = int(agent_section.get("max_turns") or 90)
+    except (TypeError, ValueError):
+        max_turns = 90
+
+    tool_list = sorted(_get_platform_tools(config, "cli"))
+    if not tool_list:
+        tool_list = None
+
+    runtime = resolve_runtime_provider(requested=config_provider)
+    api_key = str(runtime.get("api_key") or "").strip()
+    if not api_key:
+        raise ValueError(
+            "No API credentials available. Configure a model key in Hermes (Settings / Keys or ~/.hermes)."
+        )
+
+    kwargs: Dict[str, Any] = {
+        "model": default_model,
+        "platform": "hermesdesk",
+        "session_id": session_id,
+        "session_db": db,
+        "max_iterations": max_turns,
+        "enabled_toolsets": tool_list,
+        "quiet_mode": True,
+        "provider": runtime.get("provider"),
+        "api_mode": runtime.get("api_mode"),
+        "base_url": runtime.get("base_url"),
+        "api_key": runtime.get("api_key"),
+        "command": runtime.get("command"),
+        "args": list(runtime.get("args") or []),
+        "credential_pool": runtime.get("credential_pool"),
+    }
+    if isinstance(model_cfg, dict):
+        if model_cfg.get("reasoning_config") is not None:
+            kwargs["reasoning_config"] = model_cfg.get("reasoning_config")
+        if model_cfg.get("max_tokens") is not None:
+            try:
+                kwargs["max_tokens"] = int(model_cfg.get("max_tokens"))
+            except (TypeError, ValueError):
+                pass
+
+    return AIAgent(**kwargs)
+
+
+def _desk_chat_run_in_thread(
+    agent: Any,
+    user_message: Any,
+    history: List[Dict[str, Any]],
+    session_id: str,
+    persist_user_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    _desk_register_active(session_id, agent)
+    try:
+        if persist_user_message is not None:
+            result = agent.run_conversation(
+                user_message=user_message,
+                conversation_history=history,
+                task_id=session_id,
+                persist_user_message=persist_user_message,
+            )
+        else:
+            result = agent.run_conversation(
+                user_message=user_message,
+                conversation_history=history,
+                task_id=session_id,
+            )
+        return {
+            "result": result,
+            "prompt_tokens": int(getattr(agent, "session_prompt_tokens", 0) or 0),
+            "completion_tokens": int(getattr(agent, "session_completion_tokens", 0) or 0),
+        }
+    finally:
+        _desk_unregister_active(session_id)
+
+
+def _desk_strip_thinking_tags(text: str) -> str:
+    if not text or "<think>" not in text:
+        return text
+    return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
+
+
+def _desk_content_to_text(content: Any) -> str:
+    """Normalize assistant content (str, list, or OpenAI-compat dict shapes) to plain text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        t = content.strip()
+        if not t:
+            return ""
+        if t.startswith(("[", "{")):
+            try:
+                parsed = json.loads(t)
+                if isinstance(parsed, (list, dict)):
+                    return _desk_content_to_text(parsed)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        return _desk_strip_thinking_tags(t)
+    if isinstance(content, (int, float, bool)):
+        return str(content).strip()
+    if isinstance(content, dict):
+        inner = content.get("text")
+        if inner is None:
+            inner = content.get("content")
+        if isinstance(inner, (dict, list)):
+            return _desk_content_to_text(inner)
+        if inner is not None:
+            return _desk_strip_thinking_tags(str(inner).strip())
+        return _desk_strip_thinking_tags(str(content).strip())
+    if isinstance(content, list):
+        parts: List[str] = []
+        for part in content:
+            if isinstance(part, dict):
+                pt = str(part.get("type") or "")
+                if pt in ("text", "output_text") or "text" in part:
+                    parts.append(str(part.get("text") or ""))
+                elif isinstance(part.get("content"), str) and part.get("content", "").strip():
+                    parts.append(str(part.get("content")))
+            elif isinstance(part, str):
+                parts.append(part)
+        return _desk_strip_thinking_tags("\n".join(p for p in parts if p).strip())
+    return _desk_strip_thinking_tags(str(content).strip())
+
+
+def _desk_text_from_assistant_messages(messages: List[Any]) -> str:
+    for msg in reversed(messages):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") != "assistant":
+            continue
+        t = _desk_content_to_text(msg.get("content"))
+        if t:
+            return t
+    return ""
+
+
+def _desk_extract_reply_text(conv_result: Any) -> str:
+    """Best-effort assistant text from run_conversation return value."""
+    if not isinstance(conv_result, dict):
+        return str(conv_result).strip() if conv_result is not None else ""
+
+    fr = conv_result.get("final_response")
+    if isinstance(fr, str) and fr.strip():
+        return _desk_strip_thinking_tags(fr.strip())
+    if fr is not None and not isinstance(fr, str):
+        s = str(fr).strip()
+        if s:
+            return _desk_strip_thinking_tags(s)
+
+    messages: List[Dict[str, Any]] = conv_result.get("messages") or []
+    t = _desk_text_from_assistant_messages(messages)
+    if t:
+        return t
+    if conv_result.get("failed") and conv_result.get("error"):
+        return str(conv_result.get("error")).strip()
+    return ""
+
+
+@app.post("/api/desk/stop")
+async def desk_stop(request: Request):
+    """Interrupt the agent for a desk chat session (best-effort)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    session_id = (body.get("session_id") or "").strip() if isinstance(body, dict) else ""
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
+    with _desk_active_lock:
+        ag = _desk_active_agents.get(session_id)
+    if ag is not None:
+        try:
+            ag.interrupt("User requested stop from HermesDesk")
+        except Exception as e:
+            _log.warning("desk stop: interrupt failed: %s", e)
+        return JSONResponse({"ok": True, "interrupted": True})
+    return JSONResponse({"ok": True, "interrupted": False, "detail": "no active agent for this session"})
+
+
+@app.post("/api/desk/chat-proto")
+async def desk_chat_proto(request: Request):
+    """HermesDesk: run a real AIAgent turn (same credentials + workspace as CLI).
+
+    Request JSON: message (text), session_id (optional, for multi-turn),
+    attachments (optional) list of {name, mime, data} with data base64-encoded.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "invalid_body"}, status_code=400)
+    message = (body.get("message") or "").strip()
+    atts = _desk_parse_attachments_from_body(body)
+    built = _desk_build_user_message(message, atts)
+    if built is None:
+        return JSONResponse(
+            {"ok": False, "error": "empty_message", "detail": "message and attachments are both empty"},
+            status_code=400,
+        )
+    user_payload, persist_um = built
+
+    session_id = (body.get("session_id") or "").strip() or str(uuid.uuid4())
+
+    from hermes_state import SessionDB
+
+    db = SessionDB()
+    try:
+        try:
+            raw_history = db.get_messages_as_conversation(session_id)
+        except Exception as e:
+            _log.exception("desk chat: load history failed")
+            return JSONResponse(
+                {"ok": False, "error": "session_db", "detail": str(e)},
+                status_code=500,
+            )
+        history = [m for m in raw_history if m.get("role") != "session_meta"]
+
+        try:
+            agent = _desk_chat_build_agent(session_id, db)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": "config", "detail": str(e)}, status_code=503)
+        except Exception as e:
+            _log.exception("desk chat: agent init failed")
+            return JSONResponse({"ok": False, "error": "agent_init", "detail": str(e)}, status_code=500)
+
+        _recv_len = len(message) + sum(len(p.get("data") or b"") for p in atts)
+        _log.info(
+            "desk chat: session=%s user_chars~%d history_msgs=%d attachments=%d",
+            session_id, _recv_len, len(history), len(atts),
+        )
+        try:
+            payload = await asyncio.to_thread(
+                _desk_chat_run_in_thread, agent, user_payload, history, session_id, persist_um
+            )
+        except Exception as e:
+            _log.exception("desk chat: run_conversation failed")
+            return JSONResponse({"ok": False, "error": "run_failed", "detail": str(e)}, status_code=500)
+
+        result = (payload or {}).get("result") or {}
+        final_text = _desk_extract_reply_text(result)
+        if not final_text:
+            try:
+                db_msgs = db.get_messages_as_conversation(session_id)
+                final_text = _desk_text_from_assistant_messages(db_msgs)
+            except Exception:
+                _log.debug("desk chat: could not re-read session messages for reply text", exc_info=True)
+
+        ft = (final_text or "").strip()
+        if ft in ("(empty)",):
+            ft = ""
+        if not ft and isinstance(result, dict):
+            _log.warning(
+                "desk chat: empty assistant text (session=%s completed=%s failed=%s keys=%s)",
+                session_id, result.get("completed"), result.get("failed"), list(result.keys()),
+            )
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "empty_model_response",
+                    "detail": (
+                        "The model returned no visible text this turn -- "
+                        "check your API key, model ID, and network in Settings."
+                    ),
+                    "session_id": session_id,
+                    "received_chars": max(1, _recv_len),
+                }
+            )
+
+        _agent_model = getattr(agent, "model", "") or ""
+        _result_model = ((payload or {}).get("result") or {}).get("model") or ""
+        _effective_model = _agent_model or _result_model
+        return JSONResponse(
+            {
+                "ok": True,
+                "proto": False,
+                "session_id": session_id,
+                "final_response": ft,
+                "received_chars": max(1, _recv_len),
+                "preview": (ft[:500] + "..." if len(ft) > 500 else ft) if ft else "",
+                "prompt_tokens": int((payload or {}).get("prompt_tokens") or 0),
+                "completion_tokens": int((payload or {}).get("completion_tokens") or 0),
+                "model": _effective_model,
+            }
+        )
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 @app.get("/api/actions/{name}/status")

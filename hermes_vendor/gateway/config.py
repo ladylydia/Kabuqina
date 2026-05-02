@@ -382,7 +382,7 @@ class GatewayConfig:
 
     # Session isolation in shared chats
     group_sessions_per_user: bool = True  # Isolate group/channel sessions per participant when user IDs are available
-    thread_sessions_per_user: bool = False  # When False (default), threads are shared across all participants
+    thread_sessions_per_user: bool = True  # Isolate thread/topic sessions per participant (default safe)
 
     # Unauthorized DM policy
     unauthorized_dm_behavior: str = "pair"  # "pair" or "ignore"

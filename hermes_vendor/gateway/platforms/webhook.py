@@ -31,6 +31,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 import subprocess
 import time
@@ -326,6 +327,26 @@ class WebhookAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": "Invalid signature"}, status=401
                 )
+
+            # Timestamp-based replay protection.  When the sender includes
+            # X-Webhook-Timestamp (Unix seconds), reject requests older than
+            # the configured tolerance (default 5 min) to prevent replay attacks.
+            _ts_header = request.headers.get("X-Webhook-Timestamp", "")
+            if _ts_header:
+                try:
+                    _ts_value = int(_ts_header.strip())
+                    _tolerance = int(os.environ.get("WEBHOOK_REPLAY_TOLERANCE_SECONDS", "300"))
+                    if abs(time.time() - _ts_value) > _tolerance:
+                        logger.warning(
+                            "[webhook] Replayed/expired request for route %s "
+                            "(timestamp %s, now %s, tolerance %ss)",
+                            route_name, _ts_value, int(time.time()), _tolerance,
+                        )
+                        return web.json_response(
+                            {"error": "Request timestamp out of tolerance"}, status=401
+                        )
+                except (ValueError, TypeError):
+                    pass  # Malformed timestamp — fall through, rely on signature only
 
         # ── Rate limiting (after auth) ───────────────────────────
         now = time.time()
