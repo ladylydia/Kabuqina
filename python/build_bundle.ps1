@@ -257,6 +257,8 @@ $helpersDest = Join-Path $Dist "helpers"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $helpersDest
 Copy-Item -Recurse -Force (Join-Path $PSScriptRoot "helpers") $helpersDest
 Copy-Item -Force (Join-Path $PSScriptRoot "src\desktop_entrypoint.py") (Join-Path $Dist "desktop_entrypoint.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\desktop_config.py") (Join-Path $Dist "desktop_config.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\desktop_contract.py") (Join-Path $Dist "desktop_contract.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\weixin_qr_worker.py") (Join-Path $Dist "weixin_qr_worker.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\qqbot_qr_worker.py") (Join-Path $Dist "qqbot_qr_worker.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\env_validate.py") (Join-Path $Dist "env_validate.py")

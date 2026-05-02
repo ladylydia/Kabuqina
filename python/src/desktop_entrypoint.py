@@ -3,27 +3,30 @@
 Spawned by the Tauri shell. Responsibilities:
 
   1. Configure logging under ``HERMESDESK_DATA_DIR`` (Tauri: e.g. ``%LOCALAPPDATA%\\com.hermesdesk.app``).
-  2. Install runtime overlays (must happen before importing Hermes).
-  3. Pick a free localhost port, write it to a handshake file the
+  2. Validate the Tauri <-> Python contract version.
+  3. Build a typed ``DesktopConfig`` from env vars.
+  4. Install runtime overlays (must happen before importing Hermes).
+  5. Pick a free localhost port, write it to a handshake file the
      Tauri shell is polling.
-  4. Launch Hermes' built-in web server bound to 127.0.0.1:PORT.
-  5. Forward SIGTERM cleanly so closing the window closes the agent.
+  6. Launch Hermes' built-in web server bound to 127.0.0.1:PORT.
+  7. Forward SIGTERM cleanly so closing the window closes the agent.
 
 Tauri sets these env vars before spawn:
 
-    HERMESDESK_BUNDLE_DIR    install dir (read-only)
-    HERMESDESK_DATA_DIR      per-user state (writable)
-    HERMESDESK_WORKSPACE     workspace folder
-    HERMESDESK_PORT_FILE     path where we write the chosen port
-    HERMESDESK_PROVIDER      e.g. "openrouter" or "custom"
-    HERMESDESK_LLM_HOST      LLM hostname for the network allowlist
-    HERMESDESK_API_BASE_URL  optional OpenAI-compatible base URL (custom vendor)
-    HERMESDESK_MODEL         optional default model id (Hermes config seed)
+    HERMESDESK_BUNDLE_DIR        install dir (read-only)
+    HERMESDESK_DATA_DIR          per-user state (writable)
+    HERMESDESK_WORKSPACE         workspace folder
+    HERMESDESK_PORT_FILE         path where we write the chosen port
+    HERMESDESK_PROVIDER          e.g. "openrouter" or "custom"
+    HERMESDESK_LLM_HOST          LLM hostname for the network allowlist
+    HERMESDESK_API_BASE_URL      optional OpenAI-compatible base URL (custom vendor)
+    HERMESDESK_MODEL             optional default model id (Hermes config seed)
     HERMESDESK_INFERENCE_PROVIDER  optional Hermes routing hint (e.g. "custom")
-    HERMESDESK_SECRET_URL    one-shot loopback URL to fetch the API key
-    HERMESDESK_APPROVAL_URL  loopback URL the approval bridge POSTs to
-    HERMESDESK_BRIDGE_SECRET shared with Tauri X-HermesDesk-Auth (shell /api)
-    HERMESDESK_POWER_USER    "1" enables shell/code/browser/mcp tools
+    HERMESDESK_SECRET_URL        one-shot loopback URL to fetch the API key
+    HERMESDESK_APPROVAL_URL      loopback URL the approval bridge POSTs to
+    HERMESDESK_BRIDGE_SECRET     shared with Tauri X-HermesDesk-Auth (shell /api)
+    HERMESDESK_POWER_USER        "1" enables shell/code/browser/mcp tools
+    HERMESDESK_CONTRACT_VERSION  must match desktop_contract.CONTRACT_VERSION
 """
 
 from __future__ import annotations
@@ -170,6 +173,29 @@ def main() -> int:
     _verify_bundle_deps(log)
     hermes_home = _redirect_hermes_home()
     log.info("HERMES_HOME -> %s", hermes_home)
+
+    # 0. Contract version check.  Must match the Tauri shell's expectation.
+    from desktop_contract import CONTRACT_VERSION as _EXPECTED_CONTRACT
+
+    _got = int(os.environ.get("HERMESDESK_CONTRACT_VERSION", "0"))
+    if _got != _EXPECTED_CONTRACT:
+        log.error(
+            "Contract version mismatch: Tauri shell sent v%d, Python expects v%d. "
+            "Rebuild the Python bundle (python/build_bundle.ps1) so the bundled "
+            "hermes_cli matches the Tauri shell's contract.",
+            _got, _EXPECTED_CONTRACT,
+        )
+        return 5
+
+    # 0b. Build typed bootstrap config (Phase 2 — no behavior change yet).
+    # Phase 3 policy objects will consume this instead of raw env vars.
+    from desktop_config import DesktopConfig
+
+    cfg = DesktopConfig.from_env()
+    log.info(
+        "DesktopConfig: mode=%s provider=%s llm_host=%s workspace=%s",
+        cfg.runtime_mode.value, cfg.provider, cfg.llm_host, cfg.workspace,
+    )
 
     # 1. Overlays first.
     try:

@@ -71,6 +71,9 @@ impl Supervisor {
                 "HERMESDESK_POWER_USER",
                 if cfg.power_user { "1" } else { "0" },
             )
+            // HermesDesk desktop contract version.  Must match
+            // ``python/src/desktop_contract.py:CONTRACT_VERSION``.
+            .env("HERMESDESK_CONTRACT_VERSION", "1")
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUTF8", "1")
             // Don't inherit any stale OPENAI/ANTHROPIC keys from the user shell
