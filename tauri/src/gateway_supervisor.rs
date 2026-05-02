@@ -560,6 +560,12 @@ impl GatewaySupervisor {
     }
 }
 
+impl Drop for GatewaySupervisor {
+    fn drop(&mut self) {
+        let _ = self.child.start_kill();
+    }
+}
+
 async fn forward<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
     tag: &'static str,
     r: R,
