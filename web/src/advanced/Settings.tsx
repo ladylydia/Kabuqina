@@ -16,6 +16,7 @@ function platformLabel(key: string): string {
     feishu: "飞书",
     qqbot: "QQ",
     weixin: "微信",
+    dingtalk: "钉钉",
   };
   return map[key] ?? key;
 }
@@ -35,7 +36,6 @@ import {
   FolderOpen,
   Globe,
   KeyRound,
-  type LucideIcon,
   LayoutDashboard,
   MessageCircle,
   QrCode,
@@ -44,7 +44,11 @@ import {
   Store,
   Type,
 } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Toggle } from "../components/ui/Toggle";
+import { Section } from "../components/ui/Section";
 import { AppScaffold } from "../components/AppScaffold";
+import { DingTalkSettingsBlock } from "../components/DingTalkSettingsBlock";
 import { FeishuQrRouteBlock } from "../components/FeishuQrRouteBlock";
 import { PairingSettingsBlock } from "../components/PairingSettingsBlock";
 import { TelegramSettingsBlock } from "../components/TelegramSettingsBlock";
@@ -539,6 +543,10 @@ export function Settings() {
           />
         </Section>
 
+        <Section icon={Store} title={t("settings.dingtalkTitle")} desc={t("settings.dingtalkLead")}>
+          <DingTalkSettingsBlock />
+        </Section>
+
         <Section icon={Type} title={t("settings.fontTitle")} desc={t("settings.fontDesc")}>
           <div className="inline-flex w-full max-w-md rounded-lg border border-zinc-200 bg-zinc-100/50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50 sm:w-auto">
             {(
@@ -621,91 +629,4 @@ export function Settings() {
   );
 }
 
-function Section({
-  icon: Icon,
-  title,
-  desc,
-  children,
-}: {
-  icon?: LucideIcon;
-  title: string;
-  desc?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className={cn(
-        "hd-glass p-5 sm:p-5",
-        Icon ? "space-y-0" : "space-y-3"
-      )}
-    >
-      {Icon ? (
-        <div className="flex gap-3 sm:gap-4">
-          <div
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800/80"
-            aria-hidden
-          >
-            <Icon className="h-5 w-5 text-sky-600 dark:text-sky-400" strokeWidth={2} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-6 text-zinc-900 dark:text-zinc-100">
-              {title}
-            </h2>
-            {desc ? (
-              <p className="mt-2 text-sm leading-[1.57] text-zinc-600 dark:text-zinc-300">{desc}</p>
-            ) : null}
-            <div className="mt-3 flex min-w-0 flex-wrap items-center gap-3">{children}</div>
-          </div>
-        </div>
-      ) : (
-        <>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-          {desc ? (
-            <p className="mt-2 text-sm leading-[1.57] text-zinc-600 dark:text-zinc-300">{desc}</p>
-          ) : null}
-          <div className="flex min-w-0 flex-wrap items-center gap-3">{children}</div>
-        </>
-      )}
-    </section>
-  );
-}
 
-function Button({ className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...props}
-      className={cn(
-        "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800",
-        "transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90",
-        className
-      )}
-    />
-  );
-}
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className={cn(
-        "relative inline-flex h-7 w-12 items-center rounded-full border border-transparent transition",
-        "active:scale-[0.98]",
-        value
-          ? "bg-emerald-600 shadow-sm dark:bg-emerald-500"
-          : "bg-zinc-300 dark:bg-zinc-600"
-      )}
-      role="switch"
-      aria-checked={value}
-    >
-      <span
-        className={cn(
-          "inline-block h-4 w-4 transform rounded-full bg-white shadow transition",
-          value ? "translate-x-7" : "translate-x-1.5"
-        )}
-      />
-    </button>
-  );
-}

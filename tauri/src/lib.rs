@@ -13,6 +13,7 @@
 
 mod bridge;
 mod chat;
+mod dingtalk_env;
 mod feishu_env;
 mod feishu_qr;
 mod gateway_supervisor;
@@ -125,6 +126,9 @@ pub fn run() {
             weixin_qr::cmd_weixin_env_remove,
             qq_env::cmd_qq_env_remove,
             feishu_env::cmd_feishu_env_remove,
+            dingtalk_env::cmd_dingtalk_env_status,
+            dingtalk_env::cmd_dingtalk_env_remove,
+            dingtalk_env::cmd_dingtalk_save_config,
             proxy::cmd_proxy_status,
             proxy::cmd_proxy_save,
             weixin_qr::cmd_weixin_qr_cancel,

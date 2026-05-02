@@ -248,6 +248,36 @@ pub fn read_telegram_env_snapshot(hermes_home: &Path) -> TelegramEnvSnapshot {
     }
 }
 
+/// DingTalk / DingTalk app credentials (no secrets returned).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DingTalkEnvSnapshot {
+    pub configured: bool,
+    pub has_client_id: bool,
+    pub has_client_secret: bool,
+    pub client_id_hint: Option<String>,
+}
+
+pub fn read_dingtalk_env_snapshot(hermes_home: &Path) -> DingTalkEnvSnapshot {
+    let keys = parse_dotenv_upper(hermes_home);
+    let client_id = keys.get("DINGTALK_CLIENT_ID").cloned();
+    let has_client_secret = keys
+        .get("DINGTALK_CLIENT_SECRET")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_client_id = client_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_client_id && has_client_secret;
+    let client_id_hint = client_id
+        .map(|id| qq_app_id_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    DingTalkEnvSnapshot {
+        configured,
+        has_client_id,
+        has_client_secret,
+        client_id_hint,
+    }
+}
+
 fn telegram_token_hint(raw: &str) -> String {
     let s = raw.trim();
     if s.is_empty() {
@@ -311,6 +341,9 @@ pub fn dotenv_suggests_messaging_gateway(hermes_home: &Path) -> bool {
         return true;
     }
     if nonempty("QQ_APP_ID") && nonempty("QQ_CLIENT_SECRET") {
+        return true;
+    }
+    if nonempty("DINGTALK_CLIENT_ID") && nonempty("DINGTALK_CLIENT_SECRET") {
         return true;
     }
     false
