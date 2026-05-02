@@ -146,6 +146,7 @@ export const MESSAGES = {
       providerLead: "{{label}} 会给你一长串密码。只存在本机，不会写成普通文件。",
       labelProvider: "选择提供商",
       selectProvider: "选择一个提供商…",
+      providerCustomLabel: "Custom（手动填入）",
       steps: {
         s1: "点下面按钮，用浏览器打开 {{label}}。",
         s2: "登录后，找到「创建密钥」或类似入口。",
@@ -601,6 +602,7 @@ export const MESSAGES = {
       title: "Save your access pass",
       labelProvider: "Select provider",
       selectProvider: "Select a provider…",
+      providerCustomLabel: "Custom (manual)",
       customLead1:
         "Paste the service web address and your secret. It stays in Windows’ secure storage—not a normal file.",
       providerLead:

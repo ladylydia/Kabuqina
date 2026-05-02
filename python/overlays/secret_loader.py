@@ -28,6 +28,7 @@ log = logging.getLogger("hermesdesk.secret")
 
 
 _PROVIDER_ENV = {
+    "deepseek":   "OPENAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "openai":     "OPENAI_API_KEY",
     "custom":     "OPENAI_API_KEY",  # OpenAI-compatible base URL + key
