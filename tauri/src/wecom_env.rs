@@ -34,6 +34,7 @@ pub fn cmd_wecom_save_config(
     app: AppHandle,
     bot_id: String,
     secret: String,
+    open_access: Option<bool>,
 ) -> Result<(), String> {
     let bid = bot_id.trim();
     let s = secret.trim();
@@ -54,6 +55,8 @@ pub fn cmd_wecom_save_config(
 
     let mut found_id = false;
     let mut found_secret = false;
+    let mut found_dm = false;
+    let dm_value = if open_access.unwrap_or(true) { "open" } else { "pairing" };
     for line in &mut lines {
         let trimmed = line.trim();
         if trimmed.starts_with("WECOM_BOT_ID=") || trimmed.starts_with("WECOM_BOT_ID ") {
@@ -62,6 +65,9 @@ pub fn cmd_wecom_save_config(
         } else if trimmed.starts_with("WECOM_SECRET=") || trimmed.starts_with("WECOM_SECRET ") {
             *line = format!("WECOM_SECRET={}", s);
             found_secret = true;
+        } else if trimmed.starts_with("WECOM_DM_POLICY=") || trimmed.starts_with("WECOM_DM_POLICY ") {
+            *line = format!("WECOM_DM_POLICY={}", dm_value);
+            found_dm = true;
         }
     }
     if !found_id {
@@ -69,6 +75,9 @@ pub fn cmd_wecom_save_config(
     }
     if !found_secret {
         lines.push(format!("WECOM_SECRET={}", s));
+    }
+    if !found_dm {
+        lines.push(format!("WECOM_DM_POLICY={}", dm_value));
     }
 
     std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())

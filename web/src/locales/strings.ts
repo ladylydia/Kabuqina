@@ -281,6 +281,7 @@ export const MESSAGES = {
       wecomFormSave: "保存",
       wecomFormCancel: "取消",
       wecomFormError: "保存失败：{{msg}}",
+      wecomOpenAccess: "免配对开放访问（任何人可直接对话）",
       gatewayTroubleshootTelegram:
         "Telegram：① 本页「消息网关」须显示「运行中」；② 需 **TELEGRAM_BOT_TOKEN**（@BotFather）；③ 若使用 TELEGRAM_ALLOWED_USERS，请填对 numeric user id；④ 查看 hermes-home/logs/gateway.log。",
       gatewayTroubleshootFeishu:
@@ -796,6 +797,7 @@ export const MESSAGES = {
       wecomFormSave: "Save",
       wecomFormCancel: "Cancel",
       wecomFormError: "Save failed: {{msg}}",
+      wecomOpenAccess: "Open access — no pairing required (anyone can chat)",
       qqTitle: "QQ bot (official OpenAPI v2)",
       qqLead:
         "Recommended: scan to bind your QQ bot.",

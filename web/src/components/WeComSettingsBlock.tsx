@@ -26,6 +26,7 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [openAccess, setOpenAccess] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
@@ -47,7 +48,7 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
     setSaving(true);
     setError(null);
     try {
-      await invoke("cmd_wecom_save_config", { botId: bid, secret: sec });
+      await invoke("cmd_wecom_save_config", { botId: bid, secret: sec, openAccess });
       await invoke<number>("cmd_restart_embedded_hermes");
       setShowForm(false);
       setBotId("");
@@ -140,6 +141,15 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
               if (e.key === "Enter") void saveConfig();
             }}
           />
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={openAccess}
+              onChange={(e) => setOpenAccess(e.target.checked)}
+              className="rounded"
+            />
+            {t("settings.wecomOpenAccess")}
+          </label>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className={btnClass} onClick={() => void saveConfig()} disabled={saving || !botId.trim() || !secret.trim()}>
               {saving ? "…" : t("settings.wecomFormSave")}
