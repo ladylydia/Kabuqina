@@ -32,7 +32,7 @@ $Root      = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildDir  = Join-Path $PSScriptRoot "_build"
 $Download  = Join-Path $PSScriptRoot "_download"
 $Dist      = Join-Path $PSScriptRoot "dist\runtime"
-$HermesDir = Join-Path $Root "hermes"
+$HermesDir = Join-Path $Root "hermes_vendor"
 
 if ($Clean) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $BuildDir, $Dist
@@ -41,7 +41,7 @@ if ($Clean) {
 New-Item -ItemType Directory -Force -Path $BuildDir, $Download, $Dist | Out-Null
 
 if (-not (Test-Path (Join-Path $HermesDir "pyproject.toml"))) {
-    Write-Error "Hermes submodule not initialised. Run: git submodule update --init"
+    Write-Error "hermes_vendor/ directory not found. The frozen upstream source is missing."
     exit 2
 }
 
@@ -77,25 +77,7 @@ Write-Host "Using Python: " (& $Py --version)
 # ------------------------------------------------------------------ 2. pip
 & $Py -m pip install --upgrade pip wheel | Out-Null
 
-# ------------------------------------------------------------------ 3. Apply patches
-$patchDir = Join-Path $Root "patches"
-foreach ($p in (Get-ChildItem -Path $patchDir -Filter *.patch -ErrorAction SilentlyContinue | Sort-Object Name)) {
-    # Check if patch is already applied (common when working from a dirty submodule)
-    $alreadyApplied = & git -C $HermesDir apply --reverse --check $p.FullName 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "Patch already applied: $($p.Name) (skipping)"
-        continue
-    }
-    Write-Host "Applying patch: $($p.Name)"
-    & git -C $HermesDir apply --3way --ignore-whitespace $p.FullName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: Patch failed. The submodule working tree may have conflicting changes."
-        Write-Host "  Run: git -C hermes stash && .\python\build_bundle.ps1"
-        exit 1
-    }
-}
-
-# ------------------------------------------------------------------ 4. Prune Hermes into the bundle
+# ------------------------------------------------------------------ 3. Prune Hermes into the bundle
 $bundledHermes = Join-Path $Dist "hermes"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $bundledHermes
 New-Item -ItemType Directory -Force -Path $bundledHermes | Out-Null
@@ -196,7 +178,7 @@ function Invoke-HermesWebNpmCommand {
 # `hermes_cli/web_server.py` expects the built SPA at
 # `<package>/web_dist/`. Without this, every HTTP path returns
 # {"error":"Frontend not built. Run: cd web && npm run build"}.
-# Hermes dashboard SPA lives under the submodule: hermes/web → hermes/hermes_cli/web_dist (see vite.config.ts).
+# Hermes dashboard SPA lives under the frozen source: hermes_vendor/web → hermes_vendor/hermes_cli/web_dist.
 #
 # IMPORTANT: always run `npm run build` by default. A stale hermes_cli/web_dist
 # (e.g. from an older run) would previously skip the build and bundle an
@@ -292,8 +274,7 @@ $info = @{
     pythonVersion  = $PythonVersion
     pbsRelease     = $PbsRelease
     builtAt        = (Get-Date).ToString("o")
-    hermesCommit   = (& git -C $HermesDir rev-parse HEAD).Trim()
-    hermesDescribe = (& git -C $HermesDir describe --tags --always).Trim()
+    frozenCommit   = "90b304b7c (v2026.4.23 — frozen upstream snapshot)"
     bundleSizeMb   = [math]::Round(((Get-ChildItem -Recurse $Dist | Measure-Object Length -Sum).Sum / 1MB), 1)
 }
 $info | ConvertTo-Json | Set-Content -Path (Join-Path $Dist "BUNDLE_INFO.json") -Encoding UTF8
