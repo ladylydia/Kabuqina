@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
@@ -11,11 +11,22 @@ export type WeComEnvSnapshot = {
   botIdHint?: string | null;
 };
 
+export type WeComQrStatusPayload = {
+  running: boolean;
+  progress: { phase?: string; message?: string | null } | null;
+  result: { ok?: boolean; bot_id?: string; error?: string } | null;
+};
+
 const btnClass =
   "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
 
 const inputClass =
   "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+
+const ipcErr = (e: unknown): string =>
+  e instanceof Error ? e.message : String(e);
+
+const QR_POLL_MS = 2500;
 
 export function WeComSettingsBlock({ className }: { className?: string }) {
   const { t } = useI18n();
@@ -27,6 +38,12 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
   const [showForm, setShowForm] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [openAccess, setOpenAccess] = useState(true);
+
+  // QR scan
+  const [qrPolling, setQrPolling] = useState(false);
+  const [qrView, setQrView] = useState<WeComQrStatusPayload | null>(null);
+  const [qrInlineErr, setQrInlineErr] = useState<string | null>(null);
+  const qrExitStreak = useRef(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -41,6 +58,61 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
     void refresh();
   }, [refresh]);
 
+  // QR polling
+  useEffect(() => {
+    if (!qrPolling) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const s = await invoke<WeComQrStatusPayload>("cmd_wecom_qr_status");
+        if (cancelled) return;
+        setQrView(s);
+        if (s.running) { qrExitStreak.current = 0; return; }
+        const r = s.result;
+        if (r && typeof r.ok === "boolean") {
+          qrExitStreak.current = 0;
+          setQrPolling(false);
+          if (r.ok) {
+            void refresh();
+            await invoke<number>("cmd_restart_embedded_hermes").catch(() => {});
+          }
+          return;
+        }
+        // process ended with no result — likely crashed
+        qrExitStreak.current += 1;
+        if (qrExitStreak.current >= 3) {
+          setQrPolling(false);
+          setQrInlineErr(t("settings.wecomQrError", { msg: "process exited without result" }));
+        }
+      } catch {
+        /* retry */
+      }
+    };
+    tick();
+    const iv = setInterval(tick, QR_POLL_MS);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [qrPolling, t, refresh]);
+
+  async function startQr() {
+    setQrInlineErr(null);
+    setQrView(null);
+    qrExitStreak.current = 0;
+    try {
+      await invoke("cmd_wecom_qr_start");
+      setQrPolling(true);
+    } catch (e) {
+      setQrInlineErr(ipcErr(e));
+    }
+  }
+
+  async function cancelQr() {
+    try { await invoke("cmd_wecom_qr_cancel"); } catch {}
+    setQrPolling(false);
+    setQrView(null);
+  }
+
+  // Form
   async function saveConfig() {
     const bid = botId.trim();
     const sec = secret.trim();
@@ -80,8 +152,51 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
     }
   }
 
+  const qrPhaseLabel = (phase: string) => {
+    const map: Record<string, string> = {
+      starting: t("settings.wecomQrPhaseStarting"),
+      connecting: t("settings.wecomQrPhaseConnecting"),
+      done: t("settings.wecomQrPhaseDone"),
+      error: t("settings.wecomQrPhaseError"),
+    };
+    return map[phase] || phase;
+  };
+
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
+      {/* QR scan section */}
+      {!qrPolling && !qrView?.result ? (
+        <div className="rounded-lg border border-dashed border-zinc-300/80 px-3 py-2.5 text-sm dark:border-zinc-700/80">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">{t("settings.wecomQrLead")}</p>
+          <button type="button" className={btnClass} onClick={() => void startQr()}>
+            {t("settings.wecomQrStart")}
+          </button>
+        </div>
+      ) : null}
+
+      {qrPolling && qrView?.progress?.phase ? (
+        <div className="rounded-lg border border-sky-200/80 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-800/50 dark:bg-sky-950/25">
+          <p className="text-xs text-zinc-600 dark:text-zinc-300">{qrPhaseLabel(qrView.progress.phase)}</p>
+        </div>
+      ) : null}
+
+      {qrPolling && qrView?.progress?.message ? (
+        <p className="text-xs text-red-600 dark:text-red-400">{qrView.progress.message}</p>
+      ) : null}
+
+      {qrInlineErr ? (
+        <p className="text-sm text-red-600 dark:text-red-400">{qrInlineErr}</p>
+      ) : null}
+
+      {qrPolling ? (
+        <button type="button" className={btnClass} onClick={() => void cancelQr()}>
+          {t("settings.wecomQrCancel")}
+        </button>
+      ) : null}
+
+      <hr className="border-zinc-200/60 dark:border-zinc-700/60" />
+
+      {/* Manual form section */}
       {!env?.configured && !showForm ? (
         <>
           <div className="rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-2.5 text-sm dark:border-zinc-700/80 dark:bg-zinc-900/40">

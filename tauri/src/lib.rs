@@ -27,6 +27,7 @@ mod secrets;
 mod telegram_env;
 mod tray;
 mod wecom_env;
+mod wecom_qr;
 mod weixin_qr;
 
 use serde::Serialize;
@@ -46,6 +47,8 @@ pub struct AppState {
     pub qqbot_qr_child: Arc<Mutex<Option<tokio::process::Child>>>,
     /// Optional Feishu / Lark QR login child (`feishu_qr_worker.py`); separate from the long-lived Hermes process.
     pub feishu_qr_child: Arc<Mutex<Option<tokio::process::Child>>>,
+    /// Optional WeCom QR login child (`wecom_qr_worker.py`); separate from the long-lived Hermes process.
+    pub wecom_qr_child: Arc<Mutex<Option<tokio::process::Child>>>,
     pub bridge_addr: Arc<Mutex<Option<std::net::SocketAddr>>>,
     /// Cached from `bridge::Bridge` for respawning Python without a second `bridge::spawn`.
     pub bridge_secret_url: Arc<Mutex<Option<String>>>,
@@ -69,6 +72,7 @@ pub fn run() {
         weixin_qr_child: Arc::new(Mutex::new(None)),
         qqbot_qr_child: Arc::new(Mutex::new(None)),
         feishu_qr_child: Arc::new(Mutex::new(None)),
+        wecom_qr_child: Arc::new(Mutex::new(None)),
         bridge_addr: bridge_addr.clone(),
         bridge_secret_url: Arc::new(Mutex::new(None)),
         bridge_approval_url: Arc::new(Mutex::new(None)),
@@ -133,6 +137,9 @@ pub fn run() {
             wecom_env::cmd_wecom_env_status,
             wecom_env::cmd_wecom_env_remove,
             wecom_env::cmd_wecom_save_config,
+            wecom_qr::cmd_wecom_qr_start,
+            wecom_qr::cmd_wecom_qr_status,
+            wecom_qr::cmd_wecom_qr_cancel,
             proxy::cmd_proxy_status,
             proxy::cmd_proxy_save,
             weixin_qr::cmd_weixin_qr_cancel,
