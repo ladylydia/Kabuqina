@@ -12,6 +12,7 @@ export type ProviderId =
   | "openrouter"
   | "openai"
   | "anthropic"
+  | "deepseek"
   | "nous"
   | "groq"
   | "mistral"
@@ -92,6 +93,17 @@ export const PROVIDERS: Provider[] = [
     validateUrl: "https://api.mistral.ai/v1/models",
     validateAuth: (k) => `Bearer ${k}`,
     blurb: "Mistral's hosted models.",
+    freeTier: false,
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    host: "api.deepseek.com",
+    signupUrl: "https://platform.deepseek.com/api_keys",
+    validateUrl: "https://api.deepseek.com/v1/models",
+    validateAuth: (k) => `Bearer ${k}`,
+    keyPrefixHint: "sk-",
+    blurb: "DeepSeek V4. Leading performance, competitive pricing.",
     freeTier: false,
   },
   {

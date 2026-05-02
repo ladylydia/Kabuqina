@@ -1,3 +1,5 @@
+import { useCallback, useState } from "react";
+
 /**
  * UI preferences persisted in localStorage (shell webview).
  * Root `font-size` scales `rem` used by Tailwind text utilities.
@@ -38,4 +40,13 @@ export function applyFontSize(opt?: FontSizeOption): void {
   const o = opt ?? getStoredFontSize();
   document.documentElement.style.fontSize = ROOT_PX[o] ?? ROOT_PX.medium;
   document.documentElement.setAttribute("data-font-size", o);
+}
+
+export function useFontSize() {
+  const [size, setSizeState] = useState<FontSizeOption>(getStoredFontSize);
+  const setSize = useCallback((opt: FontSizeOption) => {
+    setFontSize(opt);
+    setSizeState(opt);
+  }, []);
+  return { size, setSize };
 }
