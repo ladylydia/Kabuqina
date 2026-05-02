@@ -56,7 +56,9 @@ pub fn cmd_wecom_save_config(
     let mut found_id = false;
     let mut found_secret = false;
     let mut found_dm = false;
+    let mut found_allow_all = false;
     let dm_value = if open_access.unwrap_or(true) { "open" } else { "pairing" };
+    let allow_all_value = if open_access.unwrap_or(true) { "true" } else { "false" };
     for line in &mut lines {
         let trimmed = line.trim();
         if trimmed.starts_with("WECOM_BOT_ID=") || trimmed.starts_with("WECOM_BOT_ID ") {
@@ -68,6 +70,9 @@ pub fn cmd_wecom_save_config(
         } else if trimmed.starts_with("WECOM_DM_POLICY=") || trimmed.starts_with("WECOM_DM_POLICY ") {
             *line = format!("WECOM_DM_POLICY={}", dm_value);
             found_dm = true;
+        } else if trimmed.starts_with("WECOM_ALLOW_ALL_USERS=") || trimmed.starts_with("WECOM_ALLOW_ALL_USERS ") {
+            *line = format!("WECOM_ALLOW_ALL_USERS={}", allow_all_value);
+            found_allow_all = true;
         }
     }
     if !found_id {
@@ -78,6 +83,9 @@ pub fn cmd_wecom_save_config(
     }
     if !found_dm {
         lines.push(format!("WECOM_DM_POLICY={}", dm_value));
+    }
+    if !found_allow_all {
+        lines.push(format!("WECOM_ALLOW_ALL_USERS={}", allow_all_value));
     }
 
     std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())

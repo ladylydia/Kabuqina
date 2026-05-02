@@ -54,6 +54,7 @@ pub fn cmd_dingtalk_save_config(
 
     let mut found_id = false;
     let mut found_secret = false;
+    let mut found_allow_all = false;
     for line in &mut lines {
         let trimmed = line.trim();
         if trimmed.starts_with("DINGTALK_CLIENT_ID=") || trimmed.starts_with("DINGTALK_CLIENT_ID ") {
@@ -62,6 +63,9 @@ pub fn cmd_dingtalk_save_config(
         } else if trimmed.starts_with("DINGTALK_CLIENT_SECRET=") || trimmed.starts_with("DINGTALK_CLIENT_SECRET ") {
             *line = format!("DINGTALK_CLIENT_SECRET={}", csec);
             found_secret = true;
+        } else if trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS=") || trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS ") {
+            *line = "DINGTALK_ALLOW_ALL_USERS=true".to_string();
+            found_allow_all = true;
         }
     }
     if !found_id {
@@ -69,6 +73,9 @@ pub fn cmd_dingtalk_save_config(
     }
     if !found_secret {
         lines.push(format!("DINGTALK_CLIENT_SECRET={}", csec));
+    }
+    if !found_allow_all {
+        lines.push("DINGTALK_ALLOW_ALL_USERS=true".to_string());
     }
 
     std::fs::write(&env_path, lines.join("\n") + "\n").map_err(|e| e.to_string())
