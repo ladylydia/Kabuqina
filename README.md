@@ -92,28 +92,24 @@ The gateway process loads the LLM API key from the same Windows Credential Manag
 ```
 hermesdesk/
   tauri/        Tauri 2 shell
-  python/       Bundle scripts, overlays, L1 helpers, tests
-  web/          Shell onboarding + settings (Hermes UI lives under hermes/web)
-  hermes/       git submodule → Hermes Agent
-  patches/      Small upstream applies during bundle
+  python/       Bundle scripts, overlays, policy layer, tests
+  web/          Shell onboarding + settings (Hermes UI lives under hermes_vendor/web)
+  hermes_vendor/  Frozen upstream Hermes Agent snapshot
   docs/         Architecture, safety, skills, troubleshooting
 ```
 
 ### Build from source
 
-**Needs:** Rust **1.80+**, Node **20+**, PowerShell **7+**, and the repo **with submodules**.
+**Needs:** Rust **1.80+**, Node **20+**, PowerShell **7+**.
 
 ```powershell
-git clone --recursive https://github.com/ladylydia/hermesdesk.git
+git clone https://github.com/ladylydia/hermesdesk.git
 cd hermesdesk
 
 # Python runtime bundle (downloads standalone CPython the first time)
 .\python\build_bundle.ps1
-# After any `hermes/` submodule update (especially `hermes/gateway/`), re-run the line above
-# so `python/dist/runtime/hermes/` matches git — otherwise "Start gateway" may exit with code 1
-# even when Keys shows messaging credentials (e.g. WEIXIN_*); see docs/troubleshooting.md §12 and docs/gateway-desk-weixin-strategy.md §8.
 
-# Optional: L1 helper unit tests (needs hermes/ submodule)
+# Optional: L1 helper unit tests
 Set-Location python; python -m unittest discover -s tests -p "test_*.py" -v; Set-Location ..
 
 # Shell web (onboarding / in-shell chat / settings). `npm run build` uses `tsc --noEmit`
@@ -125,7 +121,7 @@ cd web; npm ci; npm run build; cd ..
 cd tauri; cargo tauri dev
 
 # Release / `.msi` (from repo root). Sidecar/embedded Python ships from
-# `hermes/artifacts/desktop-python/`. On Windows, prefer **cmd.exe** or **Developer
+# `hermes_vendor/artifacts/desktop-python/`. On Windows, prefer **cmd.exe** or **Developer
 # PowerShell** so MSVC / SDK env vars (e.g. `VCToolsVersion`) are set for vcpkg /
 # `pydantic-core` wheels; see [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md).
 # Optional: `cd tauri` then `cargo tauri icon ..\logo.png` to refresh `tauri\icons\`
@@ -216,28 +212,24 @@ Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearc
 ```
 hermesdesk/
   tauri/        桌面壳（Rust + Tauri 2）
-  python/     打包脚本、运行时 overlay、L1 helpers、测试
-  web/        壳侧引导与设置（Hermes 仪表盘在 hermes/web）
-  hermes/     git 子模块：Hermes Agent
-  patches/    打包时对上游的小补丁
+  python/     打包脚本、运行时 overlay、policy 层、测试
+  web/        壳侧引导与设置（Hermes 仪表盘在 hermes_vendor/web）
+  hermes_vendor/  上游 Hermes Agent 冻结快照
   docs/       架构、安全、Skills、排障等
 ```
 
 ### 从源码构建（Windows）
 
-**准备：** Rust **1.80+**、Node **20+**、PowerShell **7+**，并且克隆时带上 **子模块**。
+**准备：** Rust **1.80+**、Node **20+**、PowerShell **7+**。
 
 ```powershell
-git clone --recursive https://github.com/ladylydia/hermesdesk.git
+git clone https://github.com/ladylylia/hermesdesk.git
 cd hermesdesk
 
 # 打 Python 运行时包（首次会下载独立 CPython）
 .\python\build_bundle.ps1
-# 更新 hermes 子模块（尤其 gateway）后务必再执行上一行，使 python/dist/runtime/hermes/ 与仓库一致；
-# 否则设置里「启动网关」可能立刻 exit code 1，而 Keys 里已有消息凭据（如 WEIXIN_*）。见 docs/troubleshooting.md §12、
-# docs/gateway-desk-weixin-strategy.md §8。
 
-# 可选：L1 内置助手相关单元测试（需要 hermes/ 子模块）
+# 可选：L1 内置助手相关单元测试
 Set-Location python; python -m unittest discover -s tests -p "test_*.py" -v; Set-Location ..
 
 # 壳上 Web（引导、壳内 /chat、设置）。`npm run build` 使用 `tsc --noEmit`（非 `tsc -b`），
@@ -247,7 +239,7 @@ cd web; npm ci; npm run build; cd ..
 # 开发：启动桌面壳
 cd tauri; cargo tauri dev
 
-# 发布 / 打 `.msi`（在仓库根目录；侧载 Python 来自 `hermes/artifacts/desktop-python/`）。
+# 发布 / 打 `.msi`（在仓库根目录；侧载 Python 来自 `hermes_vendor/artifacts/desktop-python/`）。
 # Windows 上建议在 **cmd** 或 **Developer PowerShell** 中构建，以便 MSVC / SDK 环境供 vcpkg
 # 与 `pydantic-core` 轮子；详见 [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md)。
 # 可选：`cd tauri` 后 `cargo tauri icon ..\logo.png` 更新 `tauri\icons\`；若报文件占用，可 `-o` 到临时目录再拷贝。

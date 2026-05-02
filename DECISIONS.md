@@ -12,11 +12,25 @@ explicit reasoning to alter.
 | Bundle id      | `com.hermesdesk.app`                                     |
 | Install target | Per-user, `%LOCALAPPDATA%\HermesDesk` (no admin needed)  |
 | License        | MIT                                                      |
-| Upstream       | git submodule -> `NousResearch/hermes-agent` pinned to a tag (currently `v0.10.0`) |
+| Upstream       | Frozen snapshot at `hermes_vendor/` (from `NousResearch/hermes-agent` pinned to `v0.10.0`). No submodule, no automatic sync. |
 | Tagline        | "A friendly AI helper for your PC. No setup, no terminal." |
 
 The "HermesDesk" name is provisional. Trademark check is pending — see
 `docs/branding-todo.md` (not yet written).
+
+## De-patching migration (2026-05-03)
+
+| Question | Decision |
+|----------|----------|
+| Product relationship | **Independent.** HermesDesk is a standalone monorepo. The upstream `NousResearch/hermes-agent` is frozen at `hermes_vendor/`. |
+| Upstream sync | **Cherry-pick only.** Security advisories, CVEs, and provider API breaking changes are manually cherry-picked and logged in this file. No batch merges. |
+| Gateway platforms | All 6 (Weixin, QQ Bot, Feishu/Lark, Telegram, DingTalk, WeCom) stay in the onboarding UI. Weixin and Feishu are feature-flagged at the `GatewayPolicy` level. |
+| Architecture | `agent_core` (frozen Hermes) + `desktop_policy` (6 injected policy objects). Overlays are transitional and tagged `# DEPRECATED`. |
+
+**Cherry-pick log:**
+
+| Date | Commit | Origin | Reason |
+|------|--------|--------|--------|
 
 ## Distribution & signing
 

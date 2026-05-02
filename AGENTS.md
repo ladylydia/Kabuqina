@@ -4,7 +4,7 @@
 > The upstream code is frozen in `hermes_vendor/` — no automatic sync, no submodule, no patches.
 > For internals of the frozen agent core, see `hermes_vendor/AGENTS.md`.
 
-**Roadmap:** This repo is migrating from a patched submodule model to an owned monorepo with policy-layer architecture. See `docs/depatching-plan.md` for the full migration plan.
+**Roadmap:** This repo has migrated from a patched submodule model to an owned monorepo with policy-layer architecture. See `docs/depatching-plan.md` for the full migration record.
 
 ## Architecture
 
@@ -41,25 +41,37 @@ cd tauri; cargo tauri dev
 - `npm run build` in `web/` uses `tsc --noEmit` (not `tsc -b`) to avoid `tsconfig.tsbuildinfo` locking on Windows.
 - `build_bundle.ps1` also builds Hermes' own React SPA (`hermes_vendor/web/` → `hermes_vendor/hermes_cli/web_dist/`) via Git Bash (`sync-assets` uses POSIX `rm`/`cp`). On machines without Git Bash, it falls back to `npm run build` directly.
 
+## Policy layer (`python/src/`)
+
+Core logic extracted from monkey-patch overlays into injected policy objects.
+Each policy has a corresponding overlay wrapper (tagged `# DEPRECATED`):
+
+| Policy | Overlay Wrapper | Responsibility |
+|--------|----------------|----------------|
+| `path_policy.py` | `workspace_jail.py`, `path_guard.py` | Confine file I/O to workspace + extra dirs |
+| `secret_store.py` | (inlined in `overlays/__init__.py`) | Fetch API key from Tauri bridge (DPAPI) |
+| `network_policy.py` | `network_allowlist.py` | Block egress to non-allowlisted hosts |
+| `approval_backend.py` | `approval_bridge.py` | Route shell commands through Tauri approval dialog |
+| `tool_policy.py` | `default_toolset.py` | Restrict tools to safe keep-list (or power-user list) |
+| `gateway_policy.py` | `strip_shims.py` | Platform feature flags + gateway adapter defaults |
+
 ## Overlays (`python/overlays/`)
 
-The Python entrypoint calls `overlays.apply_all()` **before importing any Hermes modules**. Nine overlays install in strict order:
+The Python entrypoint calls `overlays.apply_all()` **before importing any Hermes modules**. Seven overlays install in strict order:
 
 | Order | Overlay | Effect |
 |-------|---------|--------|
 | 1 | `strip_shims` | Stub-out gateway imports in the web child |
-| 2 | `windows_safety` | Process-group safety for Windows |
-| 3 | `secret_loader` | Fetch API key from Tauri bridge (DPAPI), not `.env` |
-| 4 | `desktop_llm_config` | Desktop-specific LLM routing |
-| 5 | `workspace_jail` | Confine file I/O to workspace + temp + data dir |
-| 6 | `network_allowlist` | Block egress to non-allowlisted hosts |
-| 7 | `default_toolset` | Restrict tools to safe keep-list (or power-user list) |
-| 8 | `builtin_helpers` | L1 QuickActions dispatch |
-| 9 | `approval_bridge` | Route shell commands through Tauri approval dialog |
+| 2 | `desktop_llm_config` | Desktop-specific LLM routing |
+| 3 | `workspace_jail` | Confine file I/O to workspace + temp + data dir |
+| 4 | `network_allowlist` | Block egress to non-allowlisted hosts |
+| 5 | `default_toolset` | Restrict tools to safe keep-list (or power-user list) |
+| 6 | `builtin_helpers` | L1 QuickActions dispatch |
+| 7 | `approval_bridge` | Route shell commands through Tauri approval dialog |
 
 Failure is fatal by default. Set `HERMESDESK_OVERLAY_LENIENT=1` to make failures non-fatal (dev/smoke only).
 
-These overlays are targeted for replacement by policy objects (`python/src/policies/*`) during the de-patching migration.
+Overlays `windows_safety` and `secret_loader` were removed in Phase 4 (no‑op and trivial wrapper respectively). The policy files under `python/src/` are the target replacement; overlays will be deleted per-policy once their wiring is stable.
 
 ## Power user mode
 
@@ -102,7 +114,7 @@ cd tauri; cargo tauri icon ..\logo.png
 
 ## Windows-specific gotchas
 
-1. **Proxy strangling loopback:** System-wide proxies (Clash, V2Ray, corporate MITM) route `127.0.0.1` to the proxy, breaking Tauri↔Python comms. The Rust supervisor strips all proxy env vars and forces `NO_PROXY=127.0.0.1,localhost,::1`. `secret_loader.py` uses an explicit empty `ProxyHandler({})`. See `docs/troubleshooting.md` §1.
+1. **Proxy strangling loopback:** System-wide proxies (Clash, V2Ray, corporate MITM) route `127.0.0.1` to the proxy, breaking Tauri↔Python comms. The Rust supervisor strips all proxy env vars and forces `NO_PROXY=127.0.0.1,localhost,::1`. `secret_store.py` uses an explicit empty `ProxyHandler({})`. See `docs/troubleshooting.md` §1.
 
 2. **MSVC env for wheels on release builds** (`pydantic-core` etc.). Use **Developer PowerShell for VS** or **cmd.exe** with VC vars set when building release. See `docs/embedded-python-bundled.md`.
 

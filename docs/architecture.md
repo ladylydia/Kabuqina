@@ -40,6 +40,15 @@ flowchart TD
 
 The **Hermes web child** installs `strip_shims` so imports like `gateway.run.main` inside `web_server` load **no-op stubs** — the dashboard process must not accidentally become the messaging gateway entrypoint. The **`gateway/` tree still ships on disk** inside the bundle; the **gateway supervisor** runs **`python -m gateway.run`** as a **separate OS process**, which loads the real `gateway.run` module. See [python/overlays/strip_shims.py](../python/overlays/strip_shims.py).
 
+### Python runtime layers
+
+The Python side is split into two architectural layers:
+
+1. **agent_core** — the frozen Hermes Agent subtree (`hermes_vendor/`). Imported directly by `desktop_entrypoint.py` after overlays are applied. Never modified independently.
+2. **desktop_policy** — HermesDesk-owned policy objects (`python/src/*_policy.py`). Each policy covers one surface (paths, secrets, network, tools, approval, gateway). They are injected at startup via `desktop_config.py` rather than monkey-patched.
+
+The 7 remaining overlays (`python/overlays/`) wire the policies into Hermes' import chain; they will be deleted as their corresponding policies become self-sufficient. See [python/overlays/__init__.py](../python/overlays/__init__.py) for the install order.
+
 ### Shell chat (`/chat`)
 
 The shell chat page calls Tauri **`invoke`** commands implemented in [tauri/src/chat.rs](../tauri/src/chat.rs). Rust proxies HTTP to the embedded Hermes loopback using **`X-HermesDesk-Auth`** plus the same **`Authorization: Bearer`** session token Hermes uses for its web UI (read from disk or scraped once from `index.html`). This avoids cross-origin `fetch` from the shell origin and keeps token handling in-process.
@@ -67,7 +76,8 @@ Further product notes: [gateway-desk-weixin-strategy.md](gateway-desk-weixin-str
 | [tauri/src/paths.rs](../tauri/src/paths.rs)                             | Workspace + bundle + data dir resolution; settings                                    |
 | [tauri/src/tray.rs](../tauri/src/tray.rs)                               | System tray + menu                                                                    |
 | [python/src/desktop_entrypoint.py](../python/src/desktop_entrypoint.py) | Python entry — overlays, port handshake, boots Hermes web_server                       |
-| [python/overlays/](../python/overlays/)                                 | Runtime patches (jail, approval, secret, allowlist, toolset, strip_shims, …)           |
+| [python/src/](../python/src/)                                           | Policy layer (path_policy, secret_store, approval_backend, network_policy, tool_policy, gateway_policy) |
+| [python/overlays/](../python/overlays/)                                 | Runtime monkey-patches wrapping policy objects (to be removed per-policy)               |
 | [web/src/main.tsx](../web/src/main.tsx)                                 | Shell router: Splash, onboarding, `/chat`, `/settings`                               |
 | [web/src/onboarding/](../web/src/onboarding/)                           | Wizard + gateway/setup sections                                                       |
 | [web/src/advanced/Settings.tsx](../web/src/advanced/Settings.tsx)       | Power user, gateway controls, Telegram/Feishu/QQ/Weixin blocks, proxy               |
@@ -104,7 +114,7 @@ provider's `/v1/models` (or equivalent) returns 200.
 on launch.
 - **Network unreachable:** Updater silently no-ops; chat shows the
 provider's own error in-line.
-- **Messaging gateway exits immediately (code 1):** Often **`python/dist/runtime`** is stale versus the `hermes/` submodule after a gateway fix (first-connect survival). Re-run `python/build_bundle.ps1` and relaunch. Details: [troubleshooting.md](troubleshooting.md) §12, README build notes.
+- **Messaging gateway exits immediately (code 1):** Often **`python/dist/runtime`** is stale versus `hermes_vendor/` source after a gateway fix (first-connect survival). Re-run `python/build_bundle.ps1` and relaunch. Details: [troubleshooting.md](troubleshooting.md) §12, README build notes.
 
 ## Why not Electron / why not pure browser?
 
