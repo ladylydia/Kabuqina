@@ -9,7 +9,7 @@ type Props = {
   className?: string;
 };
 
-export function ChatMarkdown({ text, className = "" }: Props) {
+export default function ChatMarkdown({ text, className = "" }: Props) {
   return (
     <div
       className={`chat-md text-sm leading-[1.6] text-zinc-800 dark:text-zinc-200 ${className}`}

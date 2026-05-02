@@ -23,7 +23,6 @@ export function Wizard() {
         <Route path="gateway" element={<SectionPlaceholderStep id="gateway" />} />
         <Route path="tools" element={<SectionPlaceholderStep id="tools" />} />
         <Route path="agent" element={<SectionPlaceholderStep id="agent" />} />
-        <Route path="vibe" element={<Navigate to="/chat" replace />} />
         <Route path="done" element={<Navigate to="/chat" replace />} />
         <Route path="*" element={<Navigate to="mode" replace />} />
       </Routes>

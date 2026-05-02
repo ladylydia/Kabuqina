@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { useI18n } from "../lib/i18n";
-import { ChatMarkdown } from "./ChatMarkdown";
 import { cn } from "../lib/cn";
+
+const ChatMarkdown = lazy(() => import("./ChatMarkdown"));
 
 export interface ChatMessageProps {
   role: "user" | "assistant";
@@ -185,7 +186,9 @@ export function ChatMessage({ role, text, model, timestamp }: ChatMessageProps) 
           </>
         ) : (
           <>
-            <ChatMarkdown text={text} />
+            <Suspense fallback={<div className="text-sm text-zinc-400 italic">...</div>}>
+              <ChatMarkdown text={text} />
+            </Suspense>
             <AssistantMessageFooter text={text} model={model} timeStr={timeStr} />
           </>
         )}
