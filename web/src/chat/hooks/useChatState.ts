@@ -69,7 +69,7 @@ function rowsToUiMessages(rows: MessageRow[], sessionModel: string): UiMsg[] {
     out.push({
       id: `m-${n++}`,
       role: role as "user" | "assistant",
-      text: text || (role === "assistant" ? "…" : ""),
+      text: text || "",
       timestamp: typeof m.timestamp === "number" ? m.timestamp : undefined,
       model: role === "assistant" && mdl ? mdl : undefined,
     });

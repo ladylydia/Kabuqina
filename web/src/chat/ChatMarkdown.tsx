@@ -77,6 +77,25 @@ export default function ChatMarkdown({ text, className = "" }: Props) {
               </code>
             );
           },
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-3 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              <table className="w-full text-left border-collapse text-sm">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children }) => (
+            <thead className="bg-zinc-100/80 dark:bg-zinc-800/60">{children}</thead>
+          ),
+          tr: ({ children }) => (
+            <tr className="border-b border-zinc-200/60 dark:border-zinc-700/40 last:border-b-0">{children}</tr>
+          ),
+          th: ({ children }) => (
+            <th className="px-3 py-2 font-semibold whitespace-nowrap text-zinc-700 dark:text-zinc-200">{children}</th>
+          ),
+          td: ({ children }) => (
+            <td className="px-3 py-2 whitespace-pre-wrap break-words text-zinc-600 dark:text-zinc-300">{children}</td>
+          ),
           blockquote: ({ children }) => (
             <blockquote className="border-l-2 border-zinc-300 dark:border-zinc-600 pl-3 my-2 text-zinc-600 dark:text-zinc-400">
               {children}

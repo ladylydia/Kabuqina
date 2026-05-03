@@ -1,8 +1,8 @@
 # HermesDesk — Development Guide
 
 > **Windows-only** Tauri 2 desktop app wrapping [Hermes Agent](https://github.com/NousResearch/hermes-agent).
-> The upstream code is frozen in `hermes_vendor/` — no automatic sync, no submodule, no patches.
-> For internals of the frozen agent core, see `hermes_vendor/AGENTS.md`.
+> The upstream code is frozen in `hermes_core/` — no automatic sync, no submodule, no patches.
+> For internals of the frozen agent core, see `hermes_core/AGENTS.md`.
 
 **Roadmap:** This repo has migrated from a patched submodule model to an owned monorepo with policy-layer architecture. See `docs/depatching-plan.md` for the full migration record.
 
@@ -15,7 +15,7 @@ Tauri 2 shell (Rust)
  └─ Python child: gateway.run (optional)  ← messaging adapters
 ```
 
-- The **web shell** (`web/src/`) is NOT the Hermes React UI. It handles onboarding/settings/chat, then redirects to Hermes' React dashboard at `http://127.0.0.1:<random-port>` (built from `hermes_vendor/web/`).
+- The **web shell** (`web/src/`) is NOT the Hermes React UI. It handles onboarding/settings/chat, then redirects to Hermes' React dashboard at `http://127.0.0.1:<random-port>` (built from `hermes_core/web/`).
 - **Two separate Python processes** — the web child runs `desktop_entrypoint.py`; the gateway child runs `python -m gateway.run`. They don't share memory. `strip_shims.py` prevents the web child from accidentally becoming the gateway entrypoint.
 - All comms between Tauri ↔ Python use **loopback-only HTTP/WS on random ports** per launch.
 - LLM API keys live in **Windows Credential Manager** (DPAPI via `keyring`), never on disk.
@@ -39,7 +39,7 @@ cd tauri; cargo tauri dev
 ```
 
 - `npm run build` in `web/` uses `tsc --noEmit` (not `tsc -b`) to avoid `tsconfig.tsbuildinfo` locking on Windows.
-- `build_bundle.ps1` also builds Hermes' own React SPA (`hermes_vendor/web/` → `hermes_vendor/hermes_cli/web_dist/`) via Git Bash (`sync-assets` uses POSIX `rm`/`cp`). On machines without Git Bash, it falls back to `npm run build` directly.
+- `build_bundle.ps1` also builds Hermes' own React SPA (`hermes_core/web/` → `hermes_core/hermes_cli/web_dist/`) via Git Bash (`sync-assets` uses POSIX `rm`/`cp`). On machines without Git Bash, it falls back to `npm run build` directly.
 
 ## Policy layer (`python/src/`)
 
@@ -82,10 +82,10 @@ With power user: adds `browser, terminal, code_execution, moa`.
 
 ## Upstream intake policy
 
-- `hermes_vendor/` is a **frozen snapshot** of the upstream Hermes Agent. No automatic sync.
+- `hermes_core/` is a **frozen snapshot** of the upstream Hermes Agent. No automatic sync.
 - All previously-patched behaviors are owned code, committed directly.
 - **Upstream cherry-picks** (security advisories, CVE fixes, provider API breaking changes):
-  - Manually `git cherry-pick <commit>` against `hermes_vendor/`
+  - Manually `git cherry-pick <commit>` against `hermes_core/`
   - Commit message: `chore: cherry-pick <hash> <subject>`
   - Log in `DECISIONS.md`
 - No batch merges. No submodule updates. No patch files.
@@ -102,7 +102,7 @@ With power user: adds `browser, terminal, code_execution, moa`.
 cd web; npm ci; npm run build; cd ..
 cd tauri; cargo tauri build
 
-# Python tests (needs hermes_vendor/ directory — already in tree)
+# Python tests (needs hermes_core/ directory — already in tree)
 cd python; python -m unittest discover -s tests -p "test_*.py" -v; cd ..
 
 # Lint web/
@@ -128,7 +128,7 @@ cd tauri; cargo tauri icon ..\logo.png
 
 | Path | Purpose |
 |------|---------|
-| `python/dist/runtime/` | Bundled Python + hermes_vendor + overlays + site-packages |
+| `python/dist/runtime/` | Bundled Python + hermes_core + overlays + site-packages |
 | `%LOCALAPPDATA%\HermesDesk\` | Per-user app data (logs, HERMES_HOME, workspace state) |
 | `%LOCALAPPDATA%\HermesDesk\hermes-home\` | Hermes config root (redirected from `~/.hermes`) |
 | `%USERPROFILE%\Documents\HermesWork\` | Default workspace (configurable) |
@@ -136,7 +136,7 @@ cd tauri; cargo tauri icon ..\logo.png
 
 ## References
 
-- **Frozen agent core:** `hermes_vendor/AGENTS.md`
+- **Frozen agent core:** `hermes_core/AGENTS.md`
 - **De-patching migration plan:** `docs/depatching-plan.md`
 - **Architecture:** `docs/architecture.md`
 - **Safety model:** `docs/safety.md`

@@ -23,11 +23,11 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Page rhythm (4px grid: 16–24px) */
-  --hd-page-pad-x: 1.5rem;
-  --hd-page-pad-y: 1.75rem;
+  --hd-page-pad-x: 2rem;
+  --hd-page-pad-y: 2rem;
   --hd-stack-gap: 1.5rem;
-  --hd-card-gap: 1.5rem; /* 24px between setting cards */
-  --hd-content-max: 40rem;
+  --hd-card-gap: 1.25rem; /* 20px between setting cards */
+  --hd-content-max: 44rem;
   /* Semantic (soft) */
   --hd-success-bg: oklch(0.95 0.04 150);
   --hd-success-fg: oklch(0.35 0.12 150);
@@ -55,12 +55,12 @@
     @apply dark:border-zinc-700/50 dark:bg-zinc-900/50;
   }
   .hd-glass-subtle {
-    @apply rounded-2xl border border-zinc-200/70 bg-white/40 backdrop-blur-sm;
-    @apply dark:border-zinc-800/80 dark:bg-zinc-900/40;
+    @apply rounded-2xl border border-zinc-200/60 bg-white/70 backdrop-blur-sm shadow-[0_1px_3px_rgb(0_0_0/0.04),0_4px_12px_rgb(0_0_0/0.04)];
+    @apply dark:border-zinc-700/60 dark:bg-zinc-900/60 dark:shadow-none;
   }
   /* Titles: one scale app-wide (adjust per page with text-3xl if needed) */
   .hd-page-title {
-    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50;
+    @apply text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50;
   }
   .hd-lead {
     @apply text-base sm:text-lg leading-relaxed text-zinc-600 dark:text-zinc-400;
@@ -99,7 +99,7 @@
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
   .hd-btn-segment-active {
-    @apply bg-sky-600 text-white dark:bg-sky-500;
+    @apply bg-sky-600 text-white shadow-sm dark:bg-sky-500;
   }
   .hd-btn-segment-idle {
     @apply bg-transparent text-zinc-600 hover:bg-zinc-100;

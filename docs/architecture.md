@@ -44,7 +44,7 @@ The **Hermes web child** installs `strip_shims` so imports like `gateway.run.mai
 
 The Python side is split into two architectural layers:
 
-1. **agent_core** — the frozen Hermes Agent subtree (`hermes_vendor/`). Imported directly by `desktop_entrypoint.py` after overlays are applied. Never modified independently.
+1. **agent_core** — the frozen Hermes Agent subtree (`hermes_core/`). Imported directly by `desktop_entrypoint.py` after overlays are applied. Never modified independently.
 2. **desktop_policy** — HermesDesk-owned policy objects (`python/src/*_policy.py`). Each policy covers one surface (paths, secrets, network, tools, approval, gateway). They are injected at startup via `desktop_config.py` rather than monkey-patched.
 
 The 7 remaining overlays (`python/overlays/`) wire the policies into Hermes' import chain; they will be deleted as their corresponding policies become self-sufficient. See [python/overlays/__init__.py](../python/overlays/__init__.py) for the install order.
@@ -114,7 +114,7 @@ provider's `/v1/models` (or equivalent) returns 200.
 on launch.
 - **Network unreachable:** Updater silently no-ops; chat shows the
 provider's own error in-line.
-- **Messaging gateway exits immediately (code 1):** Often **`python/dist/runtime`** is stale versus `hermes_vendor/` source after a gateway fix (first-connect survival). Re-run `python/build_bundle.ps1` and relaunch. Details: [troubleshooting.md](troubleshooting.md) §12, README build notes.
+- **Messaging gateway exits immediately (code 1):** Often **`python/dist/runtime`** is stale versus `hermes_core/` source after a gateway fix (first-connect survival). Re-run `python/build_bundle.ps1` and relaunch. Details: [troubleshooting.md](troubleshooting.md) §12, README build notes.
 
 ## Why not Electron / why not pure browser?
 

@@ -32,7 +32,7 @@ $Root      = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildDir  = Join-Path $PSScriptRoot "_build"
 $Download  = Join-Path $PSScriptRoot "_download"
 $Dist      = Join-Path $PSScriptRoot "dist\runtime"
-$HermesDir = Join-Path $Root "hermes_vendor"
+$HermesDir = Join-Path $Root "hermes_core"
 
 if ($Clean) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $BuildDir, $Dist
@@ -41,7 +41,7 @@ if ($Clean) {
 New-Item -ItemType Directory -Force -Path $BuildDir, $Download, $Dist | Out-Null
 
 if (-not (Test-Path (Join-Path $HermesDir "pyproject.toml"))) {
-    Write-Error "hermes_vendor/ directory not found. The frozen upstream source is missing."
+    Write-Error "hermes_core/ directory not found. The frozen upstream source is missing."
     exit 2
 }
 
@@ -178,7 +178,7 @@ function Invoke-HermesWebNpmCommand {
 # `hermes_cli/web_server.py` expects the built SPA at
 # `<package>/web_dist/`. Without this, every HTTP path returns
 # {"error":"Frontend not built. Run: cd web && npm run build"}.
-# Hermes dashboard SPA lives under the frozen source: hermes_vendor/web → hermes_vendor/hermes_cli/web_dist.
+# Hermes dashboard SPA lives under the frozen source: hermes_core/web → hermes_core/hermes_cli/web_dist.
 #
 # IMPORTANT: always run `npm run build` by default. A stale hermes_cli/web_dist
 # (e.g. from an older run) would previously skip the build and bundle an

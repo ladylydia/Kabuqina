@@ -93,8 +93,8 @@ The gateway process loads the LLM API key from the same Windows Credential Manag
 hermesdesk/
   tauri/        Tauri 2 shell
   python/       Bundle scripts, overlays, policy layer, tests
-  web/          Shell onboarding + settings (Hermes UI lives under hermes_vendor/web)
-  hermes_vendor/  Frozen upstream Hermes Agent snapshot
+  web/          Shell onboarding + settings (Hermes UI lives under hermes_core/web)
+  hermes_core/  Frozen upstream Hermes Agent snapshot
   docs/         Architecture, safety, skills, troubleshooting
 ```
 
@@ -121,7 +121,7 @@ cd web; npm ci; npm run build; cd ..
 cd tauri; cargo tauri dev
 
 # Release / `.msi` (from repo root). Sidecar/embedded Python ships from
-# `hermes_vendor/artifacts/desktop-python/`. On Windows, prefer **cmd.exe** or **Developer
+# `hermes_core/artifacts/desktop-python/`. On Windows, prefer **cmd.exe** or **Developer
 # PowerShell** so MSVC / SDK env vars (e.g. `VCToolsVersion`) are set for vcpkg /
 # `pydantic-core` wheels; see [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md).
 # Optional: `cd tauri` then `cargo tauri icon ..\logo.png` to refresh `tauri\icons\`
@@ -213,8 +213,8 @@ Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearc
 hermesdesk/
   tauri/        桌面壳（Rust + Tauri 2）
   python/     打包脚本、运行时 overlay、policy 层、测试
-  web/        壳侧引导与设置（Hermes 仪表盘在 hermes_vendor/web）
-  hermes_vendor/  上游 Hermes Agent 冻结快照
+  web/        壳侧引导与设置（Hermes 仪表盘在 hermes_core/web）
+  hermes_core/  上游 Hermes Agent 冻结快照
   docs/       架构、安全、Skills、排障等
 ```
 
@@ -239,7 +239,7 @@ cd web; npm ci; npm run build; cd ..
 # 开发：启动桌面壳
 cd tauri; cargo tauri dev
 
-# 发布 / 打 `.msi`（在仓库根目录；侧载 Python 来自 `hermes_vendor/artifacts/desktop-python/`）。
+# 发布 / 打 `.msi`（在仓库根目录；侧载 Python 来自 `hermes_core/artifacts/desktop-python/`）。
 # Windows 上建议在 **cmd** 或 **Developer PowerShell** 中构建，以便 MSVC / SDK 环境供 vcpkg
 # 与 `pydantic-core` 轮子；详见 [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md)。
 # 可选：`cd tauri` 后 `cargo tauri icon ..\logo.png` 更新 `tauri\icons\`；若报文件占用，可 `-o` 到临时目录再拷贝。

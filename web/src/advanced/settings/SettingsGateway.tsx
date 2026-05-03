@@ -139,25 +139,6 @@ export function SettingsGateway({
               {t("settings.gatewayStartFailed", { msg: gatewayStartError })}
             </p>
           ) : null}
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">
-            {t("settings.gatewayAutoRefresh")}
-          </p>
-          {gatewayEligible ? (
-            <>
-              <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {t("settings.gatewayTroubleshootTelegram")}
-              </p>
-              <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {t("settings.gatewayTroubleshootFeishu")}
-              </p>
-              <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {t("settings.gatewayTroubleshootQq")}
-              </p>
-              <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {t("settings.gatewayTroubleshootWeixin")}
-              </p>
-            </>
-          ) : null}
           {gatewayDiskState || gatewayDiskExit ? (
             <div className="rounded-md border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
               <p className="font-medium text-zinc-700 dark:text-zinc-200">{t("settings.gatewayDiskRecord")}</p>

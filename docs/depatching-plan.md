@@ -16,7 +16,7 @@ Product behavior is scattered across three mechanisms:
 
 ```
 hermesdesk monorepo/
-├── hermes_vendor/          ← frozen upstream snapshot, owned code
+├── hermes_core/          ← frozen upstream snapshot, owned code
 │   ├── gateway/            ← gateway patches baked in as normal commits
 │   └── hermes_cli/         ← desk-specific web/API changes baked in as normal commits
 ├── python/
@@ -38,7 +38,7 @@ hermesdesk monorepo/
 
 | Question | Decision |
 |----------|----------|
-| Directory name | `hermes_vendor/` |
+| Directory name | `hermes_core/` |
 | Migration style | Stepwise (not all-at-once) |
 | Gateway platforms | All 6 stay in onboarding. WeChat + Feishu gated by feature flag at the `GatewayPolicy` level |
 | Cherry-pick | Manual only (no automated sync) |
@@ -118,15 +118,15 @@ Every HermesDesk-specific behavior, where it currently lives, and what must happ
 
 | Behavior | Current mechanism | Phase 1-3 action |
 |----------|------------------|-------------------|
-| Gateway thread session isolation (safe default) | Patch: `gateway/config.py` | Bake into `hermes_vendor/` as committed change |
-| DingTalk require @mention (safe default) | Patch: `gateway/platforms/dingtalk.py` | Bake into `hermes_vendor/`; also fold into `GatewayPolicy` |
-| Feishu webhook security warning | Patch: `gateway/platforms/feishu.py` | Bake into `hermes_vendor/`; also fold into `GatewayPolicy` |
-| Telegram require mention (new feature) | Patch: `gateway/platforms/telegram.py` | Bake into `hermes_vendor/`; also fold into `GatewayPolicy` |
-| Webhook verification token | Patch: `gateway/platforms/webhook.py` | Bake into `hermes_vendor/` |
-| WhatsApp require mention (new feature) | Patch: `gateway/platforms/whatsapp.py` | Bake into `hermes_vendor/` |
-| Gateway first-connect survival | Patch: `gateway/run.py` | Bake into `hermes_vendor/` |
+| Gateway thread session isolation (safe default) | Patch: `gateway/config.py` | Bake into `hermes_core/` as committed change |
+| DingTalk require @mention (safe default) | Patch: `gateway/platforms/dingtalk.py` | Bake into `hermes_core/`; also fold into `GatewayPolicy` |
+| Feishu webhook security warning | Patch: `gateway/platforms/feishu.py` | Bake into `hermes_core/`; also fold into `GatewayPolicy` |
+| Telegram require mention (new feature) | Patch: `gateway/platforms/telegram.py` | Bake into `hermes_core/`; also fold into `GatewayPolicy` |
+| Webhook verification token | Patch: `gateway/platforms/webhook.py` | Bake into `hermes_core/` |
+| WhatsApp require mention (new feature) | Patch: `gateway/platforms/whatsapp.py` | Bake into `hermes_core/` |
+| Gateway first-connect survival | Patch: `gateway/run.py` | Bake into `hermes_core/` |
 | Dashboard PTY bridge | Patch: `hermes_cli/pty_bridge.py` | **Already absorbed** — zero diff vs HEAD; upstream now provides this |
-| Desk auth + shell-chat endpoint | Patch: `hermes_cli/web_server.py` | Bake into `hermes_vendor/` |
+| Desk auth + shell-chat endpoint | Patch: `hermes_cli/web_server.py` | Bake into `hermes_core/` |
 | Workspace file jail | Overlay: `workspace_jail.py` | Migrate to `PathPolicy` (Phase 3A) |
 | Path guard (gateway context) | Overlay: `path_guard.py` | Migrate to `PathPolicy` (Phase 3A) |
 | Secret handshake from Tauri | Overlay: `secret_loader.py` | Migrate to `SecretStore` (Phase 3B) |
@@ -162,9 +162,9 @@ This is the canonical HermesDesk source diff that Phase 1 should import.
 
 | Step | Action | Impact |
 |------|--------|--------|
-| 1.1 | Import the clean upstream base commit as `hermes_vendor/` | Imports frozen Hermes as owned directory with history |
-| 1.2 | Apply the canonical HermesDesk diff (9 patched files) as normal commits on `hermes_vendor/` | Gateway security defaults and desk-specific `hermes_cli` changes become permanent owned code |
-| 1.3 | Update `build_bundle.ps1`: source path `hermes/`→`hermes_vendor/`, remove `git apply` block, update BUNDLE_INFO | Stale bundle trap eliminated — code is what's in the tree |
+| 1.1 | Import the clean upstream base commit as `hermes_core/` | Imports frozen Hermes as owned directory with history |
+| 1.2 | Apply the canonical HermesDesk diff (9 patched files) as normal commits on `hermes_core/` | Gateway security defaults and desk-specific `hermes_cli` changes become permanent owned code |
+| 1.3 | Update `build_bundle.ps1`: source path `hermes/`→`hermes_core/`, remove `git apply` block, update BUNDLE_INFO | Stale bundle trap eliminated — code is what's in the tree |
 | 1.4 | `git rm hermes/`, remove `.gitmodules` | Terminates submodule relationship |
 | 1.5 | Delete `patches/`, `scripts/sync_upstream.ps1`, `SYNC_UPSTREAM.md` | No more patch-based workflow |
 | 1.6 | Update CI `release.yml`: remove `submodules: recursive` | CI no longer fetches upstream |
@@ -254,7 +254,7 @@ Log:           maintained in DECISIONS.md
 Rule:          No automated sync. No batch merges. Every cherry-pick is deliberate.
 ```
 
-Gateway cherry-picks additionally require updating `hermes_vendor/gateway/platforms/` entries plus the corresponding `GatewayPolicy` default if platform behavior changed.
+Gateway cherry-picks additionally require updating `hermes_core/gateway/platforms/` entries plus the corresponding `GatewayPolicy` default if platform behavior changed.
 
 ## Gateway feature flags
 
@@ -273,7 +273,7 @@ When a platform is disabled:
 ## Acceptance criteria
 
 - [ ] Phase 0 inventory exists and identifies the winning behavior for patch-file, dirty-tree, and runtime drift
-- [ ] No dirty submodule — `hermes_vendor/` is a regular directory
+- [ ] No dirty submodule — `hermes_core/` is a regular directory
 - [ ] No `patches/` directory — all patches are normal commits
 - [ ] No `.gitmodules` entry and no gitlink entry named `hermes`
 - [ ] No overlay depends on import-order side effects
