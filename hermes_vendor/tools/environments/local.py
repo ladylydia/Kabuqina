@@ -345,6 +345,20 @@ class LocalEnvironment(BaseEnvironment):
 
         return "/tmp"
 
+    def _wrap_command(self, command: str, cwd: str) -> str:
+        """Override base._wrap_command for cmd.exe compatibility.
+
+        The base class generates a bash script (source, builtin cd, eval,
+        export -p, $?, $() etc.) that cmd.exe cannot parse.  When the
+        shell is cmd.exe, return a Windows-native command string instead.
+        """
+        bash = _find_bash()
+        if os.path.basename(bash).lower() == "cmd.exe":
+            if cwd:
+                return f'cd /d "{cwd}" 2>nul & {command}'
+            return command
+        return super()._wrap_command(command, cwd)
+
     def _run_bash(self, cmd_string: str, *, login: bool = False,
                   timeout: int = 120,
                   stdin_data: str | None = None) -> subprocess.Popen:
