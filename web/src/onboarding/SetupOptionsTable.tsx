@@ -1,18 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ShellModal } from "../components/ShellModal";
-import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { getDraftSnapshot, updateDraft, useDraft, type SectionSelection } from "../lib/store";
-import { WeixinQrRouteCBlock, type WeixinEnvSnapshot } from "../components/WeixinQrRouteCBlock";
-import { QqbotQrRouteBlock, type QqEnvSnapshot } from "../components/QqbotQrRouteBlock";
-import { FeishuQrRouteBlock, type FeishuEnvSnapshot } from "../components/FeishuQrRouteBlock";
-import { WeComSettingsBlock, type WeComEnvSnapshot } from "../components/WeComSettingsBlock";
+import { updateDraft, useDraft, type SectionSelection } from "../lib/store";
+import { ConfigModalBody } from "./components/ConfigModalBody";
+import { usePlatformEnvStatus } from "./hooks/usePlatformEnvStatus";
 import type {
   LocaleKey,
-  Localized,
-  OptionConfigField,
-  PostPassSectionId,
   SetupCatalogOption,
 } from "./setupCatalog/optionTypes";
 import {
@@ -20,10 +14,7 @@ import {
   SECTION_SELECTION_MODE,
   type PostPassSelectionMode,
 } from "./sectionSelection";
-
-function pick(loc: Localized, locale: LocaleKey): string {
-  return loc[locale] || loc.zh;
-}
+import { pick, getSlice, hasConfigFieldsOrRouteC } from "./utils";
 
 type Props = {
   section: string;
@@ -35,21 +26,13 @@ type Props = {
   /** `false` for rosters that are only informational. */
   showSkipRow?: boolean;
   /** When `section` is a post-pass id, use this until `wizardSelection[section]` is persisted. */
-  defaultSelection?: import("../lib/store").SectionSelection;
+  defaultSelection?: SectionSelection;
 };
-
-function getSlice(
-  wizard: Record<string, Record<string, Record<string, string>>> | undefined,
-  section: string,
-  optionId: string
-): Record<string, string> {
-  return { ...(wizard?.[section]?.[optionId] ?? {}) };
-}
 
 function inferMode(section: string, explicit?: PostPassSelectionMode): PostPassSelectionMode {
   if (explicit) return explicit;
   if (section in SECTION_SELECTION_MODE) {
-    return SECTION_SELECTION_MODE[section as PostPassSectionId];
+    return SECTION_SELECTION_MODE[section as keyof typeof SECTION_SELECTION_MODE];
   }
   return "none";
 }
@@ -71,38 +54,16 @@ export function SetupOptionsTable({
   const draft = useDraft();
   const wizard = draft.wizardConfig ?? {};
   const selectionMode = inferMode(section, selectionModeProp);
+  const defaultSelectionForMode =
+    section in SECTION_SELECTION_MODE
+      ? (getInitialSectionSelection as (s: string) => SectionSelection | undefined)(section)
+      : undefined;
   const defaultSelection: SectionSelection | undefined =
-    defaultSelectionProp ??
-    (section in SECTION_SELECTION_MODE ? getInitialSectionSelection(section as PostPassSectionId) : undefined);
+    defaultSelectionProp ?? defaultSelectionForMode;
 
   const [editing, setEditing] = useState<SetupCatalogOption | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [weixinEnv, setWeixinEnv] = useState<WeixinEnvSnapshot | null>(null);
-  const [qqEnv, setQqEnv] = useState<QqEnvSnapshot | null>(null);
-  const [feishuEnv, setFeishuEnv] = useState<FeishuEnvSnapshot | null>(null);
-  const [wecomEnv, setWecomEnv] = useState<WeComEnvSnapshot | null>(null);
-
-  useEffect(() => {
-    if (items.some((r) => r.configUi === "weixin_route_c")) {
-      invoke<WeixinEnvSnapshot>("cmd_weixin_env_status").then(setWeixinEnv).catch(() => setWeixinEnv(null));
-    }
-  }, [items]);
-  useEffect(() => {
-    if (items.some((r) => r.configUi === "qqbot_route_c")) {
-      invoke<QqEnvSnapshot>("cmd_qq_env_status").then(setQqEnv).catch(() => setQqEnv(null));
-    }
-  }, [items]);
-  useEffect(() => {
-    if (items.some((r) => r.configUi === "feishu_route_c")) {
-      invoke<FeishuEnvSnapshot>("cmd_feishu_env_status").then(setFeishuEnv).catch(() => setFeishuEnv(null));
-    }
-  }, [items]);
-
-  useEffect(() => {
-    if (items.some((r) => r.configUi === "wecom_route_c")) {
-      invoke<WeComEnvSnapshot>("cmd_wecom_env_status").then(setWecomEnv).catch(() => setWecomEnv(null));
-    }
-  }, [items]);
+  const { weixinEnv, qqEnv, feishuEnv, wecomEnv } = usePlatformEnvStatus(items);
 
   const selRaw = draft.wizardSelection?.[section];
   const sel: SectionSelection | undefined =
@@ -123,8 +84,7 @@ export function SetupOptionsTable({
   }
 
   function rowAllowsConfig(row: SetupCatalogOption): boolean {
-    const hasModal = (row.configFields?.length ?? 0) > 0 || row.configUi === "weixin_route_c" || row.configUi === "qqbot_route_c" || row.configUi === "feishu_route_c" || row.configUi === "wecom_route_c";
-    if (!hasModal) return false;
+    if (!hasConfigFieldsOrRouteC(row.configFields, row.configUi)) return false;
     if (isSkip) return false;
     if (selectionMode === "single") return singleId === row.id;
     if (selectionMode === "multi") return multiSet.has(row.id);
@@ -156,9 +116,6 @@ export function SetupOptionsTable({
       },
     });
   }
-
-  const fieldClass =
-    "w-full rounded-[var(--radius-shell)] border border-zinc-300/90 bg-white/90 px-3 py-2.5 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
   const hasChoiceUi = selectionMode === "single" || selectionMode === "multi";
   const showSkip = showSkipRow && hasChoiceUi;
@@ -220,8 +177,7 @@ export function SetupOptionsTable({
           </thead>
           <tbody>
             {items.map((row) => {
-              const hasFields =
-                (row.configFields?.length ?? 0) > 0 || row.configUi === "weixin_route_c" || row.configUi === "qqbot_route_c" || row.configUi === "feishu_route_c" || row.configUi === "wecom_route_c";
+              const hasFields = hasConfigFieldsOrRouteC(row.configFields, row.configUi);
               const envOk = isEnvConfigured(row);
               return (
                 <tr
@@ -309,161 +265,15 @@ export function SetupOptionsTable({
         title={editing ? pick(editing.name, loc) : ""}
         size={modalSize}
       >
-        {editing?.configUi === "weixin_route_c" ? (
-          <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{t("settings.weixinLead")}</p>
-            <WeixinQrRouteCBlock
-              key={editing.id}
-              onSuccess={({ accountId }) => {
-                const d = getDraftSnapshot();
-                const w = d.wizardConfig ?? {};
-                const prevSec = w[section] ?? {};
-                const slice = getSlice(w, section, editing.id);
-                updateDraft({
-                  wizardConfig: {
-                    ...w,
-                    [section]: {
-                      ...prevSec,
-                      [editing.id]: { ...slice, WEIXIN_ACCOUNT_ID: accountId },
-                    },
-                  },
-                });
-              }}
-            />
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
-                onClick={() => setEditing(null)}
-              >
-                {t("setupOptions.cancelConfig")}
-              </button>
-            </div>
-          </div>
-        ) : editing?.configUi === "qqbot_route_c" ? (
-          <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{t("settings.qqLead")}</p>
-            <QqbotQrRouteBlock
-              key={editing.id}
-              onSuccess={({ appId }) => {
-                const d = getDraftSnapshot();
-                const w = d.wizardConfig ?? {};
-                const prevSec = w[section] ?? {};
-                const slice = getSlice(w, section, editing.id);
-                updateDraft({
-                  wizardConfig: {
-                    ...w,
-                    [section]: {
-                      ...prevSec,
-                      [editing.id]: { ...slice, QQ_APP_ID: appId },
-                    },
-                  },
-                });
-              }}
-            />
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
-                onClick={() => setEditing(null)}
-              >
-                {t("setupOptions.cancelConfig")}
-              </button>
-            </div>
-          </div>
-        ) : editing?.configUi === "feishu_route_c" ? (
-          <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{t("settings.feishuLead")}</p>
-            <FeishuQrRouteBlock
-              key={editing.id}
-              onSuccess={({ appId }) => {
-                const d = getDraftSnapshot();
-                const w = d.wizardConfig ?? {};
-                const prevSec = w[section] ?? {};
-                const slice = getSlice(w, section, editing.id);
-                updateDraft({
-                  wizardConfig: {
-                    ...w,
-                    [section]: {
-                      ...prevSec,
-                      [editing.id]: { ...slice, FEISHU_APP_ID: appId },
-                    },
-                  },
-                });
-              }}
-            />
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
-                onClick={() => setEditing(null)}
-              >
-                {t("setupOptions.cancelConfig")}
-              </button>
-            </div>
-          </div>
-        ) : editing?.configUi === "wecom_route_c" ? (
-          <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{t("settings.wecomLead")}</p>
-            <WeComSettingsBlock key={editing.id} />
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
-                onClick={() => setEditing(null)}
-              >
-                {t("setupOptions.cancelConfig")}
-              </button>
-            </div>
-          </div>
-        ) : editing?.configFields?.length ? (
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (editing) persistForm(editing, form);
-              setEditing(null);
-            }}
-          >
-            <p className="text-xs text-zinc-500 dark:text-zinc-500">{t("setupOptions.configLead")}</p>
-            {editing.configFields.map((fld: OptionConfigField) => (
-              <div key={fld.id} className="space-y-1.5">
-                <label className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  <span>{pick(fld.label, loc)}</span>
-                  {fld.optional ? (
-                    <span className="text-xs font-normal text-zinc-500">({t("setupOptions.optional")})</span>
-                  ) : null}
-                </label>
-                <p className="text-[0.7rem] font-mono text-zinc-500">{fld.id}</p>
-                <input
-                  className={fieldClass}
-                  type={fld.kind === "password" ? "password" : fld.kind === "url" ? "url" : "text"}
-                  name={fld.id}
-                  value={form[fld.id] ?? ""}
-                  placeholder={pick(fld.placeholder, loc)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [fld.id]: e.target.value }))}
-                />
-              </div>
-            ))}
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
-                onClick={() => setEditing(null)}
-              >
-                {t("setupOptions.cancelConfig")}
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                {t("setupOptions.saveConfig")}
-              </button>
-            </div>
-          </form>
-        ) : null}
+        <ConfigModalBody
+          editing={editing}
+          section={section}
+          loc={loc}
+          form={form}
+          setForm={setForm}
+          onClose={() => setEditing(null)}
+          onPersist={persistForm}
+        />
       </ShellModal>
     </div>
   );

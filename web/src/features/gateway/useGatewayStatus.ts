@@ -83,3 +83,5 @@ export function useGatewayStatus() {
     start, stop,
   };
 }
+
+export type GatewayStatus = ReturnType<typeof useGatewayStatus>;
