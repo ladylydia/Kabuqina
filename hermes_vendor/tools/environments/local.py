@@ -170,6 +170,10 @@ def _find_bash() -> str:
         if candidate and os.path.isfile(candidate):
             return candidate
 
+    # HermesDesk desktop fallback: if Git Bash isn't available, use cmd.exe
+    comspec = os.environ.get("ComSpec", "")
+    if comspec and os.path.isfile(comspec):
+        return comspec
     raise RuntimeError(
         "Git Bash not found. Hermes Agent requires Git for Windows on Windows.\n"
         "Install it from: https://git-scm.com/download/win\n"
@@ -345,17 +349,20 @@ class LocalEnvironment(BaseEnvironment):
                   timeout: int = 120,
                   stdin_data: str | None = None) -> subprocess.Popen:
         bash = _find_bash()
+        is_cmd = os.path.basename(bash).lower() == "cmd.exe"
+        if login and is_cmd:
+            login = False  # cmd.exe has no login shell
         # For login-shell invocations (used by init_session to build the
         # environment snapshot), prepend sources for the user's bashrc /
         # custom init files so tools registered outside bash_profile
         # (nvm, asdf, pyenv, …) end up on PATH in the captured snapshot.
         # Non-login invocations are already sourcing the snapshot and
         # don't need this.
-        if login:
+        if login and not is_cmd:
             init_files = _resolve_shell_init_files()
             if init_files:
                 cmd_string = _prepend_shell_init(cmd_string, init_files)
-        args = [bash, "-l", "-c", cmd_string] if login else [bash, "-c", cmd_string]
+        args = [bash, "/c", cmd_string] if is_cmd else ([bash, "-l", "-c", cmd_string] if login else [bash, "-c", cmd_string])
         run_env = _make_run_env(self.env)
 
         proc = subprocess.Popen(

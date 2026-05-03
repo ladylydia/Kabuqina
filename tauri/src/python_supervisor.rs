@@ -74,6 +74,13 @@ impl Supervisor {
             // HermesDesk desktop contract version.  Must match
             // ``python/src/desktop_contract.py:CONTRACT_VERSION``.
             .env("HERMESDESK_CONTRACT_VERSION", "1")
+            // Tell the upstream Hermes approval guard that we're in an
+            // interactive context so it routes dangerous commands through
+            // ``prompt_dangerous_approval`` (which the approval_bridge.py
+            // overlay intercepts with a Tauri native dialog).  Without this
+            // marker the web_server mode skips all approval checks and
+            // the Tauri approval bridge is never reached.
+            .env("HERMES_INTERACTIVE", "1")
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUTF8", "1")
             // Don't inherit any stale OPENAI/ANTHROPIC keys from the user shell
