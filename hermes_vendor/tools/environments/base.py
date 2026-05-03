@@ -512,6 +512,26 @@ class BaseEnvironment(ABC):
                         if idle_after_exit >= 3:
                             break
             finally:
+                # Windows: select.select() does not report pipe readiness for
+                # anonymous pipes created by subprocess.Popen.  The select loop
+                # above may break before ever reading stdout from a fast-exiting
+                # child (echo hello, python -c "print(42)").  Drain any residual
+                # buffered output before flushing the decoder.
+                try:
+                    os.set_blocking(fd, False)
+                except Exception:
+                    pass
+                try:
+                    while True:
+                        try:
+                            chunk = os.read(fd, 4096)
+                            if not chunk:
+                                break
+                            output_chunks.append(decoder.decode(chunk))
+                        except (BlockingIOError, ValueError, OSError):
+                            break
+                except Exception:
+                    pass
                 # Flush any bytes buffered mid-sequence.  With ``errors="replace"``
                 # this emits U+FFFD for any final incomplete sequence rather than
                 # raising.
