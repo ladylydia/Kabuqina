@@ -316,7 +316,13 @@ class LocalEnvironment(BaseEnvironment):
     def __init__(self, cwd: str = "", timeout: int = 60, env: dict = None):
         if cwd:
             cwd = os.path.expanduser(cwd)
-        super().__init__(cwd=cwd or os.getcwd(), timeout=timeout, env=env)
+        if not cwd:
+            cwd = os.getcwd()
+        if not os.path.isdir(cwd):
+            workspace = os.environ.get("HERMESDESK_WORKSPACE") or os.getcwd()
+            if os.path.isdir(workspace):
+                cwd = workspace
+        super().__init__(cwd=cwd, timeout=timeout, env=env)
         self.init_session()
 
     def get_temp_dir(self) -> str:
