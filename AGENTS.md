@@ -108,8 +108,8 @@ cd python; python -m unittest discover -s tests -p "test_*.py" -v; cd ..
 # Lint web/
 cd web; npm run lint
 
-# Regenerate Tauri icons (from logo.png at root)
-cd tauri; cargo tauri icon ..\logo.png
+# Regenerate Tauri icons (source PNG: web/public/kabuqina_na_blue_256.png)
+cd tauri; cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
 ```
 
 ## Windows-specific gotchas
