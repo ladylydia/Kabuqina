@@ -45,7 +45,7 @@ The gateway process loads the LLM API key from the same Windows Credential Manag
 - **In-shell chat** (`/chat`) in the Tauri host: sessions, copy on assistant messages, i18n (en/zh) for the shell UI.  
 - **Settings**: workspace copy differs for **normal** vs **power** users; toggling **power user** **restarts** the embedded Python child so `terminal` / `browser` / `code` tools match the switch.  
 - **Agent policy**: when power tools are off, a **system-prompt** overlay tells the model to **point users at Settings** instead of hallucinating shell access (see `python/overlays/desk_system_prompt.py`).  
-- **Branding**: `logo.png` and `logo.svg` under `web/public/`; Tauri `cargo tauri icon` generates `tauri/icons/`* (on Windows, if a file is locked, generate to a **temp** `-o` folder and copy — see [docs/troubleshooting.md](docs/troubleshooting.md) for loopback/AV issues).  
+- **Branding**: `logo.png` under `web/public/`; Tauri `cargo tauri icon` generates `tauri/icons/`* (on Windows, if a file is locked, generate to a **temp** `-o` folder and copy — see [docs/troubleshooting.md](docs/troubleshooting.md) for loopback/AV issues).  
 - **Control "Desk chat"** (in `hermes/web`) includes a **Copy** action on the assistant block for the embedded dashboard.
 - **Messaging gateway**: Telegram (token), Email (IMAP/SMTP), Weixin, QQ Bot, Feishu/Lark (QR binds); second Python process; LLM key from credential store.
 
@@ -183,7 +183,7 @@ Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearc
 - **壳内 /chat**：会话、**助手消息复制**、壳 UI 中/英。  
 - **设置**：普通/超级用户 **工作区文案** 不同；**超级用户** 会 **重启** 内嵌 Python 子进程，让 `terminal` / `browser` / `code` 等工具有无与开关一致。  
 - **智能体策略**：关超级用户时，**系统提示**（`python/overlays/desk_system_prompt.py`）引导用户去**设置**开启，避免假装有 shell。  
-- **品牌与图标**：`web/public/` 下的 `logo.png` 与 `logo.svg`；`cargo tauri icon` 生成 `tauri\icons\`；文件被占用时用临时 `-o` 再合并（[docs/troubleshooting.md](docs/troubleshooting.md)）。  
+- **品牌与图标**：`web/public/` 下的 `logo.png`；`cargo tauri icon` 生成 `tauri\icons\`；文件被占用时用临时 `-o` 再合并（[docs/troubleshooting.md](docs/troubleshooting.md)）。  
 - **控制台 Desk 对话**（`hermes/web`）助手区带 **复制**。
 - **消息网关**：Telegram（Token）、邮件（IMAP/SMTP）、微信、QQ、飞书/Lark（扫码绑定）；独立子进程；LLM key 走系统凭据。
 
