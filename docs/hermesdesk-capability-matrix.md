@@ -11,6 +11,7 @@ This document describes **what the Windows HermesDesk shell actually allows** fo
 | Item | Storage / injection | Notes |
 |------|---------------------|--------|
 | **Power user** | `settings.json` key `hermesdesk.power_user` (`"1"` / `"true"` = on) → child env **`HERMESDESK_POWER_USER=1` or `0`** | `tauri/src/paths.rs`, `tauri/src/python_supervisor.rs` |
+| **Capability catalog role** | Derived in Python by `CapabilityPolicy`: default when power user off, advanced when recipe market discovery is on, power when `HERMESDESK_POWER_USER=1` | Used by `/api/hermesdesk/capabilities` before the shell renders Skills / tools / plugins |
 | **Workspace folder** | Key `hermesdesk.workspace`; if unset, default **`%USERPROFILE%\Documents\HermesWork`** → **`HERMESDESK_WORKSPACE`** | `paths::ensure_workspace` |
 | **LLM (non-secret)** | `settings.json` → `provider` (e.g. `api_base_url`, `host`, `model`) → **`HERMESDESK_*`** env and overlay sync into `config.yaml` | `tauri/src/secrets.rs`, `python/overlays/desktop_llm_config.py` |
 | **API key** | Windows Credential Manager / keyring — **not** in `config.yaml` | `python/overlays/secret_loader.py` (and related) |
@@ -91,7 +92,20 @@ Which tools trigger approval is defined upstream in Hermes (`tools/approval.py` 
 
 ---
 
-## 8. Messaging gateway (second Python process)
+## 8. Desktop capability catalog
+
+**Implementation:** Python policy [`python/src/capability_policy.py`](../python/src/capability_policy.py), Hermes API `GET /api/hermesdesk/capabilities`, Tauri IPC proxy, and shell page under `web/src/advanced/pages/CapabilitiesPage.tsx`.
+
+| Area | Behavior |
+|------|----------|
+| **Skills** | Visible entries are filtered server-side. Details include content, linked files, source/trust/risk labels, and whether agent-assisted editing is available. |
+| **Tools/toolsets** | Users can browse enabled and locked toolsets. Power-user-only tools are labelled locked outside `power`; the UI does not directly mutate tool implementation. |
+| **Plugins** | Dashboard plugin manifests are browsed through the same policy. Default users do not see advanced/plugin entries unless policy metadata makes them visible. |
+| **Writes** | Editing Skills or installing recommended Skills/tools/plugins starts a chat draft for the agent. The write boundary remains `skill_manage`, hub install, plugin tooling, and approval prompts. |
+
+---
+
+## 9. Messaging gateway (second Python process)
 
 **Implementation:** [`tauri/src/gateway_supervisor.rs`](../tauri/src/gateway_supervisor.rs), Hermes upstream [`hermes/gateway/run.py`](../hermes/gateway/run.py).
 

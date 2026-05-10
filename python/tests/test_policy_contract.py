@@ -12,10 +12,12 @@ _src = str(Path(__file__).resolve().parent.parent / "src")
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-from path_policy import PathPolicy, PathPolicyError
+from path_policy import PathPolicy, PathPolicyError, _HOST_PREFS_FILENAME
 from network_policy import NetworkPolicy
 from tool_policy import ToolPolicy
 from secret_store import SecretStore
+from approval_backend import _auto_approve_workspace_read
+from capability_policy import CapabilityPolicy, ROLE_ADVANCED, ROLE_DEFAULT, ROLE_POWER
 
 
 class TestPathPolicy(unittest.TestCase):
@@ -52,6 +54,42 @@ class TestPathPolicy(unittest.TestCase):
         result = self.policy.enforce(self.write_dir / "out.txt", write=False)
         self.assertEqual(result, self.write_dir / "out.txt")
 
+    # -- _host_prefs.md write guard for gateway children -------------------
+
+    def test_gateway_child_cannot_write_host_prefs(self):
+        """HERMESDESK_GATEWAY_PLATFORM set → write to _host_prefs.md blocked."""
+        with patch.dict(os.environ, {"HERMESDESK_GATEWAY_PLATFORM": "telegram"}, clear=True):
+            # Reset class-level cache
+            PathPolicy._is_gateway_child = None
+            self.addCleanup(lambda: setattr(PathPolicy, "_is_gateway_child", None))
+            with self.assertRaises(PathPolicyError) as ctx:
+                self.policy.enforce(self.root / _HOST_PREFS_FILENAME, write=True)
+            self.assertIn(_HOST_PREFS_FILENAME, str(ctx.exception))
+
+    def test_host_can_write_host_prefs(self):
+        """HERMESDESK_GATEWAY_PLATFORM not set → write to _host_prefs.md allowed."""
+        with patch.dict(os.environ, {}, clear=True):
+            PathPolicy._is_gateway_child = None
+            self.addCleanup(lambda: setattr(PathPolicy, "_is_gateway_child", None))
+            result = self.policy.enforce(self.root / _HOST_PREFS_FILENAME, write=True)
+            self.assertEqual(result, self.root / _HOST_PREFS_FILENAME)
+
+    def test_gateway_child_can_write_normal_file(self):
+        """Gateway env set, but other files are NOT blocked."""
+        with patch.dict(os.environ, {"HERMESDESK_GATEWAY_PLATFORM": "weixin"}, clear=True):
+            PathPolicy._is_gateway_child = None
+            self.addCleanup(lambda: setattr(PathPolicy, "_is_gateway_child", None))
+            result = self.policy.enforce(self.root / "MEMORY.md", write=True)
+            self.assertEqual(result, self.root / "MEMORY.md")
+
+    def test_gateway_child_can_read_host_prefs(self):
+        """Reading _host_prefs.md is NOT blocked (only writes are)."""
+        with patch.dict(os.environ, {"HERMESDESK_GATEWAY_PLATFORM": "telegram"}, clear=True):
+            PathPolicy._is_gateway_child = None
+            self.addCleanup(lambda: setattr(PathPolicy, "_is_gateway_child", None))
+            result = self.policy.enforce(self.root / _HOST_PREFS_FILENAME, write=False)
+            self.assertEqual(result, self.root / _HOST_PREFS_FILENAME)
+
 
 class TestNetworkPolicy(unittest.TestCase):
     def setUp(self):
@@ -84,12 +122,18 @@ class TestNetworkPolicy(unittest.TestCase):
         policy = NetworkPolicy()
         policy.check_url("http://127.0.0.1:8080/api")
 
+    def test_allows_stt_model_hosts(self):
+        """STT model download URLs must be reachable."""
+        policy = NetworkPolicy()
+        policy.check_url("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin")
+        policy.check_url("https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin")
+
 
 class TestToolPolicy(unittest.TestCase):
     def test_default_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=False)
-        self.assertEqual(len(tools), 7)
-        self.assertEqual(tools, ["web", "file", "vision", "image_gen", "tts", "skills", "todo"])
+        self.assertEqual(len(tools), 8)
+        self.assertEqual(tools, ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser"])
 
     def test_power_user_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=True)
@@ -102,7 +146,6 @@ class TestToolPolicy(unittest.TestCase):
     def test_default_keeps_safe_tools(self):
         tools = ToolPolicy.resolve(power_user=False)
         self.assertNotIn("terminal", tools)
-        self.assertNotIn("browser", tools)
         self.assertNotIn("code_execution", tools)
 
     def test_is_power_user_from_env(self):
@@ -114,6 +157,74 @@ class TestToolPolicy(unittest.TestCase):
     def test_is_power_user_default(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(ToolPolicy.is_power_user())
+
+
+class TestCapabilityPolicy(unittest.TestCase):
+    def test_effective_role(self):
+        self.assertEqual(
+            CapabilityPolicy.effective_role(power_user=False, show_recipe_market=False),
+            ROLE_DEFAULT,
+        )
+        self.assertEqual(
+            CapabilityPolicy.effective_role(power_user=False, show_recipe_market=True),
+            ROLE_ADVANCED,
+        )
+        self.assertEqual(
+            CapabilityPolicy.effective_role(power_user=True, show_recipe_market=False),
+            ROLE_POWER,
+        )
+
+    def test_untagged_skill_is_visible_to_default(self):
+        policy = CapabilityPolicy(ROLE_DEFAULT)
+        visibility = policy.skill_visibility({"name": "built-in"})
+        self.assertTrue(visibility["visible"])
+        self.assertEqual(visibility["roles"], [ROLE_DEFAULT, ROLE_ADVANCED, ROLE_POWER])
+
+    def test_community_skill_defaults_to_power_only(self):
+        policy = CapabilityPolicy(ROLE_DEFAULT)
+        visibility = policy.skill_visibility({"name": "external", "source": "github"})
+        self.assertFalse(visibility["visible"])
+        self.assertEqual(visibility["roles"], [ROLE_POWER])
+
+    def test_metadata_roles_are_respected(self):
+        policy = CapabilityPolicy(ROLE_ADVANCED)
+        visibility = policy.skill_visibility(
+            {
+                "name": "signed-recipe",
+                "metadata": {
+                    "hermesdesk": {
+                        "visibility": {"roles": ["advanced", "power"]},
+                        "trust": "official",
+                        "recommended": True,
+                    }
+                },
+            }
+        )
+        self.assertTrue(visibility["visible"])
+        self.assertTrue(visibility["recommended"])
+        self.assertEqual(visibility["risk"], "medium")
+
+    def test_power_toolsets_are_locked_outside_power(self):
+        policy = CapabilityPolicy(ROLE_DEFAULT)
+        terminal = policy.tool_visibility({"name": "terminal"})
+        web = policy.tool_visibility({"name": "web"})
+        self.assertTrue(terminal["locked"])
+        self.assertEqual(terminal["roles"], [ROLE_POWER])
+        self.assertEqual(web["trust"], "official")
+        self.assertFalse(web["locked"])
+
+    def test_plugins_default_to_advanced(self):
+        policy = CapabilityPolicy(ROLE_DEFAULT)
+        visibility = policy.plugin_visibility({"name": "example"})
+        self.assertFalse(visibility["visible"])
+        self.assertEqual(visibility["roles"], [ROLE_ADVANCED, ROLE_POWER])
+        self.assertEqual(visibility["trust"], "official")
+
+    def test_bundled_plugin_defaults_to_official_trust(self):
+        policy = CapabilityPolicy(ROLE_ADVANCED)
+        visibility = policy.plugin_visibility({"name": "builtin-plugin", "source": "bundled"})
+        self.assertTrue(visibility["visible"])
+        self.assertEqual(visibility["trust"], "official")
 
 
 class TestSecretStore(unittest.TestCase):
@@ -128,6 +239,79 @@ class TestSecretStore(unittest.TestCase):
             store = SecretStore()
             result = store.fetch()
             self.assertIsNone(result)
+
+
+class TestApprovalBackendPolicy(unittest.TestCase):
+    def setUp(self):
+        self.workspace = Path(tempfile.gettempdir()) / "hermesdesk-approval-workspace"
+
+    def test_auto_approves_simple_workspace_read(self):
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertTrue(_auto_approve_workspace_read("Get-Content notes.txt"))
+            self.assertTrue(_auto_approve_workspace_read("type notes.txt"))
+
+    def test_blocks_workspace_read_with_shell_composition(self):
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertFalse(_auto_approve_workspace_read("Get-Content notes.txt | powershell -c whoami"))
+            self.assertFalse(_auto_approve_workspace_read("type notes.txt > copy.txt"))
+
+    def test_blocks_reads_outside_workspace(self):
+        outside = Path(tempfile.gettempdir()).parent / "outside.txt"
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertFalse(_auto_approve_workspace_read(f"Get-Content {outside}"))
+
+    def test_auto_approves_literal_python_workspace_read(self):
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertTrue(
+                _auto_approve_workspace_read(
+                    'python -c "from pathlib import Path; print(Path(\'notes.txt\').read_text())"'
+                )
+            )
+
+    def test_auto_approves_python_presentation_readers(self):
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertTrue(
+                _auto_approve_workspace_read(
+                    'python -c "from pptx import Presentation; ppt_path = \'deck.pptx\'; '
+                    'prs = Presentation(ppt_path); print(len(prs.slides))"'
+                )
+            )
+            self.assertTrue(
+                _auto_approve_workspace_read(
+                    'python -c "import zipfile; z = zipfile.ZipFile(\'.hermesdesk_uploads/s1/deck.pptx\'); '
+                    'print(z.namelist())"'
+                )
+            )
+
+    def test_blocks_python_presentation_readers_outside_workspace(self):
+        outside = Path(tempfile.gettempdir()).parent / "deck.pptx"
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertFalse(
+                _auto_approve_workspace_read(
+                    f'python -c "from pptx import Presentation; Presentation(r\'{outside}\')"'
+                )
+            )
+
+    def test_auto_approves_python_read_with_workspace_alias_env(self):
+        with patch.dict(os.environ, {"HERMES_WORKSPACE": str(self.workspace)}, clear=True):
+            self.assertTrue(
+                _auto_approve_workspace_read(
+                    'python -c "from pathlib import Path; p = \'notes.txt\'; print(Path(p).read_text())"'
+                )
+            )
+
+    def test_blocks_python_write_and_subprocess(self):
+        with patch.dict(os.environ, {"HERMESDESK_WORKSPACE": str(self.workspace)}):
+            self.assertFalse(
+                _auto_approve_workspace_read(
+                    'python -c "from pathlib import Path; Path(\'notes.txt\').write_text(\'x\')"'
+                )
+            )
+            self.assertFalse(
+                _auto_approve_workspace_read(
+                    'python -c "import subprocess; subprocess.run([\'cmd\', \'/c\', \'type\', \'notes.txt\'])"'
+                )
+            )
 
 
 if __name__ == "__main__":

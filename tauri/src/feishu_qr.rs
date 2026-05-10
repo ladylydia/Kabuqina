@@ -9,11 +9,15 @@ const PROGRESS_FILE: &str = "feishu_qr_progress.json";
 const RESULT_FILE: &str = "feishu_qr_result.json";
 
 fn progress_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(crate::paths::ensure_data_dir(app).map_err(|e| e.to_string())?.join(PROGRESS_FILE))
+    Ok(crate::paths::ensure_data_dir(app)
+        .map_err(|e| e.to_string())?
+        .join(PROGRESS_FILE))
 }
 
 fn result_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(crate::paths::ensure_data_dir(app).map_err(|e| e.to_string())?.join(RESULT_FILE))
+    Ok(crate::paths::ensure_data_dir(app)
+        .map_err(|e| e.to_string())?
+        .join(RESULT_FILE))
 }
 
 async fn read_json_file(path: &PathBuf) -> Option<Value> {

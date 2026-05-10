@@ -17,7 +17,7 @@ pub struct SpawnConfig {
     pub approval_url: String,
     /// Must match Tauri `X-HermesDesk-Auth` header for shell → Hermes HTTP.
     pub desk_auth_token: String,
-    /// ``GET /shell-chat/{desk_auth_token}`` on the loopback bridge — “back to shell chat” in Hermes UI.
+    /// ``GET /shell-chat/{desk_auth_token}`` on the loopback bridge — "back to shell chat" in Hermes UI.
     pub shell_chat_back_url: String,
     pub provider: String,
     pub llm_host: String,
@@ -25,6 +25,11 @@ pub struct SpawnConfig {
     pub hermes_model: Option<String>,
     pub inference_provider: Option<String>,
     pub power_user: bool,
+    /// LLM API key plaintext, injected as the corresponding env var for
+    /// gateway children (which can't fetch via HERMESDESK_SECRET_URL).
+    pub api_key: Option<String>,
+    /// The env var name to set (e.g. "OPENAI_API_KEY", "OPENROUTER_API_KEY").
+    pub api_key_env_name: String,
 }
 
 pub struct Supervisor {
@@ -35,7 +40,11 @@ pub struct Supervisor {
 impl Supervisor {
     pub async fn spawn(cfg: SpawnConfig) -> Result<Self> {
         let py_exe = cfg.bundle_dir.join("python").join("python.exe");
-        anyhow::ensure!(py_exe.exists(), "python.exe missing at {}", py_exe.display());
+        anyhow::ensure!(
+            py_exe.exists(),
+            "python.exe missing at {}",
+            py_exe.display()
+        );
 
         let entry = cfg.bundle_dir.join("desktop_entrypoint.py");
         anyhow::ensure!(entry.exists(), "desktop_entrypoint.py missing");
@@ -48,6 +57,8 @@ impl Supervisor {
             .env("HERMESDESK_BUNDLE_DIR", &cfg.bundle_dir)
             .env("HERMESDESK_DATA_DIR", &cfg.data_dir)
             .env("HERMESDESK_WORKSPACE", &cfg.workspace)
+            .env("HERMES_WORKSPACE", &cfg.workspace)
+            .env("TERMINAL_CWD", &cfg.workspace)
             .env("HERMESDESK_PORT_FILE", &port_file)
             .env("HERMESDESK_PROVIDER", &cfg.provider)
             .env("HERMESDESK_LLM_HOST", &cfg.llm_host)
@@ -81,8 +92,13 @@ impl Supervisor {
             // marker the web_server mode skips all approval checks and
             // the Tauri approval bridge is never reached.
             .env("HERMES_INTERACTIVE", "1")
+            // Edge CDP browser backend — lets Hermes drive Edge via CDP
+            // without Node.js / Playwright. Set unconditionally; the browser
+            // tool checks connectivity at runtime.
+            .env("BROWSER_CDP_URL", crate::edge_browser::cdp_url())
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUTF8", "1")
+            .env("PYTHONUNBUFFERED", "1")
             // Don't inherit any stale OPENAI/ANTHROPIC keys from the user shell
             .env_remove("OPENAI_API_KEY")
             .env_remove("ANTHROPIC_API_KEY")
@@ -94,10 +110,14 @@ impl Supervisor {
             // loopback and silently hangs. The Hermes child should never
             // need an HTTP proxy: it talks to the LLM provider directly,
             // and the user's VPN sees that traffic at the system level.
-            .env_remove("HTTP_PROXY").env_remove("http_proxy")
-            .env_remove("HTTPS_PROXY").env_remove("https_proxy")
-            .env_remove("ALL_PROXY").env_remove("all_proxy")
-            .env_remove("NO_PROXY").env_remove("no_proxy")
+            .env_remove("HTTP_PROXY")
+            .env_remove("http_proxy")
+            .env_remove("HTTPS_PROXY")
+            .env_remove("https_proxy")
+            .env_remove("ALL_PROXY")
+            .env_remove("all_proxy")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
             // Dev shells often set PYTHONPATH to the git ``hermes/`` tree; that can shadow
             // the bundle's ``site-packages`` (wrong/missing ``yaml``, ``fastapi``, …).
             .env_remove("PYTHONPATH")
@@ -164,9 +184,13 @@ pub struct PythonStatus {
 }
 
 #[tauri::command]
-pub async fn cmd_python_status(state: tauri::State<'_, crate::AppState>) -> Result<PythonStatus, String> {
+pub async fn cmd_python_status(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<PythonStatus, String> {
     let sup = state.supervisor.lock().await;
-    Ok(PythonStatus { running: sup.is_some() })
+    Ok(PythonStatus {
+        running: sup.is_some(),
+    })
 }
 
 // Keep AppHandle import linked even if unused in some build configs.

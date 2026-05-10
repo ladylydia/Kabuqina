@@ -199,7 +199,7 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
     weixinExitStreak.current = 0;
   }
 
-  async function manualRestartHermes() {
+  async function manualRestartAssistant() {
     setRestartErr(null);
     setRestartBusy(true);
     try {
@@ -298,7 +298,7 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
               type="button"
               className={btnClass}
               disabled={restartBusy}
-              onClick={() => void manualRestartHermes()}
+              onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.weixinRestartBusy") : t("settings.weixinRestart")}
             </button>

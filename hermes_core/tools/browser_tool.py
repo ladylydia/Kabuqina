@@ -88,10 +88,23 @@ from tools.tool_backend_helpers import normalize_browser_cloud_provider
 # Camofox local anti-detection browser backend (optional).
 # When CAMOFOX_URL is set, all browser operations route through the
 # camofox REST API instead of the agent-browser CLI.
-try:
-    from tools.browser_camofox import is_camofox_mode as _is_camofox_mode
-except ImportError:
-    _is_camofox_mode = lambda: False  # noqa: E731
+_is_camofox_mode = lambda: False  # Camofox removed — HermesDesk uses Edge CDP # noqa: E731
+
+# Lazy-loaded CDP backend.  Imported on first use so the module can be
+# missing from the bundle without crashing registration.
+_CDP_BACKEND: Any = None
+
+
+def _get_cdp_backend():
+    """Return the ``browser_cdp_backend`` module, or None if unavailable."""
+    global _CDP_BACKEND
+    if _CDP_BACKEND is None:
+        try:
+            import tools.browser_cdp_backend as _mod  # type: ignore[import-not-found]
+            _CDP_BACKEND = _mod
+        except ImportError:
+            _CDP_BACKEND = False
+    return _CDP_BACKEND if _CDP_BACKEND else None
 
 logger = logging.getLogger(__name__)
 
@@ -482,7 +495,7 @@ def _is_local_backend() -> bool:
     and network access on the same machine, so the check adds no security
     value.
     """
-    return _is_camofox_mode() or _get_cloud_provider() is None
+    return _is_camofox_mode() or bool(os.environ.get("BROWSER_CDP_URL", "").strip()) or _get_cloud_provider() is None
 
 
 _auto_local_for_private_urls_resolved = False
@@ -1742,6 +1755,12 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
             "blocked_by_policy": {"host": blocked["host"], "rule": blocked["rule"], "source": blocked["source"]},
         })
 
+    # CDP backend (HermesDesk Edge) — direct DevTools Protocol
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.navigate(url)
+
     # Camofox backend — delegate after safety checks pass
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_navigate
@@ -1871,6 +1890,11 @@ def browser_snapshot(
     Returns:
         JSON string with page snapshot
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.snapshot()
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_snapshot
         return camofox_snapshot(full, task_id, user_task)
@@ -1933,6 +1957,11 @@ def browser_click(ref: str, task_id: Optional[str] = None) -> str:
     Returns:
         JSON string with click result
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.click(ref)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_click
         return camofox_click(ref, task_id)
@@ -1969,6 +1998,11 @@ def browser_type(ref: str, text: str, task_id: Optional[str] = None) -> str:
     Returns:
         JSON string with type result
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.type_text(ref, text)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_type
         return camofox_type(ref, text, task_id)
@@ -2018,6 +2052,11 @@ def browser_scroll(direction: str, task_id: Optional[str] = None) -> str:
     # ~500px is roughly half a viewport of travel.
     _SCROLL_PIXELS = 500
 
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.scroll(direction)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_scroll
         # Camofox REST API doesn't support pixel args; use repeated calls
@@ -2052,6 +2091,11 @@ def browser_back(task_id: Optional[str] = None) -> str:
     Returns:
         JSON string with navigation result
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.back()
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_back
         return camofox_back(task_id)
@@ -2083,6 +2127,11 @@ def browser_press(key: str, task_id: Optional[str] = None) -> str:
     Returns:
         JSON string with key press result
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.press(key)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_press
         return camofox_press(key, task_id)
@@ -2125,6 +2174,11 @@ def browser_console(clear: bool = False, expression: Optional[str] = None, task_
         return _browser_eval(expression, task_id)
 
     # --- Console output mode (original behaviour) ---
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.console(clear)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_console
         return camofox_console(clear, task_id)
@@ -2165,6 +2219,11 @@ def browser_console(clear: bool = False, expression: Optional[str] = None, task_
 
 def _browser_eval(expression: str, task_id: Optional[str] = None) -> str:
     """Evaluate a JavaScript expression in the page context and return the result."""
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.console(clear=False, expression=expression)
+
     if _is_camofox_mode():
         return _camofox_eval(expression, task_id)
 
@@ -2296,6 +2355,11 @@ def browser_get_images(task_id: Optional[str] = None) -> str:
     Returns:
         JSON string with list of images (src and alt)
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.get_images()
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_get_images
         return camofox_get_images(task_id)
@@ -2364,6 +2428,11 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
     Returns:
         JSON string with vision analysis results and screenshot_path
     """
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
+        _mod = _get_cdp_backend()
+        if _mod is not None:
+            return _mod.vision(question, annotate)
+
     if _is_camofox_mode():
         from tools.browser_camofox import camofox_vision
         return camofox_vision(question, annotate, task_id)
@@ -2618,17 +2687,8 @@ def _cleanup_single_browser_session(task_id: str) -> None:
     # before the backend tears down the underlying CDP endpoint.
     _stop_cdp_supervisor(task_id)
 
-    # Also clean up Camofox session if running in Camofox mode.
-    # Skip full close when managed persistence is enabled — the browser
-    # profile (and its session cookies) must survive across agent tasks.
-    # The inactivity reaper still frees idle resources.
-    if _is_camofox_mode():
-        try:
-            from tools.browser_camofox import camofox_close, camofox_soft_cleanup
-            if not camofox_soft_cleanup(task_id):
-                camofox_close(task_id)
-        except Exception as e:
-            logger.debug("Camofox cleanup for task %s: %s", task_id, e)
+    # Camofox previously had a cleanup path here; removed in HermesDesk
+    # (HermesDesk uses Edge CDP instead).
 
     logger.debug("cleanup_browser called for task_id: %s", task_id)
     logger.debug("Active sessions: %s", list(_active_sessions.keys()))
@@ -2813,8 +2873,10 @@ def check_browser_requirements() -> bool:
     Returns:
         True if all requirements are met, False otherwise
     """
-    # Camofox backend — only needs the server URL, no agent-browser CLI
-    if _is_camofox_mode():
+    # CDP mode (Chrome/Edge remote debugging via CDP) — no agent-browser CLI
+    # or local Chromium needed.  Used by HermesDesk which auto-launches Edge
+    # with --remote-debugging-port.
+    if os.environ.get("BROWSER_CDP_URL", "").strip():
         return True
 
     # The agent-browser CLI is always required

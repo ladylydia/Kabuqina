@@ -264,11 +264,13 @@ Copy-Item -Force (Join-Path $PSScriptRoot "src\secret_store.py") (Join-Path $Dis
 Copy-Item -Force (Join-Path $PSScriptRoot "src\approval_backend.py") (Join-Path $Dist "approval_backend.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\network_policy.py") (Join-Path $Dist "network_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\tool_policy.py") (Join-Path $Dist "tool_policy.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\capability_policy.py") (Join-Path $Dist "capability_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\gateway_policy.py") (Join-Path $Dist "gateway_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\weixin_qr_worker.py") (Join-Path $Dist "weixin_qr_worker.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\qqbot_qr_worker.py") (Join-Path $Dist "qqbot_qr_worker.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\env_validate.py") (Join-Path $Dist "env_validate.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\feishu_qr_worker.py") (Join-Path $Dist "feishu_qr_worker.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\stt_wrapper.py") (Join-Path $Dist "stt_wrapper.py")
 
 # A pth file so the bundled hermes/ + site-packages are on sys.path
 $pthBody = @(
@@ -276,6 +278,108 @@ $pthBody = @(
     "..\site-packages"
 ) -join "`n"
 Set-Content -Path (Join-Path $pyDir "Lib\site-packages\hermesdesk.pth") -Value $pthBody -Encoding ASCII
+
+# ------------------------------------------------------------------ 6b. Bundle whisper.cpp + ffmpeg for offline STT
+#
+# Ships the binaries needed for the local-command STT path so HermesDesk can
+# transcribe audio without an API key. The model itself (~57 MB) is NOT
+# bundled — it is lazy-downloaded on first use (see desk_stt_model_*
+# endpoints in hermes_cli/web_server.py). Preferred location is
+# HERMESDESK_DATA_DIR\stt-models\ (HermesDesk path policy); without that env
+# var it falls back to %LOCALAPPDATA%\HermesDesk\stt-models\, surviving upgrades.
+#
+# Cached in python/_download/ alongside the CPython tarball. SHA-256 verified
+# against pinned constants. Net add to bundle: ~37 MB.
+#
+# To bump versions: update the URL + SHA below, run with -Clean once to
+# refresh the download cache.
+#
+# Note: whisper.cpp moved to ``ggml-org/whisper.cpp``; v1.7.4 and some older
+# tags ship **no** prebuilt zips (empty release assets) — the 404 you saw was
+# from the old ggerganov URL + missing artifact. We pin a tag that CI
+# actually publishes (``whisper-bin-x64.zip`` on the release page).
+$WhisperVersion   = "v1.8.4"
+$WhisperAsset     = "whisper-bin-x64.zip"
+$WhisperUrl       = "https://github.com/ggml-org/whisper.cpp/releases/download/$WhisperVersion/$WhisperAsset"
+# GitHub release asset digest for whisper-bin-x64.zip (v1.8.4)
+$WhisperSha256    = "74f973345cb52ef5ba3ec9e7e7af8e48cc8c71722d1528603b80588a11f82e3e"
+
+$FfmpegAsset      = "ffmpeg-release-essentials.zip"
+$FfmpegUrl        = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+$FfmpegSha256     = ""
+
+$SttBinDir = Join-Path $Dist "stt-bin"
+New-Item -ItemType Directory -Force -Path $SttBinDir | Out-Null
+
+function Test-Sha256 {
+    param([string]$Path, [string]$Expected)
+    if ([string]::IsNullOrWhiteSpace($Expected)) {
+        Write-Warning "  (skip) SHA-256 not pinned for $(Split-Path $Path -Leaf); using download as-is"
+        return
+    }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    if ($actual -ne $Expected.ToLowerInvariant()) {
+        throw "SHA-256 mismatch for $Path`n  expected: $Expected`n  actual:   $actual"
+    }
+}
+
+# whisper-cli.exe (+ its runtime DLLs if any). Static-linked builds are ~10 MB.
+$whisperZip = Join-Path $Download $WhisperAsset
+if (-not (Test-Path $whisperZip)) {
+    Write-Host "Downloading $WhisperUrl"
+    Invoke-WebRequest -Uri $WhisperUrl -OutFile $whisperZip -UseBasicParsing
+}
+Test-Sha256 -Path $whisperZip -Expected $WhisperSha256
+
+$whisperExtract = Join-Path $BuildDir "whisper-bin"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $whisperExtract
+Expand-Archive -LiteralPath $whisperZip -DestinationPath $whisperExtract -Force
+
+# Pick whisper-cli.exe (newer releases) or main.exe (older). Drag along any
+# sibling DLLs (e.g. ggml-cpu.dll / ggml.dll / SDL2.dll) so the binary runs
+# without external runtime packages.
+# NOTE: Use Where-Object instead of -Include with -LiteralPath -Recurse;
+#       -Include is unreliable with -LiteralPath on some PowerShell versions.
+$cliCandidates = Get-ChildItem -Recurse -LiteralPath $whisperExtract -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -in 'whisper-cli.exe','main.exe' }
+if (-not $cliCandidates) {
+    throw "No whisper-cli.exe / main.exe found inside $WhisperAsset (extracted to $whisperExtract). Inspect the archive layout."
+}
+# Prefer 'whisper-cli.exe' over 'main.exe'; if multiple matches, pick the one
+# in a 'bin' subdirectory (release layout: whisper-bin-x64/bin/whisper-cli.exe).
+$whisperExe = $cliCandidates | Where-Object { $_.Name -eq 'whisper-cli.exe' } | Select-Object -First 1
+if (-not $whisperExe) { $whisperExe = $cliCandidates | Select-Object -First 1 }
+$whisperSrcDir = Split-Path $whisperExe.FullName -Parent
+
+Copy-Item -Force $whisperExe.FullName (Join-Path $SttBinDir "whisper-cli.exe")
+Get-ChildItem -LiteralPath $whisperSrcDir -File | Where-Object {
+    $_.Extension -ieq ".dll" -or $_.Name -ieq "whisper.exe"
+} | ForEach-Object {
+    Copy-Item -Force $_.FullName (Join-Path $SttBinDir $_.Name)
+}
+
+# ffmpeg.exe (we don't need ffprobe / ffplay).
+$ffmpegZip = Join-Path $Download $FfmpegAsset
+if (-not (Test-Path $ffmpegZip)) {
+    Write-Host "Downloading $FfmpegUrl"
+    Invoke-WebRequest -Uri $FfmpegUrl -OutFile $ffmpegZip -UseBasicParsing
+}
+Test-Sha256 -Path $ffmpegZip -Expected $FfmpegSha256
+
+$ffmpegExtract = Join-Path $BuildDir "ffmpeg-bin"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $ffmpegExtract
+Expand-Archive -LiteralPath $ffmpegZip -DestinationPath $ffmpegExtract -Force
+
+$ffmpegBins = Get-ChildItem -Recurse -LiteralPath $ffmpegExtract -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'ffmpeg.exe' }
+if (-not $ffmpegBins) {
+    throw "No ffmpeg.exe found inside $FfmpegAsset (extracted to $ffmpegExtract)."
+}
+# If multiple ffmpeg.exe exist (unlikely), prefer the one in a 'bin' subdirectory.
+$ffmpegExe = $ffmpegBins | Where-Object { $_.DirectoryName -like '*\\bin' } | Select-Object -First 1
+if (-not $ffmpegExe) { $ffmpegExe = $ffmpegBins | Select-Object -First 1 }
+Copy-Item -Force $ffmpegExe.FullName (Join-Path $SttBinDir "ffmpeg.exe")
+
+Write-Host "STT binaries staged at $SttBinDir" -ForegroundColor DarkGray
 
 # ------------------------------------------------------------------ 7. Bundle metadata
 $info = @{
@@ -314,4 +418,25 @@ print('OK: hermes_cli.web_server importable')
         exit $LASTEXITCODE
     }
     Write-Host "smoke test passed" -ForegroundColor Green
+
+    # STT binaries must be runnable; they're invoked by stt_wrapper.py
+    # at first mic click, so any missing runtime DLLs would surface there
+    # at the worst possible moment.
+    $whisperCli = Join-Path $SttBinDir "whisper-cli.exe"
+    $ffmpegCli  = Join-Path $SttBinDir "ffmpeg.exe"
+    Write-Host "Verifying STT binaries..." -ForegroundColor DarkGray
+    & $whisperCli "--help" *> $null
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+        # whisper-cli prints usage on stderr and may exit 0 or 1 depending
+        # on version. Anything else (e.g. 0xC0000135 missing DLL → -1073741515)
+        # means the bundle is broken.
+        Write-Error "whisper-cli.exe failed to start (exit $LASTEXITCODE). DLLs missing?"
+        exit 12
+    }
+    & $ffmpegCli "-version" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "ffmpeg.exe failed to start (exit $LASTEXITCODE)."
+        exit 13
+    }
+    Write-Host "STT binaries OK" -ForegroundColor Green
 }

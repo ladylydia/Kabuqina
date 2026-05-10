@@ -1,32 +1,14 @@
-import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../lib/i18n";
-import { useDraft } from "../../lib/store";
 import { WizardFooter, WizardPrimaryButton } from "../wizard-ui";
 
 export function Welcome() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const draft = useDraft();
-
-  useEffect(() => {
-    if (!draft.setupMode) {
-      nav("/onboarding/mode", { replace: true });
-    }
-  }, [draft.setupMode, nav]);
-
-  if (!draft.setupMode) {
-    return null;
-  }
-
-  const modeLabel = draft.setupMode === "quick" ? t("setupMode.quickTitle") : t("setupMode.fullTitle");
 
   return (
     <div className="space-y-10">
       <div className="space-y-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-sky-700/90 dark:text-sky-300/90">
-          {t("welcome.modePicked")}: {modeLabel}
-        </p>
         <h1 className="hd-page-title">{t("welcome.title")}</h1>
         <p className="hd-lead max-w-prose">{t("welcome.lead")}</p>
       </div>
@@ -48,7 +30,9 @@ export function Welcome() {
 
       <WizardFooter>
         <div className="flex justify-end">
-          <WizardPrimaryButton onClick={() => nav("/onboarding/brain")}>{t("welcome.cta")}</WizardPrimaryButton>
+          <WizardPrimaryButton onClick={() => nav("/onboarding/mode")}>
+            {t("welcome.cta")}
+          </WizardPrimaryButton>
         </div>
       </WizardFooter>
     </div>

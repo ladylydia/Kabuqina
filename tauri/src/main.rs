@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    hermesdesk_lib::run()
+    kabuqina_lib::run()
 }

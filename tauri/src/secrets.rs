@@ -7,7 +7,7 @@
 //!
 //! This module:
 //!
-//!   - Names the entry consistently (service = "HermesDesk", account = provider)
+//!   - Names the entry consistently (service = "Kabuqina", account = provider)
 //!   - Persists which provider+host the user has chosen in settings.json
 //!     (no secrets — just provider id and host)
 //!   - Exposes commands the onboarding wizard calls
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-const SERVICE: &str = "HermesDesk";
+const SERVICE: &str = "Kabuqina";
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ProviderConfig {
@@ -89,6 +89,27 @@ fn write_bool_setting(app: &AppHandle, key: &str, value: bool) -> Result<()> {
 
 pub fn is_vendor_llm_disabled(app: &AppHandle) -> bool {
     read_bool_setting(app, VENDOR_LLM_DISABLED)
+}
+
+/// Map a HermesDesk provider name to the env var that should hold its API key.
+/// Mirrors ``_PROVIDER_ENV`` in ``python/src/secret_store.py``.
+pub fn provider_api_key_env(provider: &str) -> String {
+    match provider {
+        "openrouter" => "OPENROUTER_API_KEY",
+        "openai" => "OPENAI_API_KEY",
+        "deepseek" => "OPENAI_API_KEY",
+        "custom" => "OPENAI_API_KEY",
+        "anthropic" => "ANTHROPIC_API_KEY",
+        "nous" => "NOUS_PORTAL_API_KEY",
+        "groq" => "GROQ_API_KEY",
+        "mistral" => "MISTRAL_API_KEY",
+        "fireworks" => "FIREWORKS_API_KEY",
+        "together" => "TOGETHER_API_KEY",
+        "google" => "GOOGLE_API_KEY",
+        "xai" => "XAI_API_KEY",
+        _ => "OPENAI_API_KEY",
+    }
+    .to_string()
 }
 
 /// Keyring entry only (bridge may still fall back to compile-time vendor key).
@@ -207,9 +228,7 @@ fn entry_for(provider: &str) -> Result<keyring::Entry, String> {
 }
 
 fn vendor_secret_fallback_enabled(app: &AppHandle) -> bool {
-    read_provider_cfg(app).is_none()
-        && vendor_llm_available()
-        && !is_vendor_llm_disabled(app)
+    read_provider_cfg(app).is_none() && vendor_llm_available() && !is_vendor_llm_disabled(app)
 }
 
 /// Secret handed to the Python child via the loopback bridge: user keyring
@@ -306,7 +325,8 @@ pub async fn cmd_has_secret(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub async fn cmd_clear_secret(app: AppHandle) -> Result<(), String> {
     if let Some(cfg) = read_provider_cfg(&app) {
-        let _ = entry_for(&cfg.provider).and_then(|e| e.delete_credential().map_err(|e| e.to_string()));
+        let _ =
+            entry_for(&cfg.provider).and_then(|e| e.delete_credential().map_err(|e| e.to_string()));
     }
     clear_provider_cfg(&app).map_err(|e| e.to_string())?;
     let _ = write_bool_setting(&app, VENDOR_LLM_DISABLED, true);
@@ -345,7 +365,10 @@ pub async fn cmd_validate_endpoint(
     // 400 means the server is reachable — some OpenAI-compatible APIs return 400
     // for unauthenticated /models requests instead of 401.
     if !status.is_success() && status != reqwest::StatusCode::BAD_REQUEST {
-        return Err(format!("That API address answered {}. Check the URL ends with /v1.", status));
+        return Err(format!(
+            "That API address answered {}. Check the URL ends with /v1.",
+            status
+        ));
     }
     Ok(())
 }

@@ -139,6 +139,15 @@ market; power-user mode unlocks unsigned third-party install and a
 YAML editor. Full reasoning, security model, and implementation plan
 in [docs/skills-design-decision.md](docs/skills-design-decision.md).
 
+## Planned: Native document read/write tools (2026-05-06)
+
+| Question | Decision |
+|----------|----------|
+| Formats | `.docx`, `.pptx`, `.pdf` — read + write. Skip legacy `.doc`/`.ppt` (OLE binary, no lightweight Python lib). |
+| Availability | All users (standard `KEEP_LIST` + `GATEWAY_KEEP_LIST`). |
+| PDF write capability | Markdown → PDF with basic formatting (headings, bold, lists). |
+| Status | **Planned, not implemented.** See [`docs/document-tools-plan.md`](docs/document-tools-plan.md) for full plan. |
+
 ## Out of scope for v1
 
 - Linux / macOS builds

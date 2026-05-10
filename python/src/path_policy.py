@@ -13,12 +13,30 @@ from pathlib import Path
 from typing import Iterable
 
 
+# Sentinel file that bots must never write to.
+_HOST_PREFS_FILENAME = "_host_prefs.md"
+
+
 class PathPolicyError(PermissionError):
     """Raised when a path escapes the permitted allowlist."""
 
 
 class PathPolicy:
-    """Resolve and validate a path against the configured root + extra dirs."""
+    """Resolve and validate a path against the configured root + extra dirs.
+
+    If the process is a gateway child (``HERMESDESK_GATEWAY_PLATFORM`` set),
+    writes to ``_host_prefs.md`` are unconditionally rejected — that file is
+    host-write-only and serves as the read-only shared-preferences preamble
+    for all bots.
+    """
+
+    _is_gateway_child: bool | None = None
+
+    @classmethod
+    def _check_gateway_child(cls) -> bool:
+        if cls._is_gateway_child is None:
+            cls._is_gateway_child = bool(os.environ.get("HERMESDESK_GATEWAY_PLATFORM"))
+        return cls._is_gateway_child
 
     def __init__(
         self,
@@ -37,6 +55,14 @@ class PathPolicy:
 
     def enforce(self, path: str | os.PathLike, *, write: bool = False) -> Path:
         p = self._norm(path)
+
+        # Gateway children must never write to _host_prefs.md (host-only file).
+        if write and p.name == _HOST_PREFS_FILENAME and self._check_gateway_child():
+            raise PathPolicyError(
+                f"HermesDesk path policy blocked write to {_HOST_PREFS_FILENAME!r} "
+                f"from gateway child (host-only shared preferences file)."
+            )
+
         roots = [self._root] + self._extra_write
         if not write:
             roots = roots + self._extra_read

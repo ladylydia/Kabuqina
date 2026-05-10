@@ -72,7 +72,9 @@ pub async fn cmd_wecom_qr_start(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| format!("spawn wecom QR worker: {e}"))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("spawn wecom QR worker: {e}"))?;
 
     if let Some(out) = child.stdout.take() {
         let tag = "wecom-qr.out";
@@ -129,9 +131,7 @@ pub async fn cmd_wecom_qr_status(
 
 /// Cancel a running WeCom QR process (SIGKILL).
 #[tauri::command]
-pub async fn cmd_wecom_qr_cancel(
-    state: tauri::State<'_, crate::AppState>,
-) -> Result<(), String> {
+pub async fn cmd_wecom_qr_cancel(state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
     let mut slot = state.wecom_qr_child.lock().await;
     if let Some(mut child) = slot.take() {
         let _ = child.start_kill();

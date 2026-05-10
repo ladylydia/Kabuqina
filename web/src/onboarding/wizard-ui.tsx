@@ -9,7 +9,7 @@ export function WizardFooter({ children, className }: { children: ReactNode; cla
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-20 -mx-[var(--hd-page-pad-x)] border-t border-zinc-200/70 bg-white/90 px-[var(--hd-page-pad-x)] pt-4 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/90 sm:mx-0",
+        "sticky bottom-0 z-20 -mx-[var(--hd-page-pad-x)] border-t border-zinc-200/70 bg-zinc-50/95 px-[var(--hd-page-pad-x)] pt-4 dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:mx-0",
         "pb-[max(1rem,env(safe-area-inset-bottom,0px))]",
         className
       )}
@@ -35,7 +35,7 @@ export function WizardPrimaryButton({
       type="button"
       className={cn(
         primaryBase,
-        "bg-zinc-900 text-white hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900",
+        "bg-sky-600 text-white shadow-sm hover:bg-sky-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-500 dark:hover:bg-sky-400",
         className
       )}
       {...props}

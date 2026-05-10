@@ -91,7 +91,12 @@ fn normalize_proxy_url(raw: &str) -> Option<String> {
     if let Some((scheme, rest)) = first.split_once('=') {
         let scheme = scheme.trim().to_lowercase();
         let rest = rest.trim();
-        if !rest.is_empty() && matches!(scheme.as_str(), "http" | "https" | "socks4" | "socks5" | "socks") {
+        if !rest.is_empty()
+            && matches!(
+                scheme.as_str(),
+                "http" | "https" | "socks4" | "socks5" | "socks"
+            )
+        {
             return Some(format!("{}://{}", scheme, rest));
         }
     }
@@ -143,7 +148,10 @@ fn read_proxy_settings(hermes_home: &Path) -> ProxySettings {
 }
 
 /// Compute the effective proxy URL based on system detection + user preference.
-pub fn effective_proxy_url(system: &SystemProxySnapshot, settings: &ProxySettings) -> Option<String> {
+pub fn effective_proxy_url(
+    system: &SystemProxySnapshot,
+    settings: &ProxySettings,
+) -> Option<String> {
     if let Some(ref custom) = settings.custom_url {
         return Some(custom.clone());
     }
@@ -193,11 +201,16 @@ pub fn cmd_proxy_save(
     let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
     // Update HERMESDESK_USE_SYSTEM_PROXY
-    let use_line = format!("HERMESDESK_USE_SYSTEM_PROXY={}", if use_system { "1" } else { "0" });
+    let use_line = format!(
+        "HERMESDESK_USE_SYSTEM_PROXY={}",
+        if use_system { "1" } else { "0" }
+    );
     let mut found_use = false;
     for line in &mut lines {
         let trimmed = line.trim();
-        if trimmed.starts_with("HERMESDESK_USE_SYSTEM_PROXY=") || trimmed.starts_with("HERMESDESK_USE_SYSTEM_PROXY ") {
+        if trimmed.starts_with("HERMESDESK_USE_SYSTEM_PROXY=")
+            || trimmed.starts_with("HERMESDESK_USE_SYSTEM_PROXY ")
+        {
             *line = use_line.clone();
             found_use = true;
             break;
@@ -214,13 +227,16 @@ pub fn cmd_proxy_save(
         // Remove the line if clearing
         lines.retain(|l| {
             let trimmed = l.trim();
-            !trimmed.starts_with("HERMESDESK_PROXY_URL=") && !trimmed.starts_with("HERMESDESK_PROXY_URL ")
+            !trimmed.starts_with("HERMESDESK_PROXY_URL=")
+                && !trimmed.starts_with("HERMESDESK_PROXY_URL ")
         });
     } else {
         let proxy_line = format!("HERMESDESK_PROXY_URL={}", custom);
         for line in &mut lines {
             let trimmed = line.trim();
-            if trimmed.starts_with("HERMESDESK_PROXY_URL=") || trimmed.starts_with("HERMESDESK_PROXY_URL ") {
+            if trimmed.starts_with("HERMESDESK_PROXY_URL=")
+                || trimmed.starts_with("HERMESDESK_PROXY_URL ")
+            {
                 *line = proxy_line.clone();
                 found_custom = true;
                 break;

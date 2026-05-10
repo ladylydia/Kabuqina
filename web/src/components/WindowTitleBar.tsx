@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Maximize2, Minus, X } from "lucide-react";
-import { LanguageToggle } from "./LanguageToggle";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
@@ -54,8 +53,12 @@ export function WindowTitleBar() {
     void getCurrentWindow().close();
   };
 
+  const isChat = location.pathname === "/chat";
   const isSettings = location.pathname === "/settings";
+  const isCapabilities = location.pathname === "/capabilities";
+  const isWizard = location.pathname.startsWith("/onboarding");
   const settingsLabel = t("chat.openSettings");
+  const capabilitiesLabel = t("capabilities.title");
 
   return (
     <div
@@ -70,22 +73,42 @@ export function WindowTitleBar() {
         aria-label={t("brand")}
       >
         <img
-          src="/logo.svg"
-          alt=""
+          src="/kabuqina_na_blue_48.png"
+          alt={t("brand")}
           className="h-5 w-5 shrink-0 object-contain dark:opacity-95"
           width={20}
           height={20}
           decoding="async"
-          aria-hidden
         />
+        <span className="ml-2 truncate text-sm font-semibold tracking-wide text-zinc-700 dark:text-zinc-200">
+          {t("brand")}
+        </span>
       </div>
 
       <div
         className="hermes-titlebar-nodrag flex items-center gap-0.5 pr-1 pl-1 sm:gap-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <LanguageToggle />
-
+        <Link
+          to="/chat"
+          className={cn(
+            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
+            isChat && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
+          )}
+          title={t("chat.title")}
+        >
+          {t("chat.title")}
+        </Link>
+        <Link
+          to="/onboarding/welcome"
+          className={cn(
+            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
+            isWizard && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
+          )}
+          title={t("chat.wizardButton")}
+        >
+          {t("chat.wizardButton")}
+        </Link>
         <Link
           to="/settings"
           className={cn(
@@ -95,6 +118,16 @@ export function WindowTitleBar() {
           title={settingsLabel}
         >
           {settingsLabel}
+        </Link>
+        <Link
+          to="/capabilities"
+          className={cn(
+            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
+            isCapabilities && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
+          )}
+          title={capabilitiesLabel}
+        >
+          {capabilitiesLabel}
         </Link>
 
         {inApp && (

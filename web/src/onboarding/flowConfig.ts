@@ -6,11 +6,12 @@ import type { SetupMode } from "../lib/store";
  * with preamble: mode, welcome, brain, pass.
  */
 export const SHELL_WIZARD_STEPS = [
-  "mode",
   "welcome",
+  "mode",
   "brain",
   "pass",
   "tts",
+  "stt",
   "terminal",
   "gateway",
   "tools",
@@ -20,8 +21,8 @@ export const SHELL_WIZARD_STEPS = [
 export type ShellWizardStepId = (typeof SHELL_WIZARD_STEPS)[number];
 
 const QUICK_STEPS: readonly ShellWizardStepId[] = [
-  "mode",
   "welcome",
+  "mode",
   "brain",
   "pass",
   "gateway",
@@ -30,8 +31,8 @@ const QUICK_STEPS: readonly ShellWizardStepId[] = [
 const FULL_STEPS: readonly ShellWizardStepId[] = SHELL_WIZARD_STEPS;
 
 const LEGACY_INCOMPLETE: readonly ShellWizardStepId[] = [
-  "mode",
   "welcome",
+  "mode",
   "brain",
   "pass",
 ] as const;
@@ -64,7 +65,7 @@ export function getIndexInFlow(step: ShellWizardStepId, setupMode: SetupMode | n
 }
 
 export function getBackPath(current: ShellWizardStepId, setupMode: SetupMode | null): string | null {
-  if (current === "mode") return "/chat";
+  if (current === "welcome") return "/chat";
   const list = getStepsForMode(setupMode);
   const i = list.indexOf(current);
   if (i <= 0) return null;
@@ -105,7 +106,14 @@ export function getRedirectForInvalidUrlStep(
 ): string | null {
   if (!setupMode) return null;
   if (isStepInMode(pathStep, setupMode)) return null;
-  if (setupMode === "quick" && (pathStep === "tts" || pathStep === "terminal" || pathStep === "tools" || pathStep === "agent")) {
+  if (
+    setupMode === "quick" &&
+    (pathStep === "tts" ||
+      pathStep === "stt" ||
+      pathStep === "terminal" ||
+      pathStep === "tools" ||
+      pathStep === "agent")
+  ) {
     return stepToPath("gateway");
   }
   return null;

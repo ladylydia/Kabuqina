@@ -26,6 +26,8 @@ from agent.skill_utils import (
 )
 from utils import atomic_json_write
 
+from hermes_cli.default_soul import DEFAULT_SOUL_MD as DEFAULT_AGENT_IDENTITY
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -130,16 +132,7 @@ def _strip_yaml_frontmatter(content: str) -> str:
 # =========================================================================
 # Constants
 # =========================================================================
-
-DEFAULT_AGENT_IDENTITY = (
-    "You are Hermes Agent, an intelligent AI assistant created by Nous Research. "
-    "You are helpful, knowledgeable, and direct. You assist users with a wide "
-    "range of tasks including answering questions, writing and editing code, "
-    "analyzing information, creative work, and executing actions via your tools. "
-    "You communicate clearly, admit uncertainty when appropriate, and prioritize "
-    "being genuinely useful over being verbose unless otherwise directed below. "
-    "Be targeted and efficient in your exploration and investigations."
-)
+# DEFAULT_AGENT_IDENTITY is imported from hermes_cli.default_soul (single source with seeded SOUL.md).
 
 HERMES_AGENT_HELP_GUIDANCE = (
     "If the user asks about configuring, setting up, or using Hermes Agent "

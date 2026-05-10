@@ -12,21 +12,27 @@ Usage:
 import asyncio
 import base64
 import hmac
+import io
 import importlib.util
 import json
 import logging
 import os
+import queue
 import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from xml.etree import ElementTree as ET
 
 import yaml
 
@@ -55,7 +61,7 @@ from gateway.status import get_running_pid, read_runtime_status
 try:
     from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 except ImportError:
@@ -739,6 +745,7 @@ _desk_active_agents: Dict[str, Any] = {}
 _desk_active_lock = threading.Lock()
 _DESK_MAX_ATTACHMENTS = 6
 _DESK_MAX_ATTR_BYTES = 12 * 1024 * 1024
+_DESK_MAX_INLINE_CHARS = 200_000
 
 
 def _desk_register_active(session_id: str, agent: Any) -> None:
@@ -751,6 +758,99 @@ def _desk_unregister_active(session_id: str) -> None:
         _desk_active_agents.pop(session_id, None)
 
 
+_DESK_PROGRESS_EVENT_CAP = 200
+
+
+def _desk_progress_response(
+    agent: Any,
+    since: int = 0,
+    events_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    progress = dict(getattr(agent, "_progress", {}) or {})
+    events_out: List[Dict[str, Any]] = []
+    next_seq = 0
+    lock = getattr(agent, "_progress_event_lock", None)
+    if lock is not None:
+        with lock:
+            all_events = list(getattr(agent, "_progress_events", []) or [])
+            next_seq = int(getattr(agent, "_progress_event_seq", 0) or 0)
+        if events_override is not None:
+            events_out = events_override
+        else:
+            events_out = [e for e in all_events if int(e.get("seq", 0)) > int(since or 0)]
+    progress["events"] = events_out
+    progress["next_seq"] = next_seq
+    return progress
+
+
+def _desk_attach_progress_events(agent: Any, stream_emit: Optional[Any] = None) -> None:
+    """Wire `tool_progress_callback` to record per-tool events on the agent.
+
+    The frontend polls /api/desk/chat-preview/{sid}?since=N to render a live
+    step list (tool name + preview + duration). Events are kept on the agent
+    as a ring buffer; the callback only forwards `tool.started` / `tool.completed`.
+    """
+    agent._progress_events = []
+    agent._progress_event_seq = 0
+    agent._progress_event_lock = threading.Lock()
+
+    def _cb(event_type, name, preview, args, duration=None, is_error=None):
+        if event_type not in ("tool.started", "tool.completed"):
+            return
+        event_payload: Optional[Dict[str, Any]] = None
+        try:
+            with agent._progress_event_lock:
+                agent._progress_event_seq += 1
+                event_payload = {
+                    "seq": agent._progress_event_seq,
+                    "kind": event_type,
+                    "tool": str(name) if name else "",
+                    "preview": preview if isinstance(preview, str) else None,
+                    "duration": float(duration) if duration is not None else None,
+                    "is_error": bool(is_error) if is_error else False,
+                    "ts": time.time(),
+                }
+                agent._progress_events.append(event_payload)
+                if len(agent._progress_events) > _DESK_PROGRESS_EVENT_CAP:
+                    agent._progress_events = agent._progress_events[-_DESK_PROGRESS_EVENT_CAP:]
+        except Exception:
+            _log.debug("desk progress event callback failed", exc_info=True)
+        if stream_emit is not None and event_payload is not None:
+            try:
+                stream_emit({
+                    "type": "progress",
+                    "progress": _desk_progress_response(agent, events_override=[event_payload]),
+                })
+            except Exception:
+                _log.debug("desk progress stream emit failed", exc_info=True)
+
+    agent.tool_progress_callback = _cb
+
+
+def _desk_prepare_active_agent(
+    session_id: str,
+    agent: Any,
+    stream_delta_callback: Optional[Any] = None,
+    progress_event_callback: Optional[Any] = None,
+) -> None:
+    """Make a desk agent visible to preview/stop before its worker thread starts."""
+    if getattr(agent, "_desk_prepared_session_id", None) == session_id:
+        return
+    agent._progress = {
+        "running": True,
+        "status": "starting",
+        "iteration": 0,
+        "max_iterations": int(getattr(agent, "max_iterations", 0) or 0),
+        "current_tool": None,
+        "error": None,
+    }
+    _desk_attach_progress_events(agent, progress_event_callback)
+    if stream_delta_callback is not None:
+        agent.stream_delta_callback = stream_delta_callback
+    agent._desk_prepared_session_id = session_id
+    _desk_register_active(session_id, agent)
+
+
 def _desk_parse_attachments_from_body(body: Dict[str, Any]) -> List[Dict[str, Any]]:
     raw = body.get("attachments")
     if not raw or not isinstance(raw, list):
@@ -761,6 +861,23 @@ def _desk_parse_attachments_from_body(body: Dict[str, Any]) -> List[Dict[str, An
             continue
         name = str(it.get("name") or "file")
         mime = (str(it.get("mime") or "application/octet-stream")).strip() or "application/octet-stream"
+
+        # Path-based attachment (Rust saves to workspace, sends path)
+        fpath = it.get("path")
+        if isinstance(fpath, str) and fpath:
+            if os.path.isfile(fpath):
+                try:
+                    rawb = Path(fpath).read_bytes()
+                except Exception as e:
+                    _log.warning("desk attachment read failed for %s: %s", fpath, e)
+                    continue
+                out.append({"name": name, "mime": mime.lower(), "data": rawb, "path": fpath})
+                continue
+            else:
+                _log.warning("desk attachment path not found: %s", fpath)
+                continue
+
+        # Legacy base64 data field
         raw_d = it.get("data")
         if raw_d in (None, ""):
             continue
@@ -769,12 +886,105 @@ def _desk_parse_attachments_from_body(body: Dict[str, Any]) -> List[Dict[str, An
             continue
         try:
             rawb = base64.b64decode(b64, validate=False)
-        except Exception:
+        except Exception as e:
+            _log.warning("desk attachment b64decode failed: %s", e)
             continue
         if not rawb or len(rawb) > _DESK_MAX_ATTR_BYTES:
+            _log.warning("desk attachment skipped: empty=%s too_big=%s (limit=%s)",
+                         not rawb, len(rawb) > _DESK_MAX_ATTR_BYTES if rawb else False, _DESK_MAX_ATTR_BYTES)
             continue
         out.append({"name": name, "mime": mime.lower(), "data": rawb})
     return out
+
+
+def _desk_attachment_ext(name: str) -> str:
+    return Path(name).suffix.lower()
+
+
+def _desk_is_presentation(name: str, mime: str) -> bool:
+    ext = _desk_attachment_ext(name)
+    return ext in {".ppt", ".pptx"} or mime in {
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+
+
+def _desk_pptx_sort_key(path: str) -> Tuple[int, str]:
+    m = re.search(r"(\d+)", path)
+    return (int(m.group(1)) if m else 0, path)
+
+
+def _desk_extract_pptx_text(data: bytes) -> str:
+    """Extract readable text from a PPTX using only stdlib zip/xml parsing."""
+    slides: List[str] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        names = sorted(
+            (
+                n for n in zf.namelist()
+                if n.startswith("ppt/slides/slide") and n.endswith(".xml")
+            ),
+            key=_desk_pptx_sort_key,
+        )
+        notes = sorted(
+            (
+                n for n in zf.namelist()
+                if n.startswith("ppt/notesSlides/notesSlide") and n.endswith(".xml")
+            ),
+            key=_desk_pptx_sort_key,
+        )
+        for label, xml_names in (("Slide", names), ("Notes", notes)):
+            for idx, n in enumerate(xml_names, 1):
+                try:
+                    root = ET.fromstring(zf.read(n))
+                except Exception:
+                    continue
+                parts: List[str] = []
+                for el in root.iter():
+                    if el.tag.endswith("}t") and el.text:
+                        txt = " ".join(el.text.split())
+                        if txt:
+                            parts.append(txt)
+                if parts:
+                    slides.append(f"{label} {idx}: " + "\n".join(parts))
+    return "\n\n".join(slides)
+
+
+def _desk_extract_legacy_ppt_text(data: bytes) -> str:
+    """Best-effort text scrape for legacy binary .ppt files.
+
+    This is intentionally conservative: it extracts printable UTF-16LE and
+    ASCII runs without executing macros or relying on Office automation.
+    """
+    chunks: List[str] = []
+    seen: set[str] = set()
+
+    for raw in re.findall(rb"(?:[\x20-\x7e]\x00){4,}", data):
+        txt = raw.decode("utf-16le", errors="ignore").strip()
+        txt = " ".join(txt.split())
+        if txt and txt not in seen:
+            seen.add(txt)
+            chunks.append(txt)
+
+    for raw in re.findall(rb"[\x20-\x7e]{8,}", data):
+        txt = raw.decode("latin-1", errors="ignore").strip()
+        txt = " ".join(txt.split())
+        if txt and txt not in seen:
+            seen.add(txt)
+            chunks.append(txt)
+
+    return "\n".join(chunks)
+
+
+def _desk_extract_presentation_text(name: str, mime: str, data: bytes) -> str:
+    ext = _desk_attachment_ext(name)
+    try:
+        if ext == ".pptx" or mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+            return _desk_extract_pptx_text(data)
+        if ext == ".ppt" or mime == "application/vnd.ms-powerpoint":
+            return _desk_extract_legacy_ppt_text(data)
+    except Exception as e:
+        _log.warning("desk presentation extraction failed for %s: %s", name, e)
+    return ""
 
 
 def _desk_build_user_message(
@@ -799,19 +1009,37 @@ def _desk_build_user_message(
             b64d = base64.b64encode(data).decode("ascii")
             data_url = f"data:{mime};base64,{b64d}"
             image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        elif _desk_is_presentation(name, mime):
+            t = _desk_extract_presentation_text(name, mime, data)
+            if t:
+                if len(t) > _DESK_MAX_INLINE_CHARS:
+                    t = t[:_DESK_MAX_INLINE_CHARS] + "\n[truncated]"
+                text_buf = f"{text_buf}\n\n--- {name} (presentation text) ---\n{t}".strip()
+            else:
+                text_buf = (
+                    f"{text_buf}\n\n[file {name!r} type {mime!r} size {len(data)} bytes; "
+                    f"presentation text could not be extracted.]"
+                ).strip()
         elif mime.startswith("text/") or mime in ("application/json", "application/xml"):
             try:
                 t = data.decode("utf-8")
             except UnicodeDecodeError:
                 t = data.decode("utf-8", errors="replace")
-            if len(t) > 200_000:
-                t = t[:200_000] + "\n[truncated]"
+            if len(t) > _DESK_MAX_INLINE_CHARS:
+                t = t[:_DESK_MAX_INLINE_CHARS] + "\n[truncated]"
             text_buf = f"{text_buf}\n\n--- {name} ---\n{t}".strip()
         else:
-            text_buf = (
-                f"{text_buf}\n\n[file {name!r} type {mime!r} size {len(data)} bytes; "
-                f"not inlined as text -- use workspace tools if needed.]"
-            ).strip()
+            fpath = str(p.get("path") or "")
+            if fpath:
+                text_buf = (
+                    f"{text_buf}\n\n[file {name!r} type {mime!r} size {len(data)} bytes "
+                    f"saved to {fpath!r}; use read_file to inspect.]"
+                ).strip()
+            else:
+                text_buf = (
+                    f"{text_buf}\n\n[file {name!r} type {mime!r} size {len(data)} bytes; "
+                    f"not inlined as text -- use workspace tools if needed.]"
+                ).strip()
 
     if not image_parts:
         return text_buf, None
@@ -903,8 +1131,16 @@ def _desk_chat_run_in_thread(
     history: List[Dict[str, Any]],
     session_id: str,
     persist_user_message: Optional[str] = None,
+    stream_delta_callback: Optional[Any] = None,
+    progress_event_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    _desk_register_active(session_id, agent)
+    if getattr(agent, "_desk_prepared_session_id", None) != session_id:
+        _desk_prepare_active_agent(
+            session_id,
+            agent,
+            stream_delta_callback=stream_delta_callback,
+            progress_event_callback=progress_event_callback,
+        )
     try:
         if persist_user_message is not None:
             result = agent.run_conversation(
@@ -1031,6 +1267,202 @@ async def desk_stop(request: Request):
     return JSONResponse({"ok": True, "interrupted": False, "detail": "no active agent for this session"})
 
 
+@app.get("/api/desk/chat-preview/{session_id}")
+async def desk_chat_preview(session_id: str, since: int = 0):
+    """Return agent progress for the given session (lightweight poll target).
+
+    Query: `since` — only return tool events with seq > since (frontend cursor).
+    Response shape::
+
+        {
+            running: bool, status: str, iteration: int, max_iterations: int,
+            current_tool: str|None, error: str|None,
+            events: [{seq, kind, tool, preview, duration, is_error, ts}, ...],
+            next_seq: int,
+        }
+    """
+    with _desk_active_lock:
+        ag = _desk_active_agents.get(session_id)
+    if ag is None:
+        return JSONResponse({
+            "running": False, "status": "inactive",
+            "events": [], "next_seq": 0,
+        })
+    progress = _desk_progress_response(ag, since=since)
+    if not progress.get("running"):
+        with _desk_active_lock:
+            _desk_active_agents.pop(session_id, None)
+    return JSONResponse(progress)
+
+
+def _desk_sse(payload: Dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
+
+
+@app.post("/api/desk/chat-stream")
+async def desk_chat_stream(request: Request):
+    """HermesDesk: stream a real AIAgent turn as SSE events."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "invalid_body"}, status_code=400)
+    message = (body.get("message") or "").strip()
+    atts = _desk_parse_attachments_from_body(body)
+    built = _desk_build_user_message(message, atts)
+    if built is None:
+        return JSONResponse(
+            {"ok": False, "error": "empty_message", "detail": "message and attachments are both empty"},
+            status_code=400,
+        )
+    user_payload, persist_um = built
+    session_id = (body.get("session_id") or "").strip() or str(uuid.uuid4())
+
+    from hermes_state import SessionDB
+
+    db = SessionDB()
+    try:
+        try:
+            raw_history = db.get_messages_as_conversation(session_id)
+        except Exception as e:
+            _log.exception("desk stream: load history failed")
+            db.close()
+            return JSONResponse({"ok": False, "error": "session_db", "detail": str(e)}, status_code=500)
+        history = [m for m in raw_history if m.get("role") != "session_meta"]
+
+        try:
+            agent = _desk_chat_build_agent(session_id, db)
+        except ValueError as e:
+            db.close()
+            return JSONResponse({"ok": False, "error": "config", "detail": str(e)}, status_code=503)
+        except Exception as e:
+            _log.exception("desk stream: agent init failed")
+            db.close()
+            return JSONResponse({"ok": False, "error": "agent_init", "detail": str(e)}, status_code=500)
+
+        event_q: "queue.Queue[Dict[str, Any]]" = queue.Queue()
+        _recv_len = len(message) + sum(len(p.get("data") or b"") for p in atts)
+
+        def emit(payload: Dict[str, Any]) -> None:
+            payload.setdefault("session_id", session_id)
+            event_q.put(payload)
+
+        def on_delta(delta: Any) -> None:
+            if isinstance(delta, str) and delta:
+                emit({"type": "delta", "text": delta})
+            elif delta is None:
+                emit({"type": "boundary"})
+
+        _desk_prepare_active_agent(
+            session_id,
+            agent,
+            stream_delta_callback=on_delta,
+            progress_event_callback=emit,
+        )
+
+        def worker() -> None:
+            try:
+                _log.info(
+                    "desk stream: session=%s user_chars~%d history_msgs=%d attachments=%d",
+                    session_id, _recv_len, len(history), len(atts),
+                )
+                payload = _desk_chat_run_in_thread(
+                    agent,
+                    user_payload,
+                    history,
+                    session_id,
+                    persist_um,
+                    stream_delta_callback=on_delta,
+                    progress_event_callback=emit,
+                )
+                result = (payload or {}).get("result") or {}
+                final_text = _desk_extract_reply_text(result)
+                if not final_text:
+                    try:
+                        db_msgs = db.get_messages_as_conversation(session_id)
+                        final_text = _desk_text_from_assistant_messages(db_msgs)
+                    except Exception:
+                        _log.debug("desk stream: could not re-read session messages for reply text", exc_info=True)
+
+                ft = (final_text or "").strip()
+                if ft in ("(empty)",):
+                    ft = ""
+                if not ft and isinstance(result, dict):
+                    emit({
+                        "type": "error",
+                        "ok": False,
+                        "error": "empty_model_response",
+                        "detail": (
+                            "The model returned no visible text this turn -- "
+                            "check your API key, model ID, and network in Settings."
+                        ),
+                        "received_chars": max(1, _recv_len),
+                    })
+                    return
+
+                _agent_model = getattr(agent, "model", "") or ""
+                _result_model = ((payload or {}).get("result") or {}).get("model") or ""
+                _effective_model = _agent_model or _result_model
+                emit({
+                    "type": "final",
+                    "ok": True,
+                    "proto": False,
+                    "final_response": ft,
+                    "received_chars": max(1, _recv_len),
+                    "preview": (ft[:500] + "..." if len(ft) > 500 else ft) if ft else "",
+                    "prompt_tokens": int((payload or {}).get("prompt_tokens") or 0),
+                    "completion_tokens": int((payload or {}).get("completion_tokens") or 0),
+                    "model": _effective_model,
+                })
+            except Exception as e:
+                _log.exception("desk stream: run_conversation failed")
+                emit({"type": "error", "ok": False, "error": "run_failed", "detail": str(e)})
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+                emit({"type": "done"})
+
+        threading.Thread(target=worker, daemon=True, name=f"desk-chat-stream-{session_id[:8]}").start()
+
+        async def event_generator():
+            yield _desk_sse({
+                "type": "start",
+                "session_id": session_id,
+                "progress": _desk_progress_response(agent),
+            })
+            last_progress = ""
+            while True:
+                try:
+                    item = await asyncio.to_thread(event_q.get, True, 0.25)
+                except queue.Empty:
+                    progress = _desk_progress_response(agent)
+                    encoded_progress = json.dumps(progress, sort_keys=True, default=str)
+                    if encoded_progress != last_progress:
+                        last_progress = encoded_progress
+                        yield _desk_sse({"type": "progress", "session_id": session_id, "progress": progress})
+                    else:
+                        yield ": keepalive\n\n"
+                    continue
+                yield _desk_sse(item)
+                if item.get("type") == "done":
+                    break
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    except Exception:
+        try:
+            db.close()
+        except Exception:
+            pass
+        raise
+
+
 @app.post("/api/desk/chat-proto")
 async def desk_chat_proto(request: Request):
     """HermesDesk: run a real AIAgent turn (same credentials + workspace as CLI).
@@ -1084,6 +1516,7 @@ async def desk_chat_proto(request: Request):
             session_id, _recv_len, len(history), len(atts),
         )
         try:
+            _desk_prepare_active_agent(session_id, agent)
             payload = await asyncio.to_thread(
                 _desk_chat_run_in_thread, agent, user_payload, history, session_id, persist_um
             )
@@ -1144,6 +1577,781 @@ async def desk_chat_proto(request: Request):
             pass
 
 
+@app.post("/api/desk/transcribe")
+async def desk_transcribe(request: Request):
+    """HermesDesk: transcribe audio to text using the configured STT provider.
+
+    Request JSON: audio_b64 (base64-encoded audio), mime (MIME type string).
+    Response JSON: {"transcript": "..."} on success.
+
+    Data flow: the Rust shell POSTs raw base64 here; this handler decodes it,
+    writes a temporary file, runs the synchronous transcribe_audio() in a
+    thread-pool executor (to avoid blocking the event loop), then cleans up.
+
+    The entire handler stays inside ``try``/``except`` so HermesDesk never leaks
+    Starlette's plain-text ``Internal Server Error`` response (which Rust
+    cannot parse as JSON).
+    """
+    tmp_path: Optional[str] = None
+    try:
+        from tools.transcription_tools import (
+            _get_provider,
+            _load_stt_config,
+            is_stt_enabled,
+            transcribe_audio,
+        )
+
+        _ensure_bundled_local_stt_env()
+        _ensure_default_stt_provider()
+
+        if not is_stt_enabled():
+            return JSONResponse(
+                {
+                    "error": "stt_not_configured",
+                    "detail": "请在设置中配置语音识别服务（Groq / OpenAI 等）。",
+                },
+                status_code=400,
+            )
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_json", "detail": "Invalid JSON body"},
+                status_code=400,
+            )
+
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid_body"}, status_code=400)
+
+        audio_b64 = (body.get("audio_b64") or "").strip()
+        mime = (body.get("mime") or "audio/webm").strip()
+
+        if not audio_b64:
+            return JSONResponse({"error": "missing_audio_b64"}, status_code=400)
+
+        try:
+            audio_bytes = base64.b64decode(audio_b64)
+        except Exception as exc:
+            return JSONResponse(
+                {"error": "invalid_base64", "detail": str(exc)}, status_code=400
+            )
+
+        _EXT_MAP = {
+            "audio/webm": ".webm",
+            "audio/ogg": ".ogg",
+            "audio/mp4": ".mp4",
+            "audio/mpeg": ".mp3",
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+        }
+        base_mime = mime.split(";")[0].strip()
+        ext = _EXT_MAP.get(base_mime, ".webm")
+
+        stt_cfg = _load_stt_config()
+        resolved = _get_provider(stt_cfg)
+
+        if resolved == "none":
+            return JSONResponse(
+                {
+                    "error": "no_stt_provider",
+                    "detail": (
+                        "未检测到可用的语音识别后端。请在 hermes-home/.env 或控制台 Keys 中配置 "
+                        "GROQ_API_KEY、OPENAI_API_KEY（或 VOICE_TOOLS_OPENAI_KEY）、MISTRAL_API_KEY、"
+                        "XAI_API_KEY 之一，或运行 python/build_bundle.ps1 打入 whisper.cpp 本地转写。"
+                    ),
+                },
+                status_code=400,
+            )
+
+        with tempfile.NamedTemporaryFile(
+            suffix=ext, prefix="hermesdesk_stt_", delete=False
+        ) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        loop = asyncio.get_running_loop()
+        result: dict = await loop.run_in_executor(None, transcribe_audio, tmp_path)
+
+        if not result.get("success"):
+            err = result.get("error") or "transcription_failed"
+            err_text = str(err)
+            _log.warning("desk transcribe: STT failed: %s", err_text)
+            if "STT_MODEL_MISSING" in err_text:
+                return JSONResponse(
+                    {
+                        "error": "stt_model_missing",
+                        "detail": "本地语音识别模型尚未下载，请先点击下载（约 60 MB）。",
+                    },
+                    status_code=400,
+                )
+            return JSONResponse(
+                {"error": "transcription_failed", "detail": err_text},
+                status_code=500,
+            )
+
+        transcript = (result.get("transcript") or "").strip()
+        return JSONResponse({"transcript": transcript})
+
+    except Exception as exc:
+        _log.exception("desk transcribe: unexpected error")
+        return JSONResponse(
+            {
+                "error": "transcribe_internal",
+                "detail": f"{type(exc).__name__}: {exc}",
+            },
+            status_code=500,
+        )
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+# Allow-list of env vars the desktop wizard's voice setup may write. Anything
+# not in this set is silently dropped to prevent the renderer from poking at
+# arbitrary keys via this endpoint.
+_DESK_VOICE_ENV_ALLOWED = frozenset({
+    # STT
+    "GROQ_API_KEY",
+    "VOICE_TOOLS_OPENAI_KEY",
+    "OPENAI_API_KEY",
+    "MISTRAL_API_KEY",
+    "XAI_API_KEY",
+    "HERMES_LOCAL_STT_COMMAND",
+    "HERMES_LOCAL_STT_LANGUAGE",
+    # TTS (mirrors CATALOG_TTS rows)
+    "ELEVENLABS_API_KEY",
+    "MINIMAX_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+})
+
+_DESK_VOICE_PROVIDER_ALLOWED = {
+    "stt": frozenset({"local", "local_command", "groq", "openai", "mistral", "xai"}),
+    # Canonical ``tts.provider`` values per ``hermes_cli/config.py`` DEFAULT_CONFIG.tts.
+    "tts": frozenset({
+        "edge", "elevenlabs", "openai", "xai", "minimax", "mistral",
+        "gemini", "neutts", "kittentts", "piper",
+    }),
+}
+
+
+@app.post("/api/desk/save-voice-setup")
+async def desk_save_voice_setup(request: Request):
+    """HermesDesk: persist STT/TTS provider choice + secrets from the wizard.
+
+    Request JSON: ``{section: "stt"|"tts", provider: str|null, env: {KEY: VALUE, ...}}``
+
+    - ``provider`` (when non-null) is written to ``config.yaml`` at
+      ``<section>.provider``; a value of ``null`` leaves the existing setting
+      untouched (e.g. user picked "skip").
+    - ``env`` entries are written via ``save_env_value`` (which both updates
+      ``hermes-home/.env`` on disk and refreshes ``os.environ`` so the running
+      process picks them up without a restart). Keys outside an internal
+      allow-list are silently dropped; empty values are skipped (we never
+      accidentally clear a saved key with a blank field).
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "invalid_body"}, status_code=400)
+
+    section = (body.get("section") or "").strip()
+    if section not in ("stt", "tts"):
+        return JSONResponse({"error": "invalid_section"}, status_code=400)
+
+    provider_raw = body.get("provider")
+    provider: Optional[str] = None
+    if isinstance(provider_raw, str):
+        cand = provider_raw.strip()
+        if cand:
+            if cand not in _DESK_VOICE_PROVIDER_ALLOWED[section]:
+                return JSONResponse(
+                    {"error": "invalid_provider", "detail": cand},
+                    status_code=400,
+                )
+            provider = cand
+
+    env = body.get("env") or {}
+    if not isinstance(env, dict):
+        return JSONResponse({"error": "invalid_env"}, status_code=400)
+
+    saved_env: List[str] = []
+    for k_raw, v_raw in env.items():
+        if not isinstance(k_raw, str) or not isinstance(v_raw, str):
+            continue
+        key = k_raw.strip()
+        val = v_raw  # don't strip secret bodies; user might intentionally have leading/trailing whitespace
+        if not key or not val:
+            continue
+        if key not in _DESK_VOICE_ENV_ALLOWED:
+            continue
+        try:
+            save_env_value(key, val)
+            saved_env.append(key)
+        except Exception as exc:
+            _log.warning("save-voice-setup: save_env_value(%s) failed: %s", key, exc)
+
+    saved_provider = False
+    if provider:
+        try:
+            cfg = load_config()
+            sect = cfg.setdefault(section, {})
+            if not isinstance(sect, dict):
+                sect = {}
+                cfg[section] = sect
+            sect["provider"] = provider
+            save_config(cfg)
+            saved_provider = True
+        except Exception as exc:
+            _log.warning("save-voice-setup: save_config(%s.provider) failed: %s", section, exc)
+            return JSONResponse(
+                {"error": "save_config_failed", "detail": str(exc)},
+                status_code=500,
+            )
+
+    return JSONResponse({
+        "ok": True,
+        "section": section,
+        "saved_provider": saved_provider,
+        "saved_env": saved_env,
+    })
+
+
+# ---------------------------------------------------------------------------
+# HermesDesk TTS endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/desk/tts")
+async def desk_tts(request: Request):
+    """HermesDesk: generate TTS audio for the given text.
+
+    Returns the audio file directly (MP3). The caller (Tauri shell proxy)
+    streams the bytes to the webview for playback.
+    """
+    import json
+    from tools.tts_tool import text_to_speech_tool
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "invalid_body"}, status_code=400)
+
+    text = (body.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "text_required"}, status_code=400)
+
+    # Run in thread pool -- text_to_speech_tool is synchronous
+    result_str = await asyncio.to_thread(text_to_speech_tool, text=text)
+    try:
+        result = json.loads(result_str)
+    except Exception:
+        _log.exception("desk_tts: failed to parse tool result")
+        return JSONResponse({"error": "parse_failed"}, status_code=500)
+
+    if not result.get("success"):
+        err = result.get("error", "tts_failed")
+        return JSONResponse({"ok": False, "error": err}, status_code=500)
+
+    file_path = result["file_path"]
+    if not os.path.isfile(file_path):
+        return JSONResponse({"error": "file_not_found"}, status_code=500)
+
+    return FileResponse(file_path, media_type="audio/mpeg")
+
+
+# ---------------------------------------------------------------------------
+# Local STT model lazy-download (HermesDesk only)
+#
+# HermesDesk ships ``stt-bin/whisper-cli.exe`` + ``ffmpeg.exe`` in the MSI but
+# leaves the ~57 MB GGML model out so the installer stays small. The renderer
+# polls /api/desk/stt-model/status; if the model is missing it shows a "first
+# time setup, download ~60 MB?" prompt and POSTs to /download.
+#
+# The file is stored under HERMESDESK_DATA_DIR\stt-models\ when set (HermesDesk
+# path policy allows writes there); if only LOCALAPPDATA is set it uses
+# %LOCALAPPDATA%\HermesDesk\stt-models\. Survives MSI upgrades (runtime/ is
+# overwritten on each install).
+# ---------------------------------------------------------------------------
+
+# region agent log
+def _agent_dbg_stt(line: dict) -> None:
+    """Append one NDJSON line for debug session 914e79.
+
+    Tries several paths so logs are findable in dev vs MSI bundle:
+      * ``%HERMESDESK_DATA_DIR%/logs/`` (same folder as hermesdesk.log)
+      * repo / runtime parent (legacy single-path behavior)
+      * system temp as last resort
+    """
+    import json
+    import time
+
+    line.setdefault("sessionId", "914e79")
+    line.setdefault("timestamp", int(time.time() * 1000))
+
+    candidates: List[Path] = []
+    data_dir = (os.environ.get("HERMESDESK_DATA_DIR") or "").strip()
+    if data_dir:
+        candidates.append(Path(data_dir) / "logs" / "debug-914e79.log")
+    # Dev: hermes_core/hermes_cli/web_server.py -> parents[2] == repo root
+    try:
+        candidates.append(Path(__file__).resolve().parents[2] / "debug-914e79.log")
+    except Exception:
+        pass
+    try:
+        candidates.append(get_hermes_home() / "logs" / "debug-914e79.log")
+    except Exception:
+        pass
+    candidates.append(Path(tempfile.gettempdir()) / "hermesdesk-debug-914e79.log")
+
+    payload = json.dumps(line, ensure_ascii=False) + "\n"
+    for p in candidates:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "a", encoding="utf-8") as _f:
+                _f.write(payload)
+            return
+        except Exception:
+            continue
+
+
+# endregion
+
+_DESK_STT_MODEL_FILENAME = "ggml-base-q5_1.bin"
+# Pinned mirror of the upstream HuggingFace snapshot. The base-q5_1 model is
+# ~57 MB and Q5_1-quantised so it runs on a typical laptop CPU at ~real-time.
+# Both URLs point at the exact same blob; HF mirror is a community China
+# proxy used as a fallback when the primary is blocked.
+_DESK_STT_MODEL_URLS = (
+    f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{_DESK_STT_MODEL_FILENAME}",
+    f"https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/{_DESK_STT_MODEL_FILENAME}",
+)
+# SHA-256 of the published file. Empty string skips verification (acceptable
+# for dev; pin for production releases). The endpoint logs a warning when
+# unverified so the bundle owner notices.
+_DESK_STT_MODEL_SHA256 = ""
+
+
+def _desk_stt_model_path() -> Path:
+    """Resolve where the GGML model lives on disk.
+
+    Resolver rules aligned with ``python/src/stt_wrapper.py::_model_dir``: prefer
+    ``HERMESDESK_DATA_DIR``, else ``LOCALAPPDATA`` with ``HermesDesk`` inserted
+    when the chosen root is bare Local App Data. If neither is set, use
+    ``HERMES_HOME`` (the wrapper uses the runtime folder as its last resort).
+    """
+    data_dir = os.environ.get("HERMESDESK_DATA_DIR") or os.environ.get(
+        "LOCALAPPDATA"
+    )
+    if not data_dir:
+        return get_hermes_home() / "stt-models" / _DESK_STT_MODEL_FILENAME
+    base = Path(data_dir)
+    if "LOCALAPPDATA" in os.environ and base == Path(os.environ["LOCALAPPDATA"]):
+        base = base / "HermesDesk"
+    return base / "stt-models" / _DESK_STT_MODEL_FILENAME
+
+
+@app.get("/api/desk/stt-model/status")
+async def desk_stt_model_status():
+    """Report whether the local STT model is downloaded.
+
+    Frontend calls this before recording so it can prompt the user to
+    download once. Returns ``downloaded`` and ``size`` so the UI can also
+    show a stale/corrupt-file warning if the size is way off.
+    """
+    path = _desk_stt_model_path()
+    try:
+        st = path.stat()
+        return JSONResponse({
+            "downloaded": True,
+            "size": int(st.st_size),
+            "path": str(path),
+        })
+    except FileNotFoundError:
+        return JSONResponse({
+            "downloaded": False,
+            "size": 0,
+            "path": str(path),
+        })
+    except OSError as exc:
+        return JSONResponse(
+            {"error": "stat_failed", "detail": str(exc)},
+            status_code=500,
+        )
+
+
+def _download_stt_model_blocking(dest: Path) -> Tuple[bool, Dict[str, Any]]:
+    """Stream the GGML model to ``dest`` (atomic + verified).
+
+    Tries each URL in ``_DESK_STT_MODEL_URLS`` in order. Writes to
+    ``<dest>.tmp``, fsyncs, then renames over the final path. Verifies
+    SHA-256 if pinned. Returns ``(ok, info_dict)``; on failure ``info_dict``
+    contains ``error``/``detail`` keys.
+
+    Synchronous on purpose so the FastAPI handler can offload it via
+    ``run_in_executor``.
+    """
+    # region agent log
+    _agent_dbg_stt(
+        {
+            "hypothesisId": "H1",
+            "location": "_download_stt_model_blocking:enter",
+            "message": "blocking worker started",
+            "data": {"dest": str(dest)},
+        }
+    )
+    # endregion
+    import hashlib
+
+    import httpx
+
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        # region agent log
+        _agent_dbg_stt(
+            {
+                "hypothesisId": "H1",
+                "location": "_download_stt_model_blocking:mkdir",
+                "message": "mkdir failed (uncaught would yield plain 500)",
+                "data": {"type": type(exc).__name__, "detail": repr(exc)},
+            }
+        )
+        # endregion
+        raise
+
+    # region agent log
+    _agent_dbg_stt(
+        {
+            "hypothesisId": "H1",
+            "location": "_download_stt_model_blocking:mkdir_ok",
+            "message": "parent dir ready",
+            "data": {"parent": str(dest.parent)},
+        }
+    )
+    # endregion
+
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+
+    last_err: Optional[str] = None
+    for url in _DESK_STT_MODEL_URLS:
+        try:
+            hasher = hashlib.sha256() if _DESK_STT_MODEL_SHA256 else None
+            total = 0
+            with httpx.Client(
+                timeout=httpx.Timeout(600.0, connect=30.0),
+                follow_redirects=True,
+            ) as client:
+                with client.stream("GET", url) as resp:
+                    if resp.status_code != 200:
+                        last_err = f"{url}: HTTP {resp.status_code}"
+                        _log.warning("stt-model download: %s", last_err)
+                        continue
+                    with open(tmp, "wb") as f:
+                        for chunk in resp.iter_bytes(chunk_size=512 * 1024):
+                            if not chunk:
+                                continue
+                            f.write(chunk)
+                            total += len(chunk)
+                            if hasher is not None:
+                                hasher.update(chunk)
+                        f.flush()
+                        try:
+                            os.fsync(f.fileno())
+                        except OSError:
+                            pass
+            # SHA-256 check (skipped if not pinned).
+            if hasher is not None:
+                got = hasher.hexdigest().lower()
+                expected = _DESK_STT_MODEL_SHA256.lower()
+                if got != expected:
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
+                    last_err = f"sha256 mismatch (got {got}, expected {expected})"
+                    _log.warning("stt-model download: %s", last_err)
+                    continue
+            elif total < 1_000_000:
+                # No hash pinned, but anything <1 MB is clearly not the
+                # base-q5_1 model (real file is ~57 MB). Reject so a partial
+                # / error-page download can't masquerade as success.
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+                last_err = f"download too small ({total} bytes); likely not the model"
+                _log.warning("stt-model download: %s", last_err)
+                continue
+            # Atomic rename over destination.
+            os.replace(tmp, dest)
+            # region agent log
+            _agent_dbg_stt(
+                {
+                    "hypothesisId": "H2",
+                    "location": "_download_stt_model_blocking:success",
+                    "message": "download ok",
+                    "data": {"size": total, "source": url},
+                }
+            )
+            # endregion
+            return True, {"size": total, "path": str(dest), "source": url}
+        except Exception as exc:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
+            last_err = f"{url}: {exc}"
+            _log.warning("stt-model download: %s", last_err)
+            continue
+
+    # region agent log
+    _agent_dbg_stt(
+        {
+            "hypothesisId": "H2",
+            "location": "_download_stt_model_blocking:all_urls_failed",
+            "message": "returning controlled failure dict",
+            "data": {"last_err": last_err or "unknown"},
+        }
+    )
+    # endregion
+    return False, {"error": "download_failed", "detail": last_err or "unknown"}
+
+
+@app.post("/api/desk/stt-model/download")
+async def desk_stt_model_download():
+    """Download the local STT model (one-shot; idempotent if already present).
+
+    Returns ``{ "ok": true, "size": ..., "path": ... }`` on success or
+    ``{ "error": "...", "detail": "..." }`` with a 500 on failure. The
+    download itself runs in the default thread-pool executor so the FastAPI
+    event loop stays responsive.
+    """
+    import traceback
+
+    try:
+        dest = _desk_stt_model_path()
+        # region agent log
+        _agent_dbg_stt(
+            {
+                "hypothesisId": "H4",
+                "location": "desk_stt_model_download:entry",
+                "message": "POST /api/desk/stt-model/download",
+                "data": {"dest": str(dest), "exists": dest.exists()},
+            }
+        )
+        # endregion
+        if dest.exists():
+            try:
+                size = dest.stat().st_size
+            except OSError:
+                size = 0
+            return JSONResponse({"ok": True, "size": size, "path": str(dest), "already": True})
+
+        if not _DESK_STT_MODEL_SHA256:
+            _log.warning(
+                "stt-model download proceeding without SHA-256 verification "
+                "(_DESK_STT_MODEL_SHA256 not pinned); set it before shipping."
+            )
+
+        try:
+            loop = asyncio.get_running_loop()
+            # region agent log
+            _agent_dbg_stt(
+                {
+                    "hypothesisId": "H4",
+                    "location": "desk_stt_model_download:before_executor",
+                    "message": "scheduling run_in_executor",
+                    "data": {},
+                }
+            )
+            # endregion
+            ok, info = await loop.run_in_executor(None, _download_stt_model_blocking, dest)
+        except Exception as exc:
+            tb = traceback.format_exc()
+            # region agent log
+            _agent_dbg_stt(
+                {
+                    "hypothesisId": "H3",
+                    "location": "desk_stt_model_download:executor_exception",
+                    "message": "run_in_executor raised; return JSON instead of plain 500",
+                    "data": {
+                        "type": type(exc).__name__,
+                        "detail": repr(exc),
+                        "traceback": tb[:6000],
+                    },
+                }
+            )
+            # endregion
+            _log.exception("stt-model download: executor failed")
+            return JSONResponse(
+                {
+                    "error": "stt_model_download_executor_failed",
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+                status_code=500,
+            )
+
+        # region agent log
+        _agent_dbg_stt(
+            {
+                "hypothesisId": "H5",
+                "location": "desk_stt_model_download:after_executor",
+                "message": "executor returned",
+                "data": {
+                    "ok": ok,
+                    "info_keys": list(info.keys()) if isinstance(info, dict) else "n/a",
+                },
+            }
+        )
+        # endregion
+        if not ok:
+            return JSONResponse(info, status_code=500)
+        body = {"ok": True, **info}
+        return JSONResponse(body)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        # region agent log
+        _agent_dbg_stt(
+            {
+                "hypothesisId": "H5",
+                "location": "desk_stt_model_download:outer_exception",
+                "message": "unexpected failure in handler",
+                "data": {
+                    "type": type(exc).__name__,
+                    "detail": repr(exc),
+                    "traceback": tb[:6000],
+                },
+            }
+        )
+        # endregion
+        _log.exception("stt-model download handler failed")
+        return JSONResponse(
+            {
+                "error": "stt_model_download_internal",
+                "detail": f"{type(exc).__name__}: {exc}",
+            },
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Default STT provider auto-selection (HermesDesk only)
+#
+# When the user has never touched STT settings AND no cloud key is exported
+# in env, we set ``stt.provider = local_command`` so transcribe_audio uses
+# the bundled whisper.cpp wrapper (configured by desktop_entrypoint.py).
+# Idempotent: only writes once per process; never overwrites a pre-existing
+# config or an explicit user choice.
+# ---------------------------------------------------------------------------
+_DESK_STT_BUNDLE_ENV_WIRED = False
+
+
+def _ensure_bundled_local_stt_env() -> None:
+    """HermesDesk: set ``HERMES_LOCAL_STT_COMMAND`` from the runtime bundle.
+
+    ``desktop_entrypoint._wire_local_stt`` already does this before importing
+    ``web_server``.  If that step skipped (e.g. ``stt-bin`` missing in an older
+    bundle, then added after ``build_bundle`` without restarting) or the env
+    was lost, we mirror the same wiring here using ``HERMESDESK_BUNDLE_DIR``
+    (set by the Tauri shell for the embedded Python).
+
+    This allows ``stt.provider: local`` to fall through to ``local_command`` in
+    ``transcription_tools._get_provider`` when faster-whisper is not installed
+    (the default HermesDesk bundle).
+    """
+    global _DESK_STT_BUNDLE_ENV_WIRED
+    if _DESK_STT_BUNDLE_ENV_WIRED:
+        return
+    if os.environ.get("HERMES_LOCAL_STT_COMMAND", "").strip():
+        _DESK_STT_BUNDLE_ENV_WIRED = True
+        return
+    bundle = (os.environ.get("HERMESDESK_BUNDLE_DIR") or "").strip()
+    if not bundle:
+        _DESK_STT_BUNDLE_ENV_WIRED = True
+        return
+    root = Path(bundle)
+    wrapper = root / "stt_wrapper.py"
+    whisper = root / "stt-bin" / "whisper-cli.exe"
+    if not wrapper.is_file() or not whisper.is_file():
+        _log.info(
+            "bundled whisper.cpp not found under HERMESDESK_BUNDLE_DIR "
+            "(wrapper_ok=%s whisper_ok=%s); local STT unavailable until "
+            "python/build_bundle.ps1 stages stt-bin/",
+            wrapper.is_file(),
+            whisper.is_file(),
+        )
+        _DESK_STT_BUNDLE_ENV_WIRED = True
+        return
+    os.environ["HERMES_LOCAL_STT_COMMAND"] = (
+        f'"{sys.executable}" "{wrapper}" '
+        f"{{input_path}} {{output_dir}} {{language}} {{model}}"
+    )
+    os.environ.setdefault("HERMES_LOCAL_STT_LANGUAGE", "auto")
+    _log.info("HERMES_LOCAL_STT_COMMAND wired from bundle (second-chance web_server)")
+    _DESK_STT_BUNDLE_ENV_WIRED = True
+
+
+_DESK_STT_DEFAULT_APPLIED = False
+_DESK_STT_CLOUD_KEY_ENV_VARS = (
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "VOICE_TOOLS_OPENAI_KEY",
+    "MISTRAL_API_KEY",
+    "XAI_API_KEY",
+)
+
+
+def _ensure_default_stt_provider() -> None:
+    """If neither config nor env names a cloud STT, pick ``local_command``.
+
+    Runs once per process (idempotent flag) on the first /api/desk/transcribe
+    call, so the user sees a working mic even if they never opened the
+    onboarding wizard.
+    """
+    global _DESK_STT_DEFAULT_APPLIED
+    if _DESK_STT_DEFAULT_APPLIED:
+        return
+    _DESK_STT_DEFAULT_APPLIED = True
+
+    # Only when the wrapper is wired up — otherwise we'd just be promising a
+    # local STT we can't actually run.
+    if not os.environ.get("HERMES_LOCAL_STT_COMMAND", "").strip():
+        return
+
+    try:
+        cfg = load_config()
+    except Exception as exc:
+        _log.warning("ensure_default_stt_provider: load_config failed: %s", exc)
+        return
+
+    stt = cfg.get("stt") if isinstance(cfg, dict) else None
+    if isinstance(stt, dict) and stt.get("provider"):
+        return  # User already chose something; respect it.
+
+    if any(os.environ.get(k, "").strip() for k in _DESK_STT_CLOUD_KEY_ENV_VARS):
+        return  # Cloud key present — let _get_provider auto-resolve to it.
+
+    try:
+        new_stt = dict(stt) if isinstance(stt, dict) else {}
+        new_stt["provider"] = "local_command"
+        new_stt.setdefault("model", "base")
+        cfg["stt"] = new_stt
+        save_config(cfg)
+        _log.info("ensure_default_stt_provider: set stt.provider=local_command")
+    except Exception as exc:
+        _log.warning("ensure_default_stt_provider: save_config failed: %s", exc)
+
+
 @app.get("/api/actions/{name}/status")
 async def get_action_status(name: str, lines: int = 200):
     """Tail an action log and report whether the process is still running."""
@@ -1174,12 +2382,12 @@ async def get_action_status(name: str, lines: int = 200):
 
 
 @app.get("/api/sessions")
-async def get_sessions(limit: int = 20, offset: int = 0):
+async def get_sessions(limit: int = 20, offset: int = 0, source: str = None):
     try:
         from hermes_state import SessionDB
         db = SessionDB()
         try:
-            sessions = db.list_sessions_rich(limit=limit, offset=offset)
+            sessions = db.list_sessions_rich(limit=limit, offset=offset, source=source)
             total = db.session_count()
             now = time.time()
             for s in sessions:
@@ -2778,6 +3986,193 @@ async def delete_cron_job(job_id: str):
 # ---------------------------------------------------------------------------
 
 
+def _load_capability_policy():
+    try:
+        from capability_policy import CapabilityPolicy
+    except ImportError:
+        desk_src = PROJECT_ROOT.parent / "python" / "src"
+        if desk_src.exists() and str(desk_src) not in sys.path:
+            sys.path.insert(0, str(desk_src))
+        from capability_policy import CapabilityPolicy
+    return CapabilityPolicy
+
+
+def _capability_policy():
+    return _load_capability_policy()()
+
+
+def _strip_internal_plugin_fields(plugin: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in plugin.items() if not k.startswith("_")}
+
+
+def _desk_catalog_skills(policy) -> List[Dict[str, Any]]:
+    from tools.skills_tool import _find_all_skills
+    from hermes_cli.skills_config import get_disabled_skills
+
+    config = load_config()
+    disabled = get_disabled_skills(config)
+    out: List[Dict[str, Any]] = []
+    for skill in _find_all_skills(skip_disabled=True):
+        visibility = policy.skill_visibility(skill)
+        if not visibility["visible"]:
+            continue
+        item = dict(skill)
+        item["enabled"] = item["name"] not in disabled
+        item["roles"] = visibility["roles"]
+        item["source"] = visibility["source"]
+        item["trust"] = visibility["trust"]
+        item["recommended"] = visibility["recommended"]
+        item["risk"] = visibility["risk"]
+        item["can_edit"] = visibility["can_edit"]
+        item["action_mode"] = visibility["action_mode"]
+        out.append(item)
+    return sorted(out, key=lambda s: (s.get("category") or "", s.get("name") or ""))
+
+
+@lru_cache(maxsize=256)
+def _resolve_toolset_names_cached(name: str) -> Tuple[str, ...]:
+    """Memoize toolset → tool names for desktop catalog (stable per process)."""
+    from toolsets import resolve_toolset
+
+    try:
+        return tuple(sorted(set(resolve_toolset(name))))
+    except Exception:
+        return tuple()
+
+
+def _desk_catalog_toolsets(policy) -> List[Dict[str, Any]]:
+    from hermes_cli.tools_config import (
+        _get_effective_configurable_toolsets,
+        _get_platform_tools,
+        _toolset_has_keys,
+    )
+
+    config = load_config()
+    enabled_toolsets = _get_platform_tools(
+        config,
+        "cli",
+        include_default_mcp_servers=False,
+    )
+    result: List[Dict[str, Any]] = []
+    for name, label, desc in _get_effective_configurable_toolsets():
+        tools = list(_resolve_toolset_names_cached(name))
+        # source = provenance (core-built-in toolsets); trust = curation/safety.
+        visibility = policy.tool_visibility({"name": name, "source": "builtin", "trust": "official"})
+        if not policy.can_view(visibility["roles"]):
+            continue
+        is_enabled = name in enabled_toolsets
+        result.append({
+            "name": name,
+            "label": label,
+            "description": desc,
+            "enabled": is_enabled,
+            "available": is_enabled and not visibility["locked"],
+            "configured": _toolset_has_keys(name, config),
+            "tools": tools,
+            "roles": visibility["roles"],
+            "source": visibility["source"],
+            "trust": visibility["trust"],
+            "risk": visibility["risk"],
+            "locked": visibility["locked"],
+            "can_edit": visibility["can_edit"],
+            "action_mode": visibility["action_mode"],
+        })
+    return result
+
+
+def _desk_catalog_plugins(policy) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for plugin in _get_dashboard_plugins():
+        clean = _strip_internal_plugin_fields(plugin)
+        if not clean.get("source"):
+            clean["source"] = "bundled"
+        source_l = str(clean.get("source") or "").strip().lower()
+        if source_l in {"bundled", "installed", "user", "project"} and not clean.get("trust"):
+            clean["trust"] = "official"
+        visibility = policy.plugin_visibility(clean)
+        if not visibility["visible"]:
+            continue
+        clean["roles"] = visibility["roles"]
+        clean["source"] = visibility["source"]
+        clean["trust"] = visibility["trust"]
+        clean["recommended"] = visibility["recommended"]
+        clean["risk"] = visibility["risk"]
+        clean["can_edit"] = visibility["can_edit"]
+        clean["action_mode"] = visibility["action_mode"]
+        out.append(clean)
+    return sorted(out, key=lambda p: (p.get("label") or p.get("name") or ""))
+
+
+_DESK_CATALOG_TTL_SEC = 20.0
+_desk_catalog_cache_payload: Optional[Dict[str, Any]] = None
+_desk_catalog_cache_role: Optional[str] = None
+_desk_catalog_cache_expires: float = 0.0
+
+
+def invalidate_desk_catalog_cache() -> None:
+    """Drop HermesDesk capability catalog cache (skills/toolsets/plugins lists)."""
+    global _desk_catalog_cache_payload, _desk_catalog_cache_role, _desk_catalog_cache_expires
+    _desk_catalog_cache_payload = None
+    _desk_catalog_cache_role = None
+    _desk_catalog_cache_expires = 0.0
+    _resolve_toolset_names_cached.cache_clear()
+
+
+def _build_desk_catalog_payload_unlocked() -> Dict[str, Any]:
+    policy = _capability_policy()
+    return {
+        "role": policy.role,
+        "skills": _desk_catalog_skills(policy),
+        "toolsets": _desk_catalog_toolsets(policy),
+        "plugins": _desk_catalog_plugins(policy),
+    }
+
+
+def get_desk_catalog_payload_cached() -> Dict[str, Any]:
+    """Build or return cached /api/hermesdesk/capabilities body (short TTL, keyed by role)."""
+    global _desk_catalog_cache_payload, _desk_catalog_cache_role, _desk_catalog_cache_expires
+    policy = _capability_policy()
+    now = time.monotonic()
+    if (
+        _desk_catalog_cache_payload is not None
+        and _desk_catalog_cache_role == policy.role
+        and now < _desk_catalog_cache_expires
+    ):
+        return _desk_catalog_cache_payload
+    payload = _build_desk_catalog_payload_unlocked()
+    _desk_catalog_cache_payload = payload
+    _desk_catalog_cache_role = policy.role
+    _desk_catalog_cache_expires = now + _DESK_CATALOG_TTL_SEC
+    return payload
+
+
+def _desk_skill_detail_sync(skill_name: str) -> Dict[str, Any]:
+    from tools.skills_tool import skill_view
+
+    policy = _capability_policy()
+    catalog = get_desk_catalog_payload_cached()
+    skills = {s["name"]: s for s in catalog["skills"]}
+    if skill_name not in skills:
+        raise KeyError(skill_name)
+    try:
+        detail = json.loads(skill_view(skill_name, preprocess=False))
+    except Exception as exc:
+        raise RuntimeError(str(exc)) from exc
+    if not detail.get("success"):
+        raise KeyError(skill_name)
+    visibility = policy.skill_visibility({**skills[skill_name], **detail})
+    if not visibility["visible"]:
+        raise KeyError(skill_name)
+    detail["roles"] = visibility["roles"]
+    detail["source"] = visibility["source"]
+    detail["trust"] = visibility["trust"]
+    detail["recommended"] = visibility["recommended"]
+    detail["risk"] = visibility["risk"]
+    detail["can_edit"] = visibility["can_edit"]
+    detail["action_mode"] = visibility["action_mode"]
+    return detail
+
+
 class SkillToggle(BaseModel):
     name: str
     enabled: bool
@@ -2805,7 +4200,23 @@ async def toggle_skill(body: SkillToggle):
     else:
         disabled.add(body.name)
     save_disabled_skills(config, disabled)
+    invalidate_desk_catalog_cache()
     return {"ok": True, "name": body.name, "enabled": body.enabled}
+
+
+@app.get("/api/hermesdesk/capabilities")
+async def get_hermesdesk_capabilities():
+    return await asyncio.to_thread(get_desk_catalog_payload_cached)
+
+
+@app.get("/api/hermesdesk/skills/{skill_name:path}")
+async def get_hermesdesk_skill_detail(skill_name: str):
+    try:
+        return await asyncio.to_thread(_desk_skill_detail_sync, skill_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Skill not found") from None
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not load skill: {exc}") from exc
 
 
 @app.get("/api/tools/toolsets")
@@ -2838,6 +4249,175 @@ async def get_toolsets():
             "tools": tools,
         })
     return result
+
+
+def _load_capability_policy():
+    """Import HermesDesk's desktop catalog policy from dev or bundled layout."""
+    try:
+        from capability_policy import CapabilityPolicy  # type: ignore
+        return CapabilityPolicy
+    except ImportError:
+        candidates = [
+            Path(os.environ.get("HERMESDESK_BUNDLE_DIR", "")),
+            Path(__file__).resolve().parents[2] / "python" / "src",
+            Path(__file__).resolve().parents[2],
+        ]
+        for candidate in candidates:
+            if not str(candidate) or not candidate.exists():
+                continue
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            try:
+                from capability_policy import CapabilityPolicy  # type: ignore
+                return CapabilityPolicy
+            except ImportError:
+                continue
+        raise
+
+
+def _catalog_policy():
+    return _load_capability_policy()()
+
+
+def _catalog_skill_items() -> list:
+    from tools.skills_tool import _find_all_skills
+    from hermes_cli.skills_config import get_disabled_skills
+
+    config = load_config()
+    disabled = get_disabled_skills(config)
+    policy = _catalog_policy()
+    items = []
+    for skill in _find_all_skills(skip_disabled=True):
+        enriched = dict(skill)
+        enriched["enabled"] = enriched["name"] not in disabled
+        visibility = policy.skill_visibility(enriched)
+        if not visibility["visible"]:
+            continue
+        enriched.update({
+            "roles": visibility["roles"],
+            "source": visibility["source"],
+            "trust": visibility["trust"],
+            "recommended": visibility["recommended"],
+            "risk": visibility["risk"],
+            "can_edit": visibility["can_edit"],
+            "action_mode": visibility["action_mode"],
+        })
+        items.append(enriched)
+    return sorted(items, key=lambda s: (s.get("category") or "", s.get("name") or ""))
+
+
+def _catalog_toolset_items() -> list:
+    from hermes_cli.tools_config import (
+        _get_effective_configurable_toolsets,
+        _get_platform_tools,
+        _toolset_has_keys,
+    )
+    from toolsets import resolve_toolset
+
+    config = load_config()
+    enabled_toolsets = _get_platform_tools(
+        config,
+        "cli",
+        include_default_mcp_servers=False,
+    )
+    policy = _catalog_policy()
+    result = []
+    for name, label, desc in _get_effective_configurable_toolsets():
+        try:
+            tools = sorted(set(resolve_toolset(name)))
+        except Exception:
+            tools = []
+        item = {
+            "name": name,
+            "label": label,
+            "description": desc,
+            "enabled": name in enabled_toolsets,
+            "available": name in enabled_toolsets,
+            "configured": _toolset_has_keys(name, config),
+            "tools": tools,
+        }
+        visibility = policy.tool_visibility({**item, "source": "builtin", "trust": "official"})
+        if not policy.can_view(visibility["roles"]):
+            continue
+        item.update({
+            "roles": visibility["roles"],
+            "source": visibility["source"],
+            "trust": visibility["trust"],
+            "risk": visibility["risk"],
+            "locked": visibility["locked"],
+            "can_edit": visibility["can_edit"],
+            "action_mode": visibility["action_mode"],
+        })
+        result.append(item)
+    return result
+
+
+def _catalog_plugin_items() -> list:
+    policy = _catalog_policy()
+    items = []
+    for plugin in _get_dashboard_plugins():
+        clean = {k: v for k, v in plugin.items() if not k.startswith("_")}
+        if not clean.get("source"):
+            clean["source"] = "bundled"
+        source_l = str(clean.get("source") or "").strip().lower()
+        if source_l in {"bundled", "installed", "user", "project"} and not clean.get("trust"):
+            clean["trust"] = "official"
+        visibility = policy.plugin_visibility(clean)
+        if not visibility["visible"]:
+            continue
+        clean.update({
+            "roles": visibility["roles"],
+            "source": visibility["source"],
+            "trust": visibility["trust"],
+            "recommended": visibility["recommended"],
+            "risk": visibility["risk"],
+            "can_edit": visibility["can_edit"],
+            "action_mode": visibility["action_mode"],
+        })
+        items.append(clean)
+    return sorted(items, key=lambda p: p.get("name") or "")
+
+
+@app.get("/api/hermesdesk/capabilities")
+async def get_hermesdesk_capabilities():
+    """Desktop-shell catalog for skills, tools, and plugins."""
+    policy = _catalog_policy()
+    return {
+        "role": policy.role,
+        "skills": _catalog_skill_items(),
+        "toolsets": _catalog_toolset_items(),
+        "plugins": _catalog_plugin_items(),
+    }
+
+
+@app.get("/api/hermesdesk/skills/{name:path}")
+async def get_hermesdesk_skill_detail(name: str):
+    """Return a filtered skill detail document for the desktop shell."""
+    matching = [skill for skill in _catalog_skill_items() if skill.get("name") == name]
+    if not matching:
+        raise HTTPException(status_code=404, detail="Skill not visible or not found")
+
+    from tools.skills_tool import skill_view
+
+    try:
+        detail = json.loads(skill_view(name, preprocess=False))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not parse skill detail: {exc}")
+    if not detail.get("success"):
+        raise HTTPException(status_code=404, detail=detail.get("error") or "Skill not found")
+
+    item = matching[0]
+    detail.update({
+        "roles": item.get("roles", []),
+        "source": item.get("source", "installed"),
+        "trust": item.get("trust", "official"),
+        "recommended": bool(item.get("recommended")),
+        "risk": item.get("risk", "low"),
+        "can_edit": bool(item.get("can_edit")),
+        "action_mode": item.get("action_mode", "view_only"),
+        "enabled": bool(item.get("enabled")),
+    })
+    return detail
 
 
 # ---------------------------------------------------------------------------
@@ -3811,6 +5391,7 @@ async def get_dashboard_plugins():
 async def rescan_dashboard_plugins():
     """Force re-scan of dashboard plugins."""
     plugins = _get_dashboard_plugins(force_rescan=True)
+    invalidate_desk_catalog_cache()
     return {"ok": True, "count": len(plugins)}
 
 

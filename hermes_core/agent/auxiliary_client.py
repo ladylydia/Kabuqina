@@ -1548,13 +1548,12 @@ def _get_provider_chain() -> List[tuple]:
     Built at call time (not module level) so that test patches
     on the ``_try_*`` functions are picked up correctly.
 
-    NOTE: ``openai-codex`` is deliberately NOT in this chain.  The
-    ChatGPT-account Codex endpoint only accepts a shifting, undocumented
-    allow-list of model IDs, so falling back to it with a guessed model
-    fails more often than not.  Codex is used only when the user's main
-    provider *is* openai-codex (see Step 1 of ``_resolve_auto``) or when
-    a caller explicitly requests it with a model.
+    HermesDesk gateway children use the user's configured provider only;
+    the OpenRouter/Nous fallback chain is skipped so the bot never tries
+    upstream defaults.
     """
+    if os.environ.get("HERMESDESK_GATEWAY_PLATFORM"):
+        return []
     return [
         ("openrouter", _try_openrouter),
         ("nous", _try_nous),

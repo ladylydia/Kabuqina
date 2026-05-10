@@ -603,12 +603,26 @@ def _find_all_skills(*, skip_disabled: bool = False) -> List[Dict[str, Any]]:
                     description = description[:MAX_DESCRIPTION_LENGTH - 3] + "..."
 
                 category = _get_category_from_path(skill_md)
+                metadata = frontmatter.get("metadata")
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                hermes_meta = metadata.get("hermes")
+                if not isinstance(hermes_meta, dict):
+                    hermes_meta = {}
+                hermesdesk_meta = metadata.get("hermesdesk")
+                if not isinstance(hermesdesk_meta, dict):
+                    hermesdesk_meta = {}
 
                 seen_names.add(name)
                 skills.append({
                     "name": name,
                     "description": description,
                     "category": category,
+                    "metadata": metadata,
+                    "tags": _parse_tags(hermes_meta.get("tags") or frontmatter.get("tags", "")),
+                    "source": hermesdesk_meta.get("source") or frontmatter.get("source") or "installed",
+                    "trust": hermesdesk_meta.get("trust") or frontmatter.get("trust") or "official",
+                    "recommended": bool(hermesdesk_meta.get("recommended") or frontmatter.get("recommended")),
                 })
 
             except (UnicodeDecodeError, PermissionError) as e:

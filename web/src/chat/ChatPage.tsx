@@ -1,14 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
+import { usePowerUser, setPowerUser } from "../lib/powerUser";
 import { useLocation, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { AppScaffold } from "../components/AppScaffold";
 import { useI18n } from "../lib/i18n";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSidebar } from "./ChatSidebar";
-import { isFromOnboarding } from "../lib/chatLocationState";
+import {
+  armPendingChatSecretGateBypass,
+  getDraftPrompt,
+  isFromOnboarding,
+  takePendingChatSecretGateBypass,
+} from "../lib/chatLocationState";
 import { getAllowChatWithoutApi } from "../lib/apiKeyGate";
 import { ShellModal } from "../components/ShellModal";
+import { clearDraft } from "../lib/store";
 import { useHermesReadiness } from "./hooks/useHermesReadiness";
 import { useSessions } from "./hooks/useSessions";
 import { useChatState } from "./hooks/useChatState";
@@ -18,8 +26,7 @@ export function ChatPage() {
   const { t } = useI18n();
   const nav = useNavigate();
   const location = useLocation();
-  /** After wizard completion we skip the immediate `cmd_has_secret` check once (keyring/bridge timing). */
-  const skipKeyGuardOnceRef = useRef(false);
+  const powerUser = usePowerUser();
 
   const { hermesReady, bootErr } = useHermesReadiness();
   const { sessions, listLoading, loadSessions, deleteSession } = useSessions({ hermesReady });
@@ -42,6 +49,7 @@ export function ChatPage() {
     input,
     setInput,
     sending,
+    progress,
     pendingAttachments,
     onAddFiles,
     onRemoveAttachment,
@@ -60,12 +68,12 @@ export function ChatPage() {
 
   useEffect(() => {
     if (isFromOnboarding(location.state)) {
-      skipKeyGuardOnceRef.current = true;
+      armPendingChatSecretGateBypass();
+      clearDraft();
       nav("/chat", { replace: true, state: {} });
       return;
     }
-    if (skipKeyGuardOnceRef.current) {
-      skipKeyGuardOnceRef.current = false;
+    if (takePendingChatSecretGateBypass()) {
       return;
     }
     const gate = async () => {
@@ -73,13 +81,47 @@ export function ChatPage() {
         const ok = await invoke<boolean>("cmd_has_secret");
         if (ok) return;
         if (getAllowChatWithoutApi()) return;
-        nav("/onboarding/mode", { replace: true });
+        nav("/onboarding/welcome", { replace: true });
       } catch {
-        nav("/onboarding/mode", { replace: true });
+        nav("/onboarding/welcome", { replace: true });
       }
     };
     void gate();
   }, [nav, location.state]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const v = await invoke<boolean>("cmd_get_power_user");
+        setPowerUser(!!v);
+      } catch {
+        /* optional */
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const draft = getDraftPrompt(location.state);
+    if (!draft) return;
+    setInput(draft);
+    nav("/chat", { replace: true, state: {} });
+  }, [location.state, nav, setInput]);
+
+  const togglePowerUser = useCallback(async (next: boolean) => {
+    if (next) {
+      const ok = await ask(t("settings.powerAsk"), {
+        title: t("settings.powerAskTitle"),
+        kind: "warning",
+      });
+      if (!ok) return;
+    }
+    try {
+      await invoke("cmd_set_power_user", { enabled: next });
+      setPowerUser(next);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [t]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -145,7 +187,7 @@ export function ChatPage() {
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
             onClick={() => {
               setApiRequiredOpen(false);
-              nav("/onboarding/mode", { replace: true });
+              nav("/onboarding/welcome", { replace: true });
             }}
           >
             {t("chat.apiRequiredGoSetup")}
@@ -166,6 +208,7 @@ export function ChatPage() {
             messages={messages}
             sending={sending}
             sendErr={sendErr}
+            progress={progress}
             onPromptClick={(text) => setInput(text)}
           />
           <ChatInput
@@ -177,6 +220,8 @@ export function ChatPage() {
             onRemoveAttachment={onRemoveAttachment}
             onFilesPicked={onAddFiles}
             onStop={onStopAgent}
+            powerUser={powerUser}
+            onTogglePowerUser={togglePowerUser}
           />
         </main>
       </div>

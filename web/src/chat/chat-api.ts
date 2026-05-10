@@ -5,6 +5,8 @@ export type SessionRow = {
   preview?: string;
   title?: string;
   model?: string;
+  platform?: string;
+  source?: string;
   last_active?: number;
   started_at?: number;
   message_count?: number;
@@ -40,8 +42,8 @@ export async function cmdGetHermesPort(): Promise<number | null> {
   return p ?? null;
 }
 
-export async function cmdGetSessions(limit = 50, offset = 0): Promise<SessionsResponse> {
-  return invoke<SessionsResponse>("cmd_get_sessions", { limit, offset });
+export async function cmdGetSessions(limit = 50, offset = 0, source?: string): Promise<SessionsResponse> {
+  return invoke<SessionsResponse>("cmd_get_sessions", { limit, offset, source: source ?? null });
 }
 
 export async function cmdGetSessionMessages(id: string): Promise<SessionMessagesResponse> {
@@ -87,8 +89,119 @@ export async function cmdChatSend(
   });
 }
 
+export const CHAT_STREAM_EVENT = "chat-stream-event";
+
+export type ChatStreamEvent = {
+  type: "start" | "delta" | "boundary" | "progress" | "final" | "error" | "done" | string;
+  session_id?: string;
+  text?: string;
+  progress?: ChatPreviewResponse;
+  ok?: boolean;
+  error?: string;
+  detail?: string;
+  final_response?: string;
+  model?: string;
+};
+
+export type ChatStreamEnvelope = {
+  requestId: string;
+  event: ChatStreamEvent;
+};
+
+export async function cmdChatSendStream(
+  requestId: string,
+  message: string,
+  sessionId: string | null,
+  attachments?: DeskAttachmentPayload[] | null
+): Promise<unknown> {
+  return invoke("cmd_chat_send_stream", {
+    requestId,
+    message,
+    sessionId,
+    attachments: attachments?.length ? attachments : null,
+  });
+}
+
 export function cmdDeskStop(sessionId: string): Promise<unknown> {
   return invoke("cmd_desk_stop", { sessionId });
+}
+
+export type ProgressEvent = {
+  seq: number;
+  kind: "tool.started" | "tool.completed";
+  tool: string;
+  preview: string | null;
+  duration: number | null;
+  is_error: boolean;
+  ts: number;
+};
+
+export type ChatPreviewResponse = {
+  running: boolean;
+  status: string;
+  iteration?: number;
+  max_iterations?: number;
+  current_tool?: string | null;
+  error?: string | null;
+  events?: ProgressEvent[];
+  next_seq?: number;
+};
+
+/**
+ * Transcribe a base64-encoded audio blob via the Rust → Python STT proxy.
+ * Returns the recognised text on success; throws with a human-readable message
+ * on failure (STT not configured, network error, etc.).
+ */
+/** Generate TTS audio for the given text, returns base64-encoded MP3 data */
+export async function cmdTtsSpeak(text: string): Promise<string> {
+  return invoke<string>("cmd_tts_speak", { text });
+}
+
+export async function cmdTranscribe(audioB64: string, mime: string): Promise<string> {
+  return invoke<string>("cmd_transcribe", { audioB64, mime });
+}
+
+/**
+ * Local-STT model presence on disk.
+ *
+ * Returned by the Python ``GET /api/desk/stt-model/status`` endpoint; used
+ * by the mic UI to decide whether to show the first-time download prompt.
+ */
+export type SttModelStatus = {
+  downloaded: boolean;
+  size: number;
+  path: string;
+};
+
+export async function cmdSttModelStatus(): Promise<SttModelStatus> {
+  return invoke<SttModelStatus>("cmd_stt_model_status");
+}
+
+export type SttModelDownloadResult = {
+  ok: boolean;
+  size: number;
+  path: string;
+  source?: string;
+  already?: boolean;
+};
+
+/**
+ * Download the bundled local STT GGML model (~57 MB) on demand.
+ *
+ * Resolves on success with the size + final path; rejects with a string
+ * error if the download fails (timeout, both mirrors blocked, hash
+ * mismatch, …). The Python side renames atomically so a partial file
+ * never masquerades as a complete one.
+ */
+export async function cmdSttModelDownload(): Promise<SttModelDownloadResult> {
+  return invoke<SttModelDownloadResult>("cmd_stt_model_download");
+}
+
+export function cmdChatPreview(
+  sessionId: string,
+  since?: number
+): Promise<ChatPreviewResponse> {
+  return invoke("cmd_chat_preview", { sessionId, since: since ?? 0 });
 }
 
 export function isRecord(x: unknown): x is Record<string, unknown> {

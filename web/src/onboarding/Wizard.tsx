@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { CHAT_FROM_ONBOARDING_STATE } from "../lib/chatLocationState";
 import { SetupMode } from "./steps/SetupMode";
 import { Welcome } from "./steps/Welcome";
 import { PickBrain } from "./steps/PickBrain";
@@ -19,12 +20,13 @@ export function Wizard() {
         <Route path="brain" element={<PickBrain />} />
         <Route path="pass" element={<GetAccessPass />} />
         <Route path="tts" element={<SectionPlaceholderStep id="tts" />} />
+        <Route path="stt" element={<SectionPlaceholderStep id="stt" />} />
         <Route path="terminal" element={<SectionPlaceholderStep id="terminal" />} />
         <Route path="gateway" element={<SectionPlaceholderStep id="gateway" />} />
         <Route path="tools" element={<SectionPlaceholderStep id="tools" />} />
         <Route path="agent" element={<SectionPlaceholderStep id="agent" />} />
-        <Route path="done" element={<Navigate to="/chat" replace />} />
-        <Route path="*" element={<Navigate to="mode" replace />} />
+        <Route path="done" element={<Navigate to="/chat" replace state={CHAT_FROM_ONBOARDING_STATE} />} />
+        <Route path="*" element={<Navigate to="welcome" replace />} />
       </Routes>
     </ShellFrame>
   );

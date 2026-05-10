@@ -55,8 +55,8 @@
     @apply dark:border-zinc-700/50 dark:bg-zinc-900/50;
   }
   .hd-glass-subtle {
-    @apply rounded-2xl border border-zinc-200/60 bg-white/70 backdrop-blur-sm shadow-[0_1px_3px_rgb(0_0_0/0.04),0_4px_12px_rgb(0_0_0/0.04)];
-    @apply dark:border-zinc-700/60 dark:bg-zinc-900/60 dark:shadow-none;
+    @apply rounded-2xl border border-zinc-200/80 bg-zinc-50/90;
+    @apply dark:border-zinc-700/80 dark:bg-zinc-900/90;
   }
   /* Titles: one scale app-wide (adjust per page with text-3xl if needed) */
   .hd-page-title {

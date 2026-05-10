@@ -132,7 +132,9 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
   }
 
   async function cancelQr() {
-    try { await invoke("cmd_wecom_qr_cancel"); } catch {}
+    try { await invoke("cmd_wecom_qr_cancel"); } catch {
+      /* best-effort cancel */
+    }
     setQrPolling(false);
     setQrView(null);
     setViewMode(env?.configured ? "configured" : "choose");

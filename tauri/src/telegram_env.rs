@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 
 #[tauri::command]
-pub fn cmd_telegram_env_status(app: AppHandle) -> Result<crate::gateway_supervisor::TelegramEnvSnapshot, String> {
+pub fn cmd_telegram_env_status(
+    app: AppHandle,
+) -> Result<crate::gateway_supervisor::TelegramEnvSnapshot, String> {
     let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
     let hh = crate::gateway_supervisor::hermes_home_path(&data_dir);
     Ok(crate::gateway_supervisor::read_telegram_env_snapshot(&hh))
@@ -30,7 +32,8 @@ pub fn cmd_telegram_save_token(app: AppHandle, token: String) -> Result<(), Stri
 
     for line in &mut lines {
         let trimmed = line.trim();
-        if trimmed.starts_with("TELEGRAM_BOT_TOKEN=") || trimmed.starts_with("TELEGRAM_BOT_TOKEN ") {
+        if trimmed.starts_with("TELEGRAM_BOT_TOKEN=") || trimmed.starts_with("TELEGRAM_BOT_TOKEN ")
+        {
             *line = format!("TELEGRAM_BOT_TOKEN={}", token);
             found = true;
             break;

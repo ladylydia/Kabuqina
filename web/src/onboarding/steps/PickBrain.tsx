@@ -1,58 +1,155 @@
-import { useEffect } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../lib/i18n";
 import { updateDraft, useDraft } from "../../lib/store";
 import type { ProviderId } from "../../lib/providers";
+import { cn } from "../../lib/cn";
+import { getBackPath } from "../flowConfig";
+import {
+  WizardFooter,
+  WizardFooterActions,
+  WizardPrimaryButton,
+  WizardSecondaryButton,
+} from "../wizard-ui";
+
+type BrainChoice = "deepseek" | "custom";
 
 export function PickBrain() {
   const { t } = useI18n();
   const nav = useNavigate();
   const draft = useDraft();
+  const groupId = useId();
+
+  const [choice, setChoice] = useState<BrainChoice | null>(() => {
+    if (draft.providerId === "deepseek") return "deepseek";
+    if (draft.providerId === "custom") return "custom";
+    return null;
+  });
 
   useEffect(() => {
     if (!draft.setupMode) nav("/onboarding/mode", { replace: true });
   }, [draft.setupMode, nav]);
 
+  useEffect(() => {
+    if (draft.providerId === "deepseek") setChoice("deepseek");
+    else if (draft.providerId === "custom") setChoice("custom");
+  }, [draft.providerId]);
+
   if (!draft.setupMode) return null;
 
-  function pick(providerId: ProviderId, customBaseUrl: string) {
+  function applyAndGo(providerId: ProviderId, customBaseUrl: string) {
     updateDraft({ providerId, customBaseUrl, customModel: "" });
     nav("/onboarding/pass");
+  }
+
+  function onNext() {
+    if (!choice) return;
+    if (choice === "deepseek") applyAndGo("deepseek", "");
+    else applyAndGo("custom", "");
   }
 
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h1 className="hd-page-title">{t("brain.title")}</h1>
+        <h1 className="hd-page-title" id={`${groupId}-label`}>
+          {t("brain.title")}
+        </h1>
         <p className="hd-lead max-w-prose">{t("brain.lead")}</p>
       </div>
 
-      <div className="space-y-3">
-        {/* DeepSeek (recommended) */}
-        <button
-          type="button"
-          onClick={() => pick("deepseek", "")}
-          className="hd-glass-subtle w-full rounded-[var(--radius-shell-lg)] p-5 text-left transition hover:border-zinc-300/90 dark:hover:border-zinc-600"
-        >
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="font-medium">DeepSeek</div>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-              {t("brain.recommended")}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{t("brain.starter.title")}</p>
-        </button>
+      <div className="space-y-3" role="radiogroup" aria-labelledby={`${groupId}-label`}>
+        <BrainOption
+          selected={choice === "deepseek"}
+          onSelect={() => setChoice("deepseek")}
+          title={
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="font-medium">DeepSeek</div>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                {t("brain.recommended")}
+              </span>
+            </div>
+          }
+          description={t("brain.starter.title")}
+          recommendedHover
+        />
 
-        {/* Custom config */}
-        <button
-          type="button"
-          onClick={() => pick("custom", "")}
-          className="hd-glass-subtle w-full rounded-[var(--radius-shell-lg)] p-5 text-left transition hover:border-zinc-300/90 dark:hover:border-zinc-600"
-        >
-          <div className="font-medium">{t("brain.own.title")}</div>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{t("brain.own.body")}</p>
-        </button>
+        <BrainOption
+          selected={choice === "custom"}
+          onSelect={() => setChoice("custom")}
+          title={<div className="font-medium">{t("brain.customTitle")}</div>}
+          description={t("brain.customBody")}
+        />
       </div>
+
+      <WizardFooter>
+        <WizardFooterActions className="w-full sm:justify-between">
+          <WizardSecondaryButton onClick={() => nav(getBackPath("brain", draft.setupMode!)!)}>
+            {t("onboarding.back")}
+          </WizardSecondaryButton>
+          <WizardPrimaryButton disabled={choice == null} onClick={onNext}>
+            {t("onboarding.next")}
+          </WizardPrimaryButton>
+        </WizardFooterActions>
+      </WizardFooter>
     </div>
+  );
+}
+
+function BrainOption({
+  selected,
+  onSelect,
+  title,
+  description,
+  recommendedHover,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: ReactNode;
+  description: string;
+  recommendedHover?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        "hd-glass-subtle flex w-full gap-3 rounded-[var(--radius-shell-lg)] p-5 text-left transition",
+        recommendedHover
+          ? selected
+            ? "border-amber-400/90 bg-amber-50/70 ring-2 ring-amber-400/35 dark:border-amber-700/70 dark:bg-amber-950/35 dark:ring-amber-600/35"
+            : "hover:border-amber-300/80 hover:bg-amber-50/40 dark:hover:border-amber-700/50 dark:hover:bg-amber-950/20"
+          : selected
+            ? "border-sky-400/70 bg-sky-50/60 ring-2 ring-sky-400/30 dark:border-sky-700/60 dark:bg-sky-950/30 dark:ring-sky-600/35"
+            : "hover:border-zinc-300/90 dark:hover:border-zinc-600",
+        "active:scale-[0.99]"
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+          selected
+            ? recommendedHover
+              ? "border-amber-600 dark:border-amber-400"
+              : "border-sky-600 dark:border-sky-400"
+            : "border-zinc-300 dark:border-zinc-600"
+        )}
+        aria-hidden
+      >
+        {selected ? (
+          <span
+            className={cn(
+              "h-2.5 w-2.5 rounded-full",
+              recommendedHover ? "bg-amber-600 dark:bg-amber-400" : "bg-sky-600 dark:bg-sky-400"
+            )}
+          />
+        ) : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        {title}
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
+      </div>
+    </button>
   );
 }

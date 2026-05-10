@@ -1,12 +1,19 @@
-//! Second bundled Python process: ``python -m gateway.run``.
+//! Messaging gateway child processes — one per platform with per-profile HERMES_HOME.
 //!
-//! HermesDesk always runs ``desktop_entrypoint`` (web UI). Messaging adapters live in the
-//! separate gateway process — same layout as ``hermes gateway run`` on Linux.
+//! Each gateway platform (Telegram, Weixin, …) runs in its own OS child with
+//! ``HERMES_HOME = <data_dir>/hermes-home/profiles/<platform>/`` for hard filesystem
+//! isolation of memories, sessions, and credentials.
+//!
+//! Migration: on first launch after upgrading to this model, ``ensure_migration()``
+//! creates ``profiles/<platform>/`` directories for every platform found in the
+//! host ``hermes-home/.env``, plus an empty ``shared/USER_PREFS.md``.
+//!
+//! Shared preferences: the host-only ``shared/USER_PREFS.md`` is copied into each
+//! profile as ``_host_prefs.md`` at spawn time (read-only preamble for the bot).
 
-use anyhow::{Context, Result};
+use anyhow::{self, Context, Result};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -16,14 +23,85 @@ use tokio::sync::Mutex;
 
 use crate::python_supervisor::SpawnConfig;
 
-/// Same Hermes root as ``desktop_entrypoint`` / ``weixin_qr_worker`` (``HERMESDESK_DATA_DIR/hermes-home``).
+// ---------------------------------------------------------------------------
+// Platform registry
+// ---------------------------------------------------------------------------
+
+/// Known platforms and the minimum credential keys that must be present
+/// (non-empty) in `.env` for the platform to be considered "configured".
+const PLATFORM_CREDENTIAL_KEYS: &[(&str, &[&str])] = &[
+    ("telegram", &["TELEGRAM_BOT_TOKEN"]),
+    ("weixin", &["WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"]),
+    ("feishu", &["FEISHU_APP_ID", "FEISHU_APP_SECRET"]),
+    ("qqbot", &["QQ_APP_ID", "QQ_CLIENT_SECRET"]),
+    (
+        "dingtalk",
+        &["DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"],
+    ),
+    ("wecom", &["WECOM_BOT_ID", "WECOM_SECRET"]),
+    ("discord", &["DISCORD_BOT_TOKEN"]),
+    ("slack", &["SLACK_BOT_TOKEN"]),
+    ("signal", &["SIGNAL_HTTP_URL"]),
+    // Email gateway adapter (not a messaging platform per se, but runs in the gateway child).
+    (
+        "email",
+        &[
+            "EMAIL_ADDRESS",
+            "EMAIL_PASSWORD",
+            "EMAIL_IMAP_HOST",
+            "EMAIL_SMTP_HOST",
+        ],
+    ),
+];
+
+/// Additional per-platform env keys to carry into the profile `.env` (not required
+/// for "configured" detection, but needed for full operation).
+const PLATFORM_EXTRA_KEYS: &[(&str, &[&str])] = &[
+    (
+        "telegram",
+        &[
+            "TELEGRAM_ALLOWED_USERS",
+            "TELEGRAM_HOME_CHANNEL",
+            "TELEGRAM_BOT_USERNAME",
+        ],
+    ),
+    ("weixin", &[]),
+    ("feishu", &[]),
+    ("qqbot", &[]),
+    ("dingtalk", &[]),
+    ("wecom", &["WECOM_SETUP_METHOD"]),
+    ("discord", &[]),
+    ("slack", &[]),
+    ("signal", &[]),
+    ("email", &[]),
+];
+
+/// Name of the profile subdirectory.
+const PROFILES_DIR: &str = "profiles";
+/// Marker file written after first migration.
+const MIGRATION_MARKER: &str = ".migrated";
+
+// ---------------------------------------------------------------------------
+// Host-level helpers (unchanged from single-child model)
+// ---------------------------------------------------------------------------
+
+/// Host ``HERMES_HOME = <data_dir>/hermes-home``.
 pub fn hermes_home_path(data_dir: &Path) -> PathBuf {
     data_dir.join("hermes-home")
 }
 
+/// Per-profile ``HERMES_HOME = <data_dir>/hermes-home/profiles/<platform>/``.
+pub fn profile_home_path(data_dir: &Path, platform: &str) -> PathBuf {
+    hermes_home_path(data_dir).join(PROFILES_DIR).join(platform)
+}
+
+/// ``<data_dir>/hermes-home/shared/<filename>``.
+fn shared_path(data_dir: &Path, filename: &str) -> PathBuf {
+    hermes_home_path(data_dir).join("shared").join(filename)
+}
+
 /// True when the shipped ``hermes/gateway/run.py`` contains the first-connect
-/// “stay alive for reconnect watcher” path (HermesDesk bundle must be rebuilt
-/// after upstream gateway changes).
+/// "stay alive for reconnect watcher" path.
 pub fn bundled_gateway_has_startup_survival(bundle_dir: &Path) -> bool {
     let p = bundle_dir.join("hermes").join("gateway").join("run.py");
     let Ok(s) = std::fs::read_to_string(&p) else {
@@ -32,9 +110,9 @@ pub fn bundled_gateway_has_startup_survival(bundle_dir: &Path) -> bool {
     s.contains("_platform_reconnect_watcher")
 }
 
-/// Best-effort read of ``gateway_state.json`` (written by the messaging gateway) for diagnostics.
-pub fn read_gateway_state_snapshot(hermes_home: &Path) -> (Option<String>, Option<String>) {
-    let path = hermes_home.join("gateway_state.json");
+/// Best-effort read of ``gateway_state.json`` from a given ``HERMES_HOME``.
+pub fn read_gateway_state_snapshot(home: &Path) -> (Option<String>, Option<String>) {
+    let path = home.join("gateway_state.json");
     let Ok(raw) = std::fs::read_to_string(path) else {
         return (None, None);
     };
@@ -49,7 +127,7 @@ pub fn read_gateway_state_snapshot(hermes_home: &Path) -> (Option<String>, Optio
         const MAX: usize = 220;
         if s.chars().count() > MAX {
             let trunc: String = s.chars().take(MAX).collect();
-            format!("{trunc}…")
+            format!("{trunc}\u{2026}")
         } else {
             s.to_string()
         }
@@ -57,9 +135,9 @@ pub fn read_gateway_state_snapshot(hermes_home: &Path) -> (Option<String>, Optio
     (state, reason)
 }
 
-/// Last lines of ``{hermes_home}/logs/gateway.log`` for startup failure hints.
-pub fn tail_gateway_log(hermes_home: &Path, max_tail_bytes: u64) -> Option<String> {
-    let path = hermes_home.join("logs").join("gateway.log");
+/// Last lines of ``{home}/logs/gateway.log`` for startup failure hints.
+pub fn tail_gateway_log(home: &Path, max_tail_bytes: u64) -> Option<String> {
+    let path = home.join("logs").join("gateway.log");
     let meta = std::fs::metadata(&path).ok()?;
     let len = meta.len();
     let mut f = std::fs::File::open(&path).ok()?;
@@ -84,7 +162,10 @@ pub fn tail_gateway_log(hermes_home: &Path, max_tail_bytes: u64) -> Option<Strin
     if tail.is_empty() {
         None
     } else if tail.chars().count() > 380 {
-        Some(format!("{}…", tail.chars().take(380).collect::<String>()))
+        Some(format!(
+            "{}\u{2026}",
+            tail.chars().take(380).collect::<String>()
+        ))
     } else {
         Some(tail)
     }
@@ -101,14 +182,13 @@ fn unquote_env_value(raw: &str) -> String {
     s.to_string()
 }
 
-/// Parse ``hermes-home/.env`` into upper-case keys → non-empty values.
-fn parse_dotenv_upper(hermes_home: &Path) -> HashMap<String, String> {
+/// Parse ``{hermes_home}/.env`` into upper-case keys → non-empty values.
+pub fn parse_dotenv_upper(home: &Path) -> HashMap<String, String> {
     let mut keys: HashMap<String, String> = HashMap::new();
-    let dotenv = hermes_home.join(".env");
+    let dotenv = home.join(".env");
     let Ok(raw) = std::fs::read_to_string(&dotenv) else {
         return keys;
     };
-    // Strip UTF-8 BOM so the first key is not stored as "\u{feff}WEIXIN_…".
     let raw = raw.trim_start_matches('\u{feff}');
     for line in raw.lines() {
         let t = line.trim();
@@ -127,234 +207,9 @@ fn parse_dotenv_upper(hermes_home: &Path) -> HashMap<String, String> {
     keys
 }
 
-/// Whether route-C Weixin credentials exist on disk, plus a short display hint (no token).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct WeixinEnvSnapshot {
-    pub configured: bool,
-    /// ``WEIXIN_ACCOUNT_ID`` present and non-empty in ``.env`` (used for partial-config UI).
-    pub has_account_id: bool,
-    /// ``WEIXIN_TOKEN`` present and non-empty in ``.env``.
-    pub has_token: bool,
-    pub account_id_hint: Option<String>,
-}
-
-pub fn read_weixin_env_snapshot(hermes_home: &Path) -> WeixinEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let account = keys.get("WEIXIN_ACCOUNT_ID").cloned();
-    let has_token = keys.get("WEIXIN_TOKEN").map(|s| !s.is_empty()).unwrap_or(false);
-    let has_account_id = account.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_account_id && has_token;
-    let account_id_hint = account
-        .map(|id| weixin_account_display_hint(&id))
-        .filter(|s| !s.is_empty());
-    WeixinEnvSnapshot {
-        configured,
-        has_account_id,
-        has_token,
-        account_id_hint,
-    }
-}
-
-/// QQ Bot credentials on disk (no ``QQ_CLIENT_SECRET`` returned).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct QqEnvSnapshot {
-    pub configured: bool,
-    pub has_app_id: bool,
-    pub has_client_secret: bool,
-    pub app_id_hint: Option<String>,
-}
-
-pub fn read_qq_env_snapshot(hermes_home: &Path) -> QqEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let app_id = keys.get("QQ_APP_ID").cloned();
-    let has_client_secret = keys
-        .get("QQ_CLIENT_SECRET")
-        .map(|s| !s.is_empty())
-        .unwrap_or(false);
-    let has_app_id = app_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_app_id && has_client_secret;
-    let app_id_hint = app_id
-        .map(|id| qq_app_id_display_hint(&id))
-        .filter(|s| !s.is_empty());
-    QqEnvSnapshot {
-        configured,
-        has_app_id,
-        has_client_secret,
-        app_id_hint,
-    }
-}
-
-/// Feishu / Lark custom-app credentials (no ``FEISHU_APP_SECRET`` returned).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct FeishuEnvSnapshot {
-    pub configured: bool,
-    pub has_app_id: bool,
-    pub has_app_secret: bool,
-    pub app_id_hint: Option<String>,
-}
-
-pub fn read_feishu_env_snapshot(hermes_home: &Path) -> FeishuEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let app_id = keys.get("FEISHU_APP_ID").cloned();
-    let has_app_secret = keys
-        .get("FEISHU_APP_SECRET")
-        .map(|s| !s.is_empty())
-        .unwrap_or(false);
-    let has_app_id = app_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_app_id && has_app_secret;
-    let app_id_hint = app_id
-        .map(|id| qq_app_id_display_hint(&id))
-        .filter(|s| !s.is_empty());
-    FeishuEnvSnapshot {
-        configured,
-        has_app_id,
-        has_app_secret,
-        app_id_hint,
-    }
-}
-
-/// Telegram bot token presence (token value is never returned; optional masked hint when configured).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct TelegramEnvSnapshot {
-    pub configured: bool,
-    pub has_bot_token: bool,
-    /// True when other ``TELEGRAM_*`` keys exist but the bot token is missing.
-    pub orphan_telegram_config: bool,
-    pub token_hint: Option<String>,
-}
-
-pub fn read_telegram_env_snapshot(hermes_home: &Path) -> TelegramEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
-    let token = keys.get("TELEGRAM_BOT_TOKEN").cloned();
-    let has_bot_token = token.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_bot_token;
-    let orphan_telegram_config = !configured
-        && (nonempty("TELEGRAM_ALLOWED_USERS")
-            || nonempty("TELEGRAM_HOME_CHANNEL")
-            || nonempty("TELEGRAM_BOT_USERNAME"));
-    let token_hint = token
-        .filter(|s| !s.is_empty())
-        .map(|t| telegram_token_hint(&t));
-    TelegramEnvSnapshot {
-        configured,
-        has_bot_token,
-        orphan_telegram_config,
-        token_hint,
-    }
-}
-
-/// DingTalk / DingTalk app credentials (no secrets returned).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct DingTalkEnvSnapshot {
-    pub configured: bool,
-    pub has_client_id: bool,
-    pub has_client_secret: bool,
-    pub client_id_hint: Option<String>,
-}
-
-pub fn read_dingtalk_env_snapshot(hermes_home: &Path) -> DingTalkEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let client_id = keys.get("DINGTALK_CLIENT_ID").cloned();
-    let has_client_secret = keys
-        .get("DINGTALK_CLIENT_SECRET")
-        .map(|s| !s.is_empty())
-        .unwrap_or(false);
-    let has_client_id = client_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_client_id && has_client_secret;
-    let client_id_hint = client_id
-        .map(|id| qq_app_id_display_hint(&id))
-        .filter(|s| !s.is_empty());
-    DingTalkEnvSnapshot {
-        configured,
-        has_client_id,
-        has_client_secret,
-        client_id_hint,
-    }
-}
-
-/// WeCom (企业微信) bot credentials (no secrets returned).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct WeComEnvSnapshot {
-    pub configured: bool,
-    pub has_bot_id: bool,
-    pub has_secret: bool,
-    pub bot_id_hint: Option<String>,
-    pub setup_method: Option<String>,
-}
-
-pub fn read_wecom_env_snapshot(hermes_home: &Path) -> WeComEnvSnapshot {
-    let keys = parse_dotenv_upper(hermes_home);
-    let bot_id = keys.get("WECOM_BOT_ID").cloned();
-    let has_secret = keys
-        .get("WECOM_SECRET")
-        .map(|s| !s.is_empty())
-        .unwrap_or(false);
-    let has_bot_id = bot_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-    let configured = has_bot_id && has_secret;
-    let bot_id_hint = bot_id
-        .map(|id| qq_app_id_display_hint(&id))
-        .filter(|s| !s.is_empty());
-    let setup_method = keys.get("WECOM_SETUP_METHOD").cloned();
-    WeComEnvSnapshot {
-        configured,
-        has_bot_id,
-        has_secret,
-        bot_id_hint,
-        setup_method,
-    }
-}
-
-fn telegram_token_hint(raw: &str) -> String {
-    let s = raw.trim();
-    if s.is_empty() {
-        return String::new();
-    }
-    let ch: Vec<char> = s.chars().collect();
-    let n = ch.len();
-    if n <= 10 {
-        return "****".to_string();
-    }
-    let head: String = ch.iter().take(4).collect();
-    let tail: String = ch[n.saturating_sub(4)..].iter().collect();
-    format!("{head}…{tail}")
-}
-
-fn qq_app_id_display_hint(id: &str) -> String {
-    let s = id.trim();
-    if s.is_empty() {
-        return String::new();
-    }
-    let ch: Vec<char> = s.chars().collect();
-    if ch.len() <= 12 {
-        return s.to_string();
-    }
-    let tail: String = ch[ch.len().saturating_sub(8)..].iter().collect();
-    format!("…{tail}")
-}
-
-fn weixin_account_display_hint(id: &str) -> String {
-    let s = id.trim();
-    if s.is_empty() {
-        return String::new();
-    }
-    let ch: Vec<char> = s.chars().collect();
-    if ch.len() <= 14 {
-        return s.to_string();
-    }
-    let tail: String = ch[ch.len().saturating_sub(12)..].iter().collect();
-    format!("…{tail}")
-}
-
-/// Heuristic: ``hermes-home/.env`` has at least one messaging platform the gateway can connect.
-pub fn dotenv_suggests_messaging_gateway(hermes_home: &Path) -> bool {
-    let keys = parse_dotenv_upper(hermes_home);
+/// Heuristic: host ``hermes-home/.env`` has at least one messaging platform the gateway can connect.
+pub fn dotenv_suggests_messaging_gateway(home: &Path) -> bool {
+    let keys = parse_dotenv_upper(home);
     let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
 
     if nonempty("WEIXIN_ACCOUNT_ID") && nonempty("WEIXIN_TOKEN") {
@@ -382,196 +237,906 @@ pub fn dotenv_suggests_messaging_gateway(hermes_home: &Path) -> bool {
     false
 }
 
-pub struct GatewaySupervisor {
+// ---------------------------------------------------------------------------
+// Env snapshot helpers (read from a given `.env`, defaulting to host)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Env snapshot structs (unchanged, but now accept a configurable home path)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WeixinEnvSnapshot {
+    pub configured: bool,
+    pub has_account_id: bool,
+    pub has_token: bool,
+    pub account_id_hint: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct QqEnvSnapshot {
+    pub configured: bool,
+    pub has_app_id: bool,
+    pub has_client_secret: bool,
+    pub app_id_hint: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FeishuEnvSnapshot {
+    pub configured: bool,
+    pub has_app_id: bool,
+    pub has_app_secret: bool,
+    pub app_id_hint: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TelegramEnvSnapshot {
+    pub configured: bool,
+    pub has_bot_token: bool,
+    pub orphan_telegram_config: bool,
+    pub token_hint: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DingTalkEnvSnapshot {
+    pub configured: bool,
+    pub has_client_id: bool,
+    pub has_client_secret: bool,
+    pub client_id_hint: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WeComEnvSnapshot {
+    pub configured: bool,
+    pub has_bot_id: bool,
+    pub has_secret: bool,
+    pub bot_id_hint: Option<String>,
+    pub setup_method: Option<String>,
+}
+
+fn telegram_token_hint(raw: &str) -> String {
+    let s = raw.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    let ch: Vec<char> = s.chars().collect();
+    let n = ch.len();
+    if n <= 10 {
+        return "****".to_string();
+    }
+    let head: String = ch.iter().take(4).collect();
+    let tail: String = ch[n.saturating_sub(4)..].iter().collect();
+    format!("{head}\u{2026}{tail}")
+}
+
+fn qq_app_id_display_hint(id: &str) -> String {
+    let s = id.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    let ch: Vec<char> = s.chars().collect();
+    if ch.len() <= 12 {
+        return s.to_string();
+    }
+    let tail: String = ch[ch.len().saturating_sub(8)..].iter().collect();
+    format!("\u{2026}{tail}")
+}
+
+fn weixin_account_display_hint(id: &str) -> String {
+    let s = id.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    let ch: Vec<char> = s.chars().collect();
+    if ch.len() <= 14 {
+        return s.to_string();
+    }
+    let tail: String = ch[ch.len().saturating_sub(12)..].iter().collect();
+    format!("\u{2026}{tail}")
+}
+
+pub fn read_weixin_env_snapshot(home: &Path) -> WeixinEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let account = keys.get("WEIXIN_ACCOUNT_ID").cloned();
+    let has_token = keys
+        .get("WEIXIN_TOKEN")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_account_id = account.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_account_id && has_token;
+    let account_id_hint = account
+        .map(|id| weixin_account_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    WeixinEnvSnapshot {
+        configured,
+        has_account_id,
+        has_token,
+        account_id_hint,
+    }
+}
+
+pub fn read_qq_env_snapshot(home: &Path) -> QqEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let app_id = keys.get("QQ_APP_ID").cloned();
+    let has_client_secret = keys
+        .get("QQ_CLIENT_SECRET")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_app_id = app_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_app_id && has_client_secret;
+    let app_id_hint = app_id
+        .map(|id| qq_app_id_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    QqEnvSnapshot {
+        configured,
+        has_app_id,
+        has_client_secret,
+        app_id_hint,
+    }
+}
+
+pub fn read_feishu_env_snapshot(home: &Path) -> FeishuEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let app_id = keys.get("FEISHU_APP_ID").cloned();
+    let has_app_secret = keys
+        .get("FEISHU_APP_SECRET")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_app_id = app_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_app_id && has_app_secret;
+    let app_id_hint = app_id
+        .map(|id| qq_app_id_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    FeishuEnvSnapshot {
+        configured,
+        has_app_id,
+        has_app_secret,
+        app_id_hint,
+    }
+}
+
+pub fn read_telegram_env_snapshot(home: &Path) -> TelegramEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
+    let token = keys.get("TELEGRAM_BOT_TOKEN").cloned();
+    let has_bot_token = token.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_bot_token;
+    let orphan_telegram_config = !configured
+        && (nonempty("TELEGRAM_ALLOWED_USERS")
+            || nonempty("TELEGRAM_HOME_CHANNEL")
+            || nonempty("TELEGRAM_BOT_USERNAME"));
+    let token_hint = token
+        .filter(|s| !s.is_empty())
+        .map(|t| telegram_token_hint(&t));
+    TelegramEnvSnapshot {
+        configured,
+        has_bot_token,
+        orphan_telegram_config,
+        token_hint,
+    }
+}
+
+pub fn read_dingtalk_env_snapshot(home: &Path) -> DingTalkEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let client_id = keys.get("DINGTALK_CLIENT_ID").cloned();
+    let has_client_secret = keys
+        .get("DINGTALK_CLIENT_SECRET")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_client_id = client_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_client_id && has_client_secret;
+    let client_id_hint = client_id
+        .map(|id| qq_app_id_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    DingTalkEnvSnapshot {
+        configured,
+        has_client_id,
+        has_client_secret,
+        client_id_hint,
+    }
+}
+
+pub fn read_wecom_env_snapshot(home: &Path) -> WeComEnvSnapshot {
+    let keys = parse_dotenv_upper(home);
+    let bot_id = keys.get("WECOM_BOT_ID").cloned();
+    let has_secret = keys
+        .get("WECOM_SECRET")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_bot_id = bot_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let configured = has_bot_id && has_secret;
+    let bot_id_hint = bot_id
+        .map(|id| qq_app_id_display_hint(&id))
+        .filter(|s| !s.is_empty());
+    let setup_method = keys.get("WECOM_SETUP_METHOD").cloned();
+    WeComEnvSnapshot {
+        configured,
+        has_bot_id,
+        has_secret,
+        bot_id_hint,
+        setup_method,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Platform discovery
+// ---------------------------------------------------------------------------
+
+/// Return the list of platform names whose credential keys are all present
+/// and non-empty in the given dotenv key map.
+pub fn discover_configured_platforms(keys: &HashMap<String, String>) -> Vec<String> {
+    let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
+    let mut platforms: Vec<String> = Vec::new();
+    for &(name, creds) in PLATFORM_CREDENTIAL_KEYS {
+        if creds.iter().all(|k| nonempty(k)) {
+            platforms.push(name.to_string());
+        }
+    }
+    platforms
+}
+
+// ---------------------------------------------------------------------------
+// Migration
+/// Read the host ``hermes-home/config.yaml`` and return the ``llm:`` section
+/// lines (everything from ``llm:`` to the next top-level key).  Returns
+/// ``None`` if the file is missing or has no ``llm:`` key.
+fn extract_llm_config_section(host_home: &Path) -> Option<String> {
+    let path = host_home.join("config.yaml");
+    let raw = std::fs::read_to_string(path).ok()?;
+    let mut llm_lines = String::new();
+    let mut in_llm = false;
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if in_llm {
+            // Top-level keys are not indented.  End of llm section.
+            if !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
+                break;
+            }
+            llm_lines.push_str(line);
+            llm_lines.push('\n');
+        } else if trimmed == "llm:" {
+            in_llm = true;
+            llm_lines.push_str(line);
+            llm_lines.push('\n');
+        }
+    }
+    if llm_lines.is_empty() {
+        return None;
+    }
+    Some(llm_lines)
+}
+
+// ---------------------------------------------------------------------------
+
+/// One-time migration: create ``profiles/<platform>/`` dirs for every
+/// currently-configured platform, plus ``shared/USER_PREFS.md``.
+///
+/// Safe to call repeatedly — checks for the ``.migrated`` marker file.
+pub fn ensure_migration(data_dir: &Path) -> Result<()> {
+    let host_home = hermes_home_path(data_dir);
+    let profiles_dir = host_home.join(PROFILES_DIR);
+    let marker = profiles_dir.join(MIGRATION_MARKER);
+
+    if marker.exists() {
+        return Ok(());
+    }
+
+    log::info!("[gateway_migration] creating profile directories");
+
+    std::fs::create_dir_all(&profiles_dir).context("create profiles dir")?;
+
+    // Create shared/ dir and empty USER_PREFS.md.
+    let shared_dir = host_home.join("shared");
+    std::fs::create_dir_all(&shared_dir).context("create shared dir")?;
+    let prefs_path = shared_dir.join("USER_PREFS.md");
+    if !prefs_path.exists() {
+        std::fs::write(&prefs_path, "").context("write empty USER_PREFS.md")?;
+    }
+
+    // Create per-platform profile dirs.
+    let keys = parse_dotenv_upper(&host_home);
+    let platforms = discover_configured_platforms(&keys);
+
+    // Read the host LLM config section so every profile inherits the
+    // user's LLM provider/model/endpoint settings.
+    let host_llm_lines = extract_llm_config_section(&host_home);
+
+    for platform in &platforms {
+        let profile_dir = profile_home_path(data_dir, platform);
+        std::fs::create_dir_all(profile_dir.join("memories"))
+            .context("create profile memories dir")?;
+        std::fs::create_dir_all(profile_dir.join("sessions"))
+            .context("create profile sessions dir")?;
+        if !profile_dir.join("config.yaml").exists() {
+            // Write a config that enables only this platform and includes
+            // the host's LLM config (provider, model, base_url, etc.).
+            let mut config = format!(
+                r#"platforms:
+  {}:
+    enable: true
+
+"#,
+                platform
+            );
+            if let Some(ref llm) = host_llm_lines {
+                config.push_str(llm);
+                config.push('\n');
+            }
+            std::fs::write(profile_dir.join("config.yaml"), &config)
+                .context("write profile config.yaml")?;
+        }
+    }
+
+    std::fs::write(&marker, "1").context("write migration marker")?;
+    log::info!(
+        "[gateway_migration] created {} profile(s): {:?}",
+        platforms.len(),
+        platforms
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Per-platform child management
+// ---------------------------------------------------------------------------
+
+struct PlatformChild {
+    platform: String,
     child: Child,
-    /// Captured early stderr lines (first 4 KiB) — for startup diagnostics.
     captured_stderr: Arc<Mutex<String>>,
 }
 
+pub struct GatewaySupervisor {
+    children: Vec<PlatformChild>,
+}
+
 impl GatewaySupervisor {
-    pub async fn spawn(cfg: &SpawnConfig) -> Result<Self> {
-        let py_exe = cfg.bundle_dir.join("python").join("python.exe");
-        anyhow::ensure!(py_exe.exists(), "python.exe missing at {}", py_exe.display());
+    /// Spawn one gateway child per configured platform.
+    ///
+    /// Each child gets its own ``HERMES_HOME`` pointing to
+    /// ``<data_dir>/hermes-home/profiles/<platform>/``.
+    pub async fn spawn_all(cfg: &SpawnConfig) -> Result<Self> {
+        // 0. On Windows, kill any orphan gateway Python processes that
+        //    survived a crash of the Tauri process (Ctrl+C, dev restart).
+        //    These orphans still hold the Windows named mutex, preventing
+        //    new gateway children from acquiring the runtime lock.
+        kill_orphan_gateway_processes();
 
-        let hermes_home = hermes_home_path(&cfg.data_dir);
-        std::fs::create_dir_all(&hermes_home).context("create hermes-home")?;
+        // 1. Ensure migration has run.
+        ensure_migration(&cfg.data_dir)?;
 
-        // Clean up stale token-scoped locks left by previous gateway instances.
-        // On Windows PID reuse makes Python-level stale detection unreliable
-        // (_get_process_start_time returns None — no /proc).  Deleting locks
-        // here ensures the new gateway always starts with a clean slate.
-        {
-            let lock_base = std::env::var("XDG_STATE_HOME")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let home = std::env::var("USERPROFILE")
-                        .map(std::path::PathBuf::from)
-                        .unwrap_or_default();
-                    home.join(".local").join("state")
-                });
-            let lock_dir = lock_base.join("hermes").join("gateway-locks");
-            if lock_dir.exists() {
-                if let Ok(entries) = std::fs::read_dir(&lock_dir) {
-                    for entry in entries.flatten() {
-                        let p = entry.path();
-                        if p.extension().map_or(false, |e| e == "lock") {
-                            let _ = std::fs::remove_file(&p);
-                        }
-                    }
-                }
-            }
-            // Also clean the gateway runtime lock + PID files from previous
-            // instances.  The upstream added a process-level file lock
-            // (gateway.lock, via msvcrt.locking) that, if stale, causes
-            // PermissionError on read during get_running_pid().
-            let _ = std::fs::remove_file(hermes_home.join("gateway.lock"));
-            let _ = std::fs::remove_file(hermes_home.join("gateway.pid"));
-            // Clear stale gateway_state so the frontend doesn't show a
-            // "running" state from a dead process.
-            let _ = std::fs::remove_file(hermes_home.join("gateway_state.json"));
+        let host_home = hermes_home_path(&cfg.data_dir);
+        let host_keys = parse_dotenv_upper(&host_home);
+        let platforms = discover_configured_platforms(&host_keys);
+
+        if platforms.is_empty() {
+            log::info!("[gateway_spawn] no configured platforms; returning empty supervisor");
+            return Ok(Self {
+                children: Vec::new(),
+            });
         }
 
+        let mut children: Vec<PlatformChild> = Vec::new();
+        for platform in &platforms {
+            match Self::spawn_one(cfg, platform, &host_keys).await {
+                Ok(pc) => {
+                    log::info!(
+                        "[gateway_spawn] {} child spawned (pid={:?})",
+                        platform,
+                        pc.child.id()
+                    );
+                    children.push(pc);
+                }
+                Err(e) => {
+                    log::warn!("[gateway_spawn] failed to spawn {}: {:#}", platform, e);
+                }
+            }
+        }
+
+        if children.is_empty() {
+            anyhow::bail!("all gateway platforms failed to spawn");
+        }
+
+        Ok(Self { children })
+    }
+
+    /// Build and spawn a single platform child.
+    async fn spawn_one(
+        cfg: &SpawnConfig,
+        platform: &str,
+        host_keys: &HashMap<String, String>,
+    ) -> Result<PlatformChild> {
+        let py_exe = cfg.bundle_dir.join("python").join("python.exe");
+        anyhow::ensure!(
+            py_exe.exists(),
+            "python.exe missing at {}",
+            py_exe.display()
+        );
+
+        let profile_dir = profile_home_path(&cfg.data_dir, platform);
+        std::fs::create_dir_all(&profile_dir).context("create profile dir")?;
+
+        // Copy the host config.yaml into the profile so the upstream
+        // gateway finds its llm/credential_pool/credentials sections.
+        // Without this, the gateway can't authenticate with the LLM
+        // provider and falls back to upstream defaults (Qwen → 401).
+        copy_host_config(&cfg.data_dir, &profile_dir);
+
+        // Write profile-specific `.env` — only this platform's credentials.
+        write_profile_dotenv(&cfg.data_dir, platform, host_keys)?;
+
+        // Also append the LLM API key to the profile's .env as a safety net.
+        // The upstream gateway reads .env for credentials; if the env var
+        // injection above fails, this ensures the key is still available.
+        if let (Some(key), name) = (&cfg.api_key, &cfg.api_key_env_name) {
+            if !name.is_empty() && !key.is_empty() {
+                let dotenv_path = profile_dir.join(".env");
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(&dotenv_path) {
+                    let _ = writeln!(f, "{}={}", name, key);
+                }
+            }
+        }
+
+        // Copy shared/USER_PREFS.md → _host_prefs.md (if non-empty).
+        copy_host_prefs(&cfg.data_dir, &profile_dir)?;
+
+        // Clean up stale lock files from previous instances.
+        cleanup_stale_locks(&profile_dir);
+
         let mut cmd = Command::new(&py_exe);
-        cmd.args([
-       	        "-m",
-                "gateway.run",
-        ])
-        .current_dir(&cfg.bundle_dir)
-        .env("HERMES_HOME", hermes_home.as_os_str())
-        .env("HERMESDESK_BUNDLE_DIR", &cfg.bundle_dir)
-        .env("HERMESDESK_DATA_DIR", &cfg.data_dir)
-        .env("HERMESDESK_WORKSPACE", &cfg.workspace)
-        .env("HERMESDESK_PROVIDER", &cfg.provider)
-        .env("HERMESDESK_LLM_HOST", &cfg.llm_host)
-        .env(
-            "HERMESDESK_API_BASE_URL",
-            cfg.api_base_url.as_deref().unwrap_or(""),
-        )
-        .env(
-            "HERMESDESK_MODEL",
-            cfg.hermes_model.as_deref().unwrap_or(""),
-        )
-        .env(
-            "HERMESDESK_INFERENCE_PROVIDER",
-            cfg.inference_provider.as_deref().unwrap_or(""),
-        )
-        .env("HERMESDESK_SECRET_URL", &cfg.secret_url)
-        .env("HERMESDESK_APPROVAL_URL", &cfg.approval_url)
-        .env("HERMESDESK_BRIDGE_SECRET", &cfg.desk_auth_token)
-        .env("HERMESDESK_SHELL_CHAT_URL", &cfg.shell_chat_back_url)
-        .env(
-            "HERMESDESK_POWER_USER",
-            if cfg.power_user { "1" } else { "0" },
-        )
-        .env("PYTHONIOENCODING", "utf-8")
-        .env("PYTHONUTF8", "1")
-        .env_remove("OPENAI_API_KEY")
-        .env_remove("ANTHROPIC_API_KEY")
-        .env_remove("OPENROUTER_API_KEY")
-        // Keep generic proxy vars so the gateway can still pick them up via
-        // resolve_proxy_url() as a fallback.  Loopback is protected by NO_PROXY.
-        .env_remove("PYTHONPATH")
-        // ``-m hermes_cli.gateway.run`` does not run ``desktop_entrypoint``'s ``_wire_sys_path()``;
-        // deps (PyYAML → ``import yaml``, fastapi, …) live under ``site-packages/``.
-        .env(
-            "PYTHONPATH",
-            env::join_paths([cfg.bundle_dir.join("site-packages"), cfg.bundle_dir.join("hermes")])
+        cmd.args(["-m", "gateway.run"])
+            .current_dir(&cfg.bundle_dir)
+            .env("HERMES_HOME", &profile_dir)
+            .env("HERMESDESK_GATEWAY_PLATFORM", platform)
+            .env("HERMESDESK_BUNDLE_DIR", &cfg.bundle_dir)
+            .env("HERMESDESK_DATA_DIR", &cfg.data_dir)
+            .env("HERMESDESK_WORKSPACE", &cfg.workspace)
+            .env("HERMESDESK_PROVIDER", &cfg.provider)
+            .env("HERMESDESK_LLM_HOST", &cfg.llm_host)
+            .env(
+                "HERMESDESK_API_BASE_URL",
+                cfg.api_base_url.as_deref().unwrap_or(""),
+            )
+            .env(
+                "HERMESDESK_MODEL",
+                cfg.hermes_model.as_deref().unwrap_or(""),
+            )
+            .env(
+                "HERMESDESK_INFERENCE_PROVIDER",
+                cfg.inference_provider.as_deref().unwrap_or(""),
+            )
+            .env("HERMESDESK_SECRET_URL", &cfg.secret_url)
+            .env("HERMESDESK_APPROVAL_URL", &cfg.approval_url)
+            .env("HERMESDESK_BRIDGE_SECRET", &cfg.desk_auth_token)
+            .env("HERMESDESK_SHELL_CHAT_URL", &cfg.shell_chat_back_url)
+            .env(
+                "HERMESDESK_POWER_USER",
+                if cfg.power_user { "1" } else { "0" },
+            )
+            .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1")
+            // Strip any stray API keys inherited from the user shell or
+            // parent process, then inject the correct one from our vault.
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("ANTHROPIC_API_KEY")
+            .env_remove("OPENROUTER_API_KEY")
+            .env_remove("NOUS_PORTAL_API_KEY")
+            .env_remove("GROQ_API_KEY")
+            .env_remove("GOOGLE_API_KEY")
+            .env_remove("XAI_API_KEY")
+            .env_remove("OPENAI_BASE_URL")
+            .env_remove("HERMES_INFERENCE_PROVIDER")
+            .env(
+                "PYTHONPATH",
+                std::env::join_paths([
+                    cfg.bundle_dir.join("site-packages"),
+                    cfg.bundle_dir.join("hermes"),
+                ])
                 .map_err(|e| anyhow::anyhow!("PYTHONPATH: {e}"))?,
-        )
-        .env("NO_PROXY", "127.0.0.1,localhost,::1");
+            )
+            .env("NO_PROXY", "127.0.0.1,localhost,::1")
+            .env("BROWSER_CDP_URL", crate::edge_browser::cdp_url());
 
-    // Inject HermesDesk-managed proxy if the user has opted in.
-    if let Some(proxy_url) = crate::proxy::read_effective_proxy_for_hermes_home(&hermes_home) {
-        cmd.env("HERMESDESK_PROXY_URL", proxy_url);
-    }
-
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(windows)]
-    {
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-
-        log::info!("[gateway_spawn] about to spawn: {:?}", py_exe);
-        let mut child = match cmd.spawn() {
-            Ok(c) => {
-                log::info!("[gateway_spawn] child spawned, pid={:?}", c.id());
-                c
+        // Inject the LLM API key from our vault so the upstream gateway
+        // can authenticate with the LLM provider.  The web child fetches
+        // this via HERMESDESK_SECRET_URL; gateway children have no overlay
+        // to do that, so we inject it directly.
+        log::info!(
+            "[gateway_spawn] {} api_key env_name={:?} key={}",
+            platform,
+            cfg.api_key_env_name,
+            cfg.api_key.as_ref().map(|_| "present").unwrap_or("missing"),
+        );
+        if !cfg.api_key_env_name.is_empty() {
+            if let Some(key) = &cfg.api_key {
+                cmd.env(&cfg.api_key_env_name, key);
+                log::info!(
+                    "[gateway_spawn] {} injected {} (len={})",
+                    platform,
+                    cfg.api_key_env_name,
+                    key.len(),
+                );
             }
-            Err(e) => {
-                log::error!("[gateway_spawn] spawn FAILED: {:#}", e);
-                return Err(e).context("spawn gateway python");
-            }
-        };
+        }
 
+        // Also inject OPENAI_BASE_URL for custom providers (upstream
+        // gateway reads this, not HERMESDESK_API_BASE_URL).
+        if let Some(url) = &cfg.api_base_url {
+            if !url.trim().is_empty() {
+                cmd.env("OPENAI_BASE_URL", url);
+            }
+        }
+
+        // Inject email creds from the PROFILE's .env (not the host's).
+        let profile_keys = parse_dotenv_upper(&profile_dir);
+        for key in [
+            "EMAIL_ADDRESS",
+            "EMAIL_PASSWORD",
+            "EMAIL_IMAP_HOST",
+            "EMAIL_SMTP_HOST",
+        ] {
+            if let Some(val) = profile_keys.get(key) {
+                cmd.env(key, val);
+            }
+        }
+
+        // Inject proxy config from the HOST (proxy is a system-level setting).
+        if let Some(proxy_url) =
+            crate::proxy::read_effective_proxy_for_hermes_home(&hermes_home_path(&cfg.data_dir))
+        {
+            cmd.env("HERMESDESK_PROXY_URL", &proxy_url);
+            cmd.env("HTTP_PROXY", &proxy_url);
+            cmd.env("HTTPS_PROXY", &proxy_url);
+        }
+
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let mut child = cmd.spawn().context("spawn gateway python child")?;
         let captured = Arc::new(Mutex::new(String::new()));
 
         if let Some(out) = child.stdout.take() {
-            tokio::spawn(forward("gw.out", out, None));
+            let tag = format!("gw.{}.out", platform);
+            tokio::spawn(forward(tag, out, None));
         }
         if let Some(err) = child.stderr.take() {
-            tokio::spawn(forward("gw.err", err, Some(captured.clone())));
+            let tag = format!("gw.{}.err", platform);
+            tokio::spawn(forward(tag, err, Some(captured.clone())));
         }
 
-        log::info!("[gateway_spawn] returning GatewaySupervisor");
-        Ok(Self { child, captured_stderr: captured })
+        Ok(PlatformChild {
+            platform: platform.to_string(),
+            child,
+            captured_stderr: captured,
+        })
     }
 
+    /// Kill every child and wait up to 3 s for each to exit.
     pub async fn shutdown(mut self) -> Result<()> {
-        let _ = self.child.start_kill();
-        // Wait up to 3s for the process to exit so that token locks are
-        // released before a subsequent start.  Without this wait, a quick
-        // stop -> start cycle leaves stale locks held by the zombie child.
-        let start = tokio::time::Instant::now();
-        loop {
-            match self.child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) => {
-                    if start.elapsed() > std::time::Duration::from_secs(3) {
-                        log::warn!("gateway child did not exit within 3s of kill");
+        let children = std::mem::take(&mut self.children);
+        for mut pc in children {
+            let _ = pc.child.start_kill();
+            let start = tokio::time::Instant::now();
+            loop {
+                match pc.child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) => {
+                        if start.elapsed() > std::time::Duration::from_secs(3) {
+                            log::warn!(
+                                "gateway child {} did not exit within 3s of kill",
+                                pc.platform
+                            );
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                    Err(e) => {
+                        log::warn!("gateway child {} wait error: {}", pc.platform, e);
                         break;
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                }
-                Err(e) => {
-                    log::warn!("gateway child wait error: {}", e);
-                    break;
                 }
             }
         }
         Ok(())
     }
 
-    /// Non-blocking: reap if the child already exited.
-    pub fn try_reap(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
-        self.child.try_wait()
+    /// True when at least one child is still running.
+    pub fn any_running(&mut self) -> bool {
+        self.children
+            .iter_mut()
+            .any(|pc| match pc.child.try_wait() {
+                Ok(None) => true,
+                _ => false,
+            })
     }
 
-    /// Early stderr lines captured during spawn (up to first 4 KiB).
-    pub fn stderr_snapshot(&self) -> String {
-        // best-effort: try deprecated poll_lock first for single-threaded runtime
-        match self.captured_stderr.try_lock() {
-            Ok(g) => g.clone(),
-            Err(_) => String::from("(stderr capture busy)"),
+    /// Remove exited children, return (platform, status) for each.
+    pub fn reap_exited(&mut self) -> Vec<(String, std::process::ExitStatus)> {
+        let mut exited = Vec::new();
+        let mut i = 0;
+        while i < self.children.len() {
+            match self.children[i].child.try_wait() {
+                Ok(Some(st)) => {
+                    let pc = self.children.swap_remove(i);
+                    exited.push((pc.platform, st));
+                }
+                _ => {
+                    i += 1;
+                }
+            }
         }
+        exited
+    }
+
+    /// Per-platform running state map.
+    pub fn running_map(&self) -> HashMap<String, bool> {
+        let mut map = HashMap::new();
+        // We can't call try_wait on &self, so just report the presence of each child.
+        // The caller should call try_reap first to clean up exited children.
+        for pc in &self.children {
+            map.insert(pc.platform.clone(), true);
+        }
+        map
+    }
+
+    /// Aggregate stderr from all children (best-effort, truncated).
+    pub fn aggregate_stderr(&self) -> String {
+        let mut buf = String::new();
+        for pc in &self.children {
+            if let Ok(g) = pc.captured_stderr.try_lock() {
+                let s = g.trim();
+                if !s.is_empty() {
+                    if !buf.is_empty() {
+                        buf.push_str("\n---\n");
+                    }
+                    buf.push_str(&format!("[{}]\n{}", pc.platform, s));
+                }
+            }
+        }
+        buf
+    }
+
+    /// Number of platform children.
+    pub fn platform_count(&self) -> usize {
+        self.children.len()
     }
 }
 
 impl Drop for GatewaySupervisor {
     fn drop(&mut self) {
-        let _ = self.child.start_kill();
+        for pc in &mut self.children {
+            let _ = pc.child.start_kill();
+        }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Profile helpers
+// ---------------------------------------------------------------------------
+
+/// Write a platform-specific `.env` inside the profile directory.
+///
+/// Contains:
+///   - Credentials and extras for this specific platform
+///   - LLM API keys and provider config (from the host `.env`) so the
+///     upstream gateway can authenticate with the LLM provider
+///   - GATEWAY_ALLOW_ALL_USERS=true to skip pairing on first run
+fn write_profile_dotenv(
+    data_dir: &Path,
+    platform: &str,
+    host_keys: &HashMap<String, String>,
+) -> Result<()> {
+    let profile_dir = profile_home_path(data_dir, platform);
+    let dotenv_path = profile_dir.join(".env");
+
+    let mut content = String::new();
+
+    // 1. Platform-specific credentials + extras.
+    let mut platform_keys: Vec<&str> = Vec::new();
+    for &(name, creds) in PLATFORM_CREDENTIAL_KEYS {
+        if name == platform {
+            platform_keys.extend_from_slice(creds);
+            break;
+        }
+    }
+    for &(name, extras) in PLATFORM_EXTRA_KEYS {
+        if name == platform {
+            platform_keys.extend_from_slice(extras);
+            break;
+        }
+    }
+    for key in &platform_keys {
+        if let Some(val) = host_keys.get(*key) {
+            content.push_str(&format!("{}={}\n", key, val));
+        }
+    }
+
+    // 2. LLM API keys and provider config — without these the gateway
+    //    child can't authenticate with the LLM provider and falls back to
+    //    upstream defaults (Alibaba Cloud Qwen) which breaks all bots.
+    //    Only suffix-match *_API_KEY, OPENAI_BASE_URL, and HERMES_* vars.
+    for (key, val) in host_keys {
+        if key.ends_with("_API_KEY") || key == "OPENAI_BASE_URL" || key.starts_with("HERMES_") {
+            content.push_str(&format!("{}={}\n", key, val));
+        }
+    }
+
+    // 3. Allow all users by default so pairing isn't required on first run.
+    content.push_str("GATEWAY_ALLOW_ALL_USERS=true\n");
+
+    std::fs::write(&dotenv_path, &content).context("write profile .env")?;
+    Ok(())
+}
+
+/// Copy the host ``hermes-home/config.yaml`` into the profile directory.
+/// The profile needs the host's LLM config (provider, model, credential_pool)
+/// so the upstream gateway can authenticate.  If the host config is missing
+/// the copy is silently skipped (the gateway falls back to defaults).
+fn copy_host_config(data_dir: &Path, profile_dir: &Path) {
+    let src = hermes_home_path(data_dir).join("config.yaml");
+    let dst = profile_dir.join("config.yaml");
+    if src.exists() {
+        if let Err(e) = std::fs::copy(&src, &dst) {
+            log::warn!("[gateway_spawn] copy host config.yaml: {e}");
+        }
+    }
+}
+
+/// Copy ``shared/USER_PREFS.md`` into the profile directory as ``_host_prefs.md``.
+/// If the shared file is empty or missing, ensure ``_host_prefs.md`` does not exist.
+fn copy_host_prefs(data_dir: &Path, profile_dir: &Path) -> Result<()> {
+    let src = shared_path(data_dir, "USER_PREFS.md");
+    let dst = profile_dir.join("_host_prefs.md");
+
+    match std::fs::read_to_string(&src) {
+        Ok(content) if !content.trim().is_empty() => {
+            std::fs::write(&dst, &content).context("write _host_prefs.md")?;
+        }
+        _ => {
+            // Ensure stale copy is removed.
+            let _ = std::fs::remove_file(&dst);
+        }
+    }
+    Ok(())
+}
+
+/// Remove stale lock/pid/state files from a profile directory.
+fn cleanup_stale_locks(profile_dir: &Path) {
+    for name in &["gateway.lock", "gateway.pid", "gateway_state.json"] {
+        let _ = std::fs::remove_file(profile_dir.join(name));
+    }
+    // Clean up token-scoped locks (XDG state path under profile).
+    let lock_dir = profile_dir.join("gateway-locks");
+    if lock_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&lock_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().map_or(false, |e| e == "lock") {
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+    }
+
+    // Clean up system-level token-scoped locks from previous gateway instances.
+    // The upstream platform adapters (Telegram, Weixin, etc.) call
+    // acquire_scoped_lock() which writes to ~/.local/state/hermes/gateway-locks/.
+    // These are NOT inside HERMES_HOME — they live in the XDG state path.
+    let sys_lock_base = std::env::var("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = std::env::var("USERPROFILE")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_default();
+            home.join(".local").join("state")
+        });
+    let sys_lock_dir = sys_lock_base.join("hermes").join("gateway-locks");
+    if sys_lock_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&sys_lock_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().map_or(false, |e| e == "lock") {
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+    }
+}
+
+/// Remove orphan gateway Python processes that survived a Tauri crash.
+/// On Windows, the gateway uses a named kernel mutex (`CreateMutexW`) for
+/// its runtime lock.  When `cargo tauri dev` is force-restarted (Ctrl+C),
+/// the Tauri supervisor dies but orphan Python children survive, still
+/// holding the mutex.  New gateway children then fail with:
+///   "Gateway runtime lock is already held by another instance."
+///
+/// This function enumerates running `python.exe` processes and terminates
+/// any that are running `gateway.run`, allowing fresh spawns to acquire
+/// the mutex.
+#[cfg(windows)]
+fn kill_orphan_gateway_processes() {
+    use std::process::Command;
+
+    // WMIC query: get all python.exe processes with their PIDs and command lines.
+    // CSV format: Node,ProcessId,CommandLine (CommandLine may contain commas and be quoted).
+    let output = match Command::new("wmic")
+        .args([
+            "process",
+            "where",
+            "name='python.exe'",
+            "get",
+            "ProcessId,CommandLine",
+            "/format:csv",
+        ])
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => {
+            log::debug!("[gateway_cleanup] wmic not available (non-Windows?)");
+            return;
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines().skip(1) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("Node") {
+            continue;
+        }
+        // CSV: HOSTNAME,1234,"C:\path\python.exe -m gateway.run ..."
+        // Use splitn(3) so the CommandLine (3rd field) retains any internal commas.
+        let mut cols = trimmed.splitn(3, ',');
+        let _node = cols.next();
+        let pid = cols.next().unwrap_or("").trim();
+        let cmdline = cols.next().unwrap_or("").trim();
+
+        if pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+
+        // CommandLine in WMIC CSV may be wrapped in double quotes.
+        let cl = cmdline.trim_matches('"');
+
+        if cl.contains("gateway.run") {
+            log::info!(
+                "[gateway_cleanup] terminating orphan gateway process pid={}",
+                pid,
+            );
+            let _ = Command::new("taskkill").args(["/F", "/PID", pid]).output();
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn kill_orphan_gateway_processes() {
+    // On Unix, orphaned children are automatically reaped by init when the
+    // parent exits, so no explicit cleanup is needed.
+}
+
+// ---------------------------------------------------------------------------
+// Stderr forwarder
+// ---------------------------------------------------------------------------
+
 async fn forward<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
-    tag: &'static str,
+    tag: String,
     r: R,
     capture: Option<Arc<Mutex<String>>>,
 ) {
-    log::info!("[forward] starting tag={}", tag);
     let mut lines = BufReader::new(r).lines();
     while let Ok(Some(line)) = lines.next_line().await {
         log::info!("{}: {}", tag, line);
@@ -579,9 +1144,6 @@ async fn forward<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
             if let Ok(mut g) = buf.try_lock() {
                 use std::fmt::Write;
                 let _ = writeln!(g, "{line}");
-                // Keep only the last 8192 bytes — Python traceback errors
-                // print the exception at the END, and truncating from the
-                // front (first-N) cuts off the most useful part.
                 const MAX: usize = 8192;
                 if g.len() > MAX {
                     let excess = g.len() - MAX;
@@ -590,5 +1152,4 @@ async fn forward<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
             }
         }
     }
-    log::info!("[forward] tag={} ended (stream closed or error)", tag);
 }

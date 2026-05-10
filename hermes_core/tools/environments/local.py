@@ -222,6 +222,26 @@ def _make_run_env(env: dict) -> dict:
     return run_env
 
 
+def _unix_to_windows_path(path: str) -> str:
+    """Convert Git Bash Unix paths to Windows paths on Windows.
+
+    Git Bash ``pwd -P`` returns paths like ``/c/Users/X13/...`` or
+    ``/d/project/...`` which ``subprocess.Popen(cwd=…)`` rejects with
+    ``NotADirectoryError: [WinError 267]``.
+
+    Only transforms paths matching the ``/[a-z]/…`` drive-letter pattern;
+    everything else is returned unchanged.
+    """
+    if not path or not path.startswith("/"):
+        return path
+    raw = path.lstrip("/").split("/", 1)
+    letter = raw[0]
+    if len(letter) == 1 and letter.isalpha():
+        suffix = "\\" + raw[1] if len(raw) > 1 else "\\"
+        return f"{letter.upper()}:{suffix}"
+    return path
+
+
 def _read_terminal_shell_init_config() -> tuple[list[str], bool]:
     """Return (shell_init_files, auto_source_bashrc) from config.yaml.
 
@@ -462,12 +482,16 @@ class LocalEnvironment(BaseEnvironment):
             with open(self._cwd_file) as f:
                 cwd_path = f.read().strip()
             if cwd_path:
+                if _IS_WINDOWS:
+                    cwd_path = _unix_to_windows_path(cwd_path)
                 self.cwd = cwd_path
         except (OSError, FileNotFoundError):
             pass
 
         # Still strip the marker from output so it's not visible
         self._extract_cwd_from_output(result)
+        if _IS_WINDOWS and self.cwd and self.cwd.startswith("/"):
+            self.cwd = _unix_to_windows_path(self.cwd)
 
     def cleanup(self):
         """Clean up temp files."""

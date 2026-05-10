@@ -30,7 +30,7 @@ export function Splash() {
           nav("/chat", { replace: true });
           return;
         }
-        nav("/onboarding/mode", { replace: true });
+        nav("/onboarding/welcome", { replace: true });
       } catch {
         if (!cancelled) nav("/onboarding/mode", { replace: true });
       }
@@ -48,7 +48,18 @@ export function Splash() {
           "sm:max-w-md sm:px-10"
         )}
       >
+        <img
+          src="/kabuqina_na_blue_128.png"
+          alt={t("brand")}
+          className="mx-auto mb-4 h-16 w-16 object-contain dark:opacity-95"
+          width={64}
+          height={64}
+          decoding="async"
+        />
         <div className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("brand")}</div>
+        <div className="mt-1 font-mono text-xs uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+          Kabuqina
+        </div>
         <p className="hd-hint mt-3 justify-center">
           <span aria-hidden>✨</span>
           {t("splash.waking")}

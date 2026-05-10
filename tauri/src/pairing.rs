@@ -119,7 +119,10 @@ fn now_epoch() -> u64 {
 // ---- Tauri commands ----
 
 #[tauri::command]
-pub fn cmd_pairing_list(app: AppHandle, platform: Option<String>) -> Result<PairingSnapshot, String> {
+pub fn cmd_pairing_list(
+    app: AppHandle,
+    platform: Option<String>,
+) -> Result<PairingSnapshot, String> {
     let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
     let platforms: Vec<String> = match platform {
         Some(ref p) if !p.is_empty() => vec![p.trim().to_lowercase()],
@@ -171,7 +174,11 @@ pub fn cmd_pairing_list(app: AppHandle, platform: Option<String>) -> Result<Pair
 }
 
 #[tauri::command]
-pub fn cmd_pairing_approve(app: AppHandle, platform: String, code: String) -> Result<String, String> {
+pub fn cmd_pairing_approve(
+    app: AppHandle,
+    platform: String,
+    code: String,
+) -> Result<String, String> {
     let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
     let platform = platform.trim().to_lowercase();
     let code = code.trim().to_uppercase();
@@ -182,8 +189,7 @@ pub fn cmd_pairing_approve(app: AppHandle, platform: String, code: String) -> Re
 
     let pending_file = pending_path(&data_dir, &platform);
 
-    let mut pending: HashMap<String, PendingEntry> =
-        read_json(&pending_file).unwrap_or_default();
+    let mut pending: HashMap<String, PendingEntry> = read_json(&pending_file).unwrap_or_default();
 
     let entry = pending
         .remove(&code)
@@ -214,7 +220,11 @@ pub fn cmd_pairing_approve(app: AppHandle, platform: String, code: String) -> Re
 }
 
 #[tauri::command]
-pub fn cmd_pairing_revoke(app: AppHandle, platform: String, user_id: String) -> Result<String, String> {
+pub fn cmd_pairing_revoke(
+    app: AppHandle,
+    platform: String,
+    user_id: String,
+) -> Result<String, String> {
     let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
     let platform = platform.trim().to_lowercase();
     let user_id = user_id.trim().to_string();
@@ -228,16 +238,25 @@ pub fn cmd_pairing_revoke(app: AppHandle, platform: String, user_id: String) -> 
         read_json(&approved_file).unwrap_or_default();
 
     if approved.remove(&user_id).is_none() {
-        return Err(format!("User '{}' not found in approved list for '{}'", user_id, platform));
+        return Err(format!(
+            "User '{}' not found in approved list for '{}'",
+            user_id, platform
+        ));
     }
 
     write_json(&approved_file, &approved)?;
 
-    Ok(format!("Revoked access for user {} on {}", user_id, platform))
+    Ok(format!(
+        "Revoked access for user {} on {}",
+        user_id, platform
+    ))
 }
 
 #[tauri::command]
-pub fn cmd_pairing_clear_pending(app: AppHandle, platform: Option<String>) -> Result<String, String> {
+pub fn cmd_pairing_clear_pending(
+    app: AppHandle,
+    platform: Option<String>,
+) -> Result<String, String> {
     let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| e.to_string())?;
     let platforms: Vec<String> = match platform {
         Some(ref p) if !p.is_empty() => vec![p.trim().to_lowercase()],
@@ -253,5 +272,9 @@ pub fn cmd_pairing_clear_pending(app: AppHandle, platform: Option<String>) -> Re
         }
     }
 
-    Ok(format!("Cleared {} pending request(s) across {} platform(s)", cleared, platforms.len()))
+    Ok(format!(
+        "Cleared {} pending request(s) across {} platform(s)",
+        cleared,
+        platforms.len()
+    ))
 }

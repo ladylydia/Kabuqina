@@ -6,11 +6,13 @@ import { findProvider, type ProviderId } from "../../lib/providers";
 import { useI18n } from "../../lib/i18n";
 import { validateKey, validateCustomEndpoint, normalizeOpenAiBaseUrl } from "../../lib/validate";
 import { updateDraft, useDraft } from "../../lib/store";
-import { clearAllowChatWithoutApi, setAllowChatWithoutApi } from "../../lib/apiKeyGate";
-import { getNextPathAfterPass } from "../flowConfig";
+import { clearAllowChatWithoutApi } from "../../lib/apiKeyGate";
+import { getBackPath, getNextPathAfterPass } from "../flowConfig";
+import { cn } from "../../lib/cn";
+import { Check, Loader2 } from "lucide-react";
 import {
-  WizardFooter, WizardFooterActions, WizardFooterHint,
-  WizardPrimaryButton, WizardSecondaryButton,
+  WizardFooter, WizardFooterActions,
+  WizardPrimaryButton,
 } from "../wizard-ui";
 
 type LlmConfigPreview = {
@@ -45,21 +47,54 @@ export function GetAccessPass() {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<LlmConfigPreview | null>(null);
   const [dropdownProvider, setDropdownProvider] = useState<ProviderId | "">("");
+  const [validationStatus, setValidationStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<LlmConfigPreview>("cmd_llm_config_preview").then(setPreview)
       .catch(() => setPreview({ hasSecret: false, provider: null, host: null, model: null, apiBaseUrl: null }));
   }, []);
 
+  // Debounced auto-validation of the API key
+  useEffect(() => {
+    const pid = draft.providerId;
+    const trimmed = key.trim();
+    if (!trimmed || !pid) {
+      setValidationStatus("idle");
+      setValidationMessage(null);
+      return;
+    }
+    if (preview?.hasSecret && !trimmed) {
+      setValidationStatus("valid");
+      setValidationMessage(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setValidationStatus("validating");
+      try {
+        const result = pid === "custom"
+          ? await validateCustomEndpoint(baseUrl, key)
+          : await validateKey(pid, key);
+        setValidationStatus(result.ok ? "valid" : "invalid");
+        setValidationMessage(result.message ?? null);
+      } catch {
+        setValidationStatus("invalid");
+        setValidationMessage(t("pass.errGeneric"));
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [key, baseUrl, draft.providerId, preview?.hasSecret, t]);
+
   useEffect(() => {
     if (!draft.setupMode) nav("/onboarding/mode", { replace: true });
   }, [draft.setupMode, nav]);
 
-  if (!draft.setupMode) return null;
-  if (!draft.providerId) { nav("/onboarding/brain", { replace: true }); return null; }
+  useEffect(() => {
+    if (draft.setupMode && !draft.providerId) nav("/onboarding/brain", { replace: true });
+  }, [draft.providerId, draft.setupMode, nav]);
 
-  const provider = findProvider(draft.providerId);
-  const isCustom = provider.id === "custom";
+  const provider = draft.providerId ? findProvider(draft.providerId) : null;
+  const isCustom = provider?.id === "custom";
 
   // Pre-fill from saved preview
   useEffect(() => {
@@ -69,10 +104,13 @@ export function GetAccessPass() {
   }, [preview, isCustom]);
 
   const effectiveProvider = useMemo(() => {
+    if (!provider) return null;
     if (!isCustom) return provider;
     if (dropdownProvider && dropdownProvider !== "custom") return findProvider(dropdownProvider);
     return null;
   }, [isCustom, provider, dropdownProvider]);
+
+  if (!draft.setupMode || !provider) return null;
 
   async function openSignup() {
     if (!effectiveProvider?.signupUrl) return;
@@ -80,11 +118,13 @@ export function GetAccessPass() {
   }
 
   async function onSave() {
-    const mode = draft.setupMode; if (!mode) return;
+    const mode = draft.setupMode; if (!mode || !provider) return;
     setBusy(true); setError(null);
     try {
       if (preview?.hasSecret && !key.trim()) {
-        try { await invoke("cmd_set_personality", { name: draft.personality }); } catch {}
+        try { await invoke("cmd_set_personality", { name: draft.personality }); } catch {
+          /* optional */
+        }
         clearAllowChatWithoutApi(); nav(getNextPathAfterPass(mode), { replace: true }); return;
       }
       if (isCustom) {
@@ -108,17 +148,13 @@ export function GetAccessPass() {
         });
         updateDraft({ apiKey: "" });
       }
-      try { await invoke("cmd_set_personality", { name: draft.personality }); } catch {}
+      try { await invoke("cmd_set_personality", { name: draft.personality }); } catch {
+        /* optional */
+      }
       clearAllowChatWithoutApi(); nav(getNextPathAfterPass(mode), { replace: true });
     } catch (e: unknown) {
       setError(typeof e === "string" ? e : (e as Error)?.message ?? t("pass.errSave"));
     } finally { setBusy(false); }
-  }
-
-  function onSkip() {
-    const mode = draft.setupMode; if (!mode) return;
-    void invoke("cmd_set_personality", { name: draft.personality }).catch(() => {});
-    setAllowChatWithoutApi(); nav(getNextPathAfterPass(mode), { replace: true });
   }
 
   const continuingWithSaved = Boolean(preview?.hasSecret && !key.trim());
@@ -185,9 +221,29 @@ export function GetAccessPass() {
 
     <div className="space-y-2">
       <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{isCustom ? t("pass.labelKeyCustom") : t("pass.labelKey")}</label>
-      <input type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)}
-        placeholder={preview?.hasSecret ? t("pass.keyPlaceholderSaved") : effectiveProvider?.keyPrefixHint ? `${effectiveProvider.keyPrefixHint}\u2026` : t("pass.phKey")}
-        className={f} />
+      <div className="relative">
+        <input type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)}
+          placeholder={preview?.hasSecret ? t("pass.keyPlaceholderSaved") : effectiveProvider?.keyPrefixHint ? `${effectiveProvider.keyPrefixHint}\u2026` : t("pass.phKey")}
+          className={cn(
+            f,
+            "pr-10",
+            validationStatus === "valid" && "border-emerald-400 dark:border-emerald-600",
+            validationStatus === "invalid" && "border-red-400 dark:border-red-600",
+          )} />
+        {validationStatus === "validating" && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+          </span>
+        )}
+        {validationStatus === "valid" && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
+            <Check className="h-4 w-4" strokeWidth={3} />
+          </span>
+        )}
+      </div>
+      {validationStatus === "invalid" && validationMessage && (
+        <p className="text-sm text-red-600 dark:text-red-400">{validationMessage}</p>
+      )}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
 
@@ -196,13 +252,16 @@ export function GetAccessPass() {
       {t("pass.openVendor", { label: provider.label })}</button>)}
 
     <WizardFooter>
-      <WizardFooterActions>
-        <WizardSecondaryButton onClick={onSkip} disabled={busy}>{t("pass.skipCta")}</WizardSecondaryButton>
-        <WizardPrimaryButton onClick={() => void onSave()} disabled={busy || !canSubmit}>
-          {busy ? t("pass.checkWait") : preview?.hasSecret && !key.trim() ? t("pass.continueCta") : t("pass.cta")}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <WizardPrimaryButton onClick={() => nav(getBackPath("pass", draft.setupMode!)!)}>
+          {t("onboarding.back")}
         </WizardPrimaryButton>
-      </WizardFooterActions>
-      <WizardFooterHint>{t("pass.skipHint")}</WizardFooterHint>
+        <WizardFooterActions>
+          <WizardPrimaryButton onClick={() => void onSave()} disabled={busy || !canSubmit}>
+            {busy ? t("pass.checkWait") : preview?.hasSecret && !key.trim() ? t("pass.continueCta") : t("pass.cta")}
+          </WizardPrimaryButton>
+        </WizardFooterActions>
+      </div>
     </WizardFooter>
   </div>);
 }

@@ -1,20 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cmdDeleteSession, cmdGetSessions, type SessionRow } from "../chat-api";
+
+export type LoadSessionsOptions = { silent?: boolean };
 
 export function useSessions({ hermesReady }: { hermesReady: boolean }) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
 
-  const loadSessions = useCallback(async () => {
-    setListLoading(true);
+  const loadSessions = useCallback(async (options: LoadSessionsOptions = {}) => {
+    const showLoading = !options.silent && !hasLoadedRef.current;
+    if (showLoading) {
+      setListLoading(true);
+    }
     try {
-      const r = await cmdGetSessions(50, 0);
+      const r = await cmdGetSessions(50, 0, "hermesdesk");
       setSessions(r.sessions ?? []);
+      hasLoadedRef.current = true;
     } catch (e) {
       console.error(e);
       setSessions([]);
     } finally {
-      setListLoading(false);
+      if (showLoading) {
+        setListLoading(false);
+      }
     }
   }, []);
 

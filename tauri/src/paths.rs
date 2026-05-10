@@ -26,7 +26,7 @@ fn default_workspace(app: &AppHandle) -> Result<PathBuf> {
     Ok(docs.join("HermesWork"))
 }
 
-/// `%LOCALAPPDATA%\HermesDesk` — writable per-user state.
+/// Writable per-user app state (resolved by Tauri from the app identifier).
 pub fn ensure_data_dir(app: &AppHandle) -> Result<PathBuf> {
     let dir = app.path().app_local_data_dir().context("local data dir")?;
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -81,7 +81,10 @@ pub fn resolve_runtime_dir(app: &AppHandle) -> Result<PathBuf> {
 }
 
 pub fn is_power_user(app: &AppHandle) -> bool {
-    matches!(read_setting(app, SETTING_POWER_USER).as_deref(), Some("1" | "true"))
+    matches!(
+        read_setting(app, SETTING_POWER_USER).as_deref(),
+        Some("1" | "true")
+    )
 }
 
 pub fn is_show_recipe_market(app: &AppHandle) -> bool {
@@ -101,12 +104,8 @@ pub fn is_auto_start_gateway(app: &AppHandle) -> bool {
 }
 
 pub fn set_auto_start_gateway_enabled(app: &AppHandle, enabled: bool) -> Result<(), String> {
-    write_setting(
-        app,
-        SETTING_AUTO_GATEWAY,
-        if enabled { "1" } else { "0" },
-    )
-    .map_err(|e| e.to_string())
+    write_setting(app, SETTING_AUTO_GATEWAY, if enabled { "1" } else { "0" })
+        .map_err(|e| e.to_string())
 }
 
 /// Mirror the setting into the data dir so embedded Python can read `/api/status` without a process restart.
@@ -136,7 +135,9 @@ fn read_setting(app: &AppHandle, _key: &str) -> Option<String> {
 
 #[tauri::command]
 pub fn cmd_workspace_path(app: AppHandle) -> Result<String, String> {
-    ensure_workspace(&app).map(|p| p.display().to_string()).map_err(|e| e.to_string())
+    ensure_workspace(&app)
+        .map(|p| p.display().to_string())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -191,8 +192,7 @@ pub fn cmd_set_show_recipe_market(app: AppHandle, enabled: bool) -> Result<(), S
 
 #[tauri::command]
 pub fn cmd_set_personality(app: AppHandle, name: String) -> Result<(), String> {
-    write_setting(&app, "hermesdesk.personality", &name)
-        .map_err(|e| e.to_string())
+    write_setting(&app, "hermesdesk.personality", &name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -203,4 +203,59 @@ pub fn cmd_get_auto_start_gateway(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub fn cmd_set_auto_start_gateway(app: AppHandle, enabled: bool) -> Result<(), String> {
     set_auto_start_gateway_enabled(&app, enabled)
+}
+
+// ---- Shared user preferences (host-only write, bot-read-only) ----------------
+
+/// ``<data_dir>/hermes-home/shared/USER_PREFS.md``
+fn shared_prefs_path(data_dir: &PathBuf) -> PathBuf {
+    let home = data_dir.join("hermes-home");
+    home.join("shared").join("USER_PREFS.md")
+}
+
+/// Read the shared preferences file (used by all bots as read-only preamble).
+/// Returns an empty string if the file does not exist or is empty.
+#[tauri::command]
+pub fn cmd_read_shared_prefs(app: AppHandle) -> Result<String, String> {
+    let data_dir = ensure_data_dir(&app).map_err(|e| e.to_string())?;
+    let path = shared_prefs_path(&data_dir);
+    match std::fs::read_to_string(&path) {
+        Ok(content) => Ok(content),
+        Err(_) => Ok(String::new()),
+    }
+}
+
+/// Write a text file to an arbitrary path (used by the export flow after the
+/// user picks the save location via the save dialog).
+///
+/// Safety: the user explicitly chose the path in the save dialog, so there is
+/// no shell-injection risk. We only write, never read at this path.
+#[tauri::command]
+pub fn cmd_write_text_file(path_str: String, content: String) -> Result<(), String> {
+    use std::io::Write;
+    let path = std::path::PathBuf::from(&path_str);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
+    }
+    let mut f = std::fs::File::create(&path).map_err(|e| format!("open {path_str:?}: {e}"))?;
+    f.write_all(content.as_bytes())
+        .map_err(|e| format!("write {path_str:?}: {e}"))?;
+    Ok(())
+}
+
+/// Write (overwrite) the shared preferences file.
+/// This is a host-only operation (desktop agent). Bots never call this.
+#[tauri::command]
+pub fn cmd_save_shared_prefs(app: AppHandle, content: String) -> Result<(), String> {
+    use std::io::Write;
+    let data_dir = ensure_data_dir(&app).map_err(|e| e.to_string())?;
+    let path = shared_prefs_path(&data_dir);
+    // Ensure parent dir exists.
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create shared dir: {e}"))?;
+    }
+    let mut f = std::fs::File::create(&path).map_err(|e| format!("open {path:?}: {e}"))?;
+    f.write_all(content.as_bytes())
+        .map_err(|e| format!("write {path:?}: {e}"))?;
+    Ok(())
 }

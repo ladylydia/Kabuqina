@@ -1,17 +1,18 @@
 # Safety model
 
-HermesDesk's "safe by default" promise rests on five concentric layers, each
+HermesDesk's "safe by default" promise rests on six concentric layers, each
 defended in a different language. A bug in any single layer should not be
 sufficient to compromise the user's machine.
 
 ```
-     +----------------------------------------------+
-     |  L5  Onboarding defaults (UI nudges)         |  React
-     |  L4  Per-tool gates (Power-user toggle)      |  Python overlay
-     |  L3  Network egress allowlist                |  Python overlay
-     |  L2  Workspace folder jail                   |  Python overlay
-     |  L1  OS sandbox (cap allowlist, no admin)    |  Tauri capabilities + Windows ACLs
-     +----------------------------------------------+
+     +--------------------------------------------------+
+     |  L6  Onboarding defaults (UI nudges)             |  React
+     |  L5  Cross-platform memory filtering             |  Python overlay + memory_tool
+     |  L4  Per-tool gates (Power-user toggle)          |  Python overlay
+     |  L3  Network egress allowlist                    |  Python overlay
+     |  L2  Workspace folder jail                       |  Python overlay
+     |  L1  OS sandbox (cap allowlist, no admin)        |  Tauri capabilities + Windows ACLs
+     +--------------------------------------------------+
 ```
 
 ## L1 — OS / Tauri capabilities
@@ -67,16 +68,46 @@ automatically by the power-user toggle). See
 
 [`python/overlays/default_toolset.py`](../python/overlays/default_toolset.py)
 forces the default Hermes toolset to the curated keep-list (see
-`DECISIONS.md`). The dangerous tools — shell (`terminal_tool`),
-`code_execution_tool`, browser automation, MCP servers, cron — are
-**only registered** when `HERMESDESK_POWER_USER=1`.
+`DECISIONS.md`). Browser automation is available to all users (it
+uses the pre-installed Edge browser via CDP, with outbound traffic
+going through the L3 network allowlist). The remaining dangerous
+tools — shell (`terminal_tool`), `code_execution_tool`, MCP servers,
+cron — are **only registered** when `HERMESDESK_POWER_USER=1`.
 
 When Power-user mode is on, those tools still go through the **shell
 approval bridge**: every command is shown to the user in a native Windows
 dialog before it runs. There is no "always allow" — every command is
 re-confirmed.
 
-## L5 — Onboarding defaults
+**Gateway toolset lock:** All gateway platform toolset keys (``telegram``,
+``weixin``, ``discord``, etc.) are forced to the non-power-user keep-list
+regardless of the toggle. See ``default_toolset.py`` and
+``ToolPolicy.gateway_keep_list()``.
+
+**Capability disclosure:** Gateway bots' system prompts include a
+permission-level notice listing their available and unavailable tools,
+and instructing them to be transparent with users who ask about
+capabilities. See ``_build_system_prompt()`` in ``run_agent.py``.
+
+## L5 — Cross-platform memory filtering
+
+[`tools/memory_tool.py`](../hermes_core/tools/memory_tool.py) tags every
+memory entry with its source platform and a timestamp on write. On read,
+gateway bots (WeChat, Telegram, etc.) are filtered to only see:
+
+- Entries they wrote themselves
+- Entries marked ``scope:shared`` (desktop entries)
+- Legacy (untagged) entries
+
+All within a configurable time window (``memory.gateway_max_age_hours``,
+default 168 hours). The desktop (``cli``) sees **all** entries unfiltered —
+it is the admin context. Tags are stripped before entering the system prompt
+and before return in tool responses; the LLM never sees metadata.
+
+This prevents a compromised or prompt-injected gateway bot from exfiltrating
+sensitive desktop conversations, while preserving shared-context UX.
+
+## L6 — Onboarding defaults
 
 The onboarding wizard never enables Power-user mode. It never presents the
 user with security-relevant toggles. The Settings page has a single
@@ -94,6 +125,10 @@ this document.
   system trust store.
 - Side-channel data exfiltration through the LLM (the LLM provider sees
   whatever Hermes sends them). Use a self-hosted endpoint if this matters.
+- A gateway bot that is itself the direct exfiltration path — memory tagging
+  prevents the LLM from reading desktop entries, but if the LLM already
+  knows a fact from earlier in the conversation, it can still repeat it.
+  Memory filtering is a data-plane control, not a conversation-plane one.
 
 ## See also
 

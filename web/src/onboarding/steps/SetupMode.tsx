@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../lib/i18n";
 import { updateDraft, useDraft } from "../../lib/store";
-import { WizardFooter, WizardFooterActions, WizardPrimaryButton, WizardSecondaryButton } from "../wizard-ui";
+import { ArrowRight } from "lucide-react";
+import { cn } from "../../lib/cn";
 
-/** Quick vs full setup path — copy stays non-technical for first-time users. */
+/** Quick vs full setup path — cards are the buttons. */
 export function SetupMode() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -11,12 +12,12 @@ export function SetupMode() {
 
   function chooseQuick() {
     updateDraft({ setupMode: "quick", useRecommendedDefaults: true });
-    nav("/onboarding/welcome");
+    nav("/onboarding/brain");
   }
 
   function chooseFull() {
     updateDraft({ setupMode: "full", useRecommendedDefaults: false });
-    nav("/onboarding/welcome");
+    nav("/onboarding/brain");
   }
 
   return (
@@ -30,31 +31,72 @@ export function SetupMode() {
         <p className="text-sm text-amber-800/90 dark:text-amber-200/90">{t("setupMode.againHint")}</p>
       ) : null}
 
-      <div className="space-y-4">
-        <div className="hd-glass-subtle space-y-2 rounded-[var(--radius-shell-lg)] p-5">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("setupMode.quickTitle")}
-          </h2>
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{t("setupMode.quickBody")}</p>
-        </div>
-        <div className="hd-glass-subtle space-y-2 rounded-[var(--radius-shell-lg)] p-5">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("setupMode.fullTitle")}
-          </h2>
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{t("setupMode.fullBody")}</p>
-        </div>
+      <div className="space-y-3">
+        <ModeCard
+          title={t("setupMode.quickTitle")}
+          body={t("setupMode.quickBody")}
+          onClick={chooseQuick}
+          recommended
+          recommendedLabel={t("brain.recommended")}
+        />
+        <ModeCard
+          title={t("setupMode.fullTitle")}
+          body={t("setupMode.fullBody")}
+          onClick={chooseFull}
+        />
       </div>
 
-      <WizardFooter>
-        <WizardFooterActions>
-          <WizardSecondaryButton onClick={chooseFull}>
-            {t("setupMode.chooseFullCta")}
-          </WizardSecondaryButton>
-          <WizardPrimaryButton onClick={chooseQuick}>
-            {t("setupMode.chooseQuickCta")}
-          </WizardPrimaryButton>
-        </WizardFooterActions>
-      </WizardFooter>
     </div>
+  );
+}
+
+function ModeCard({
+  title,
+  body,
+  onClick,
+  recommended,
+  recommendedLabel,
+}: {
+  title: string;
+  body: string;
+  onClick: () => void;
+  recommended?: boolean;
+  recommendedLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "hd-glass-subtle w-full rounded-[var(--radius-shell-lg)] p-5 text-left transition",
+        recommended
+          ? "border-amber-200/80 bg-amber-50/60 hover:border-amber-300/90 hover:bg-amber-50/80 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700/60 dark:hover:bg-amber-950/30"
+          : "hover:border-sky-300/70 hover:bg-sky-50/30 dark:hover:border-sky-700/50 dark:hover:bg-sky-950/20",
+        "active:scale-[0.99]"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+            {recommended && recommendedLabel ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                {recommendedLabel}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{body}</p>
+        </div>
+        <ArrowRight
+          className={cn(
+            "mt-0.5 h-5 w-5 shrink-0 transition",
+            recommended
+              ? "text-amber-400 dark:text-amber-600"
+              : "text-zinc-400 group-hover:text-sky-500 dark:text-zinc-500"
+          )}
+          strokeWidth={2}
+        />
+      </div>
+    </button>
   );
 }

@@ -20,6 +20,8 @@ DEFAULT_ALLOW: set[str] = {
     "raw.githubusercontent.com",
     "github.com",
     "api.github.com",
+    "huggingface.co",
+    "hf-mirror.com",
 }
 
 

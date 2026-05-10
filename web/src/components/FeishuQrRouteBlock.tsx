@@ -197,7 +197,7 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
     exitStreak.current = 0;
   }
 
-  async function manualRestartHermes() {
+  async function manualRestartAssistant() {
     setRestartErr(null);
     setRestartBusy(true);
     try {
@@ -301,7 +301,7 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
               type="button"
               className={btnClass}
               disabled={restartBusy}
-              onClick={() => void manualRestartHermes()}
+              onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.feishuRestartBusy") : t("settings.feishuRestart")}
             </button>

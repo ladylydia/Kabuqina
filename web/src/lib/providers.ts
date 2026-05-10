@@ -1,5 +1,5 @@
 /**
- * The set of LLM providers HermesDesk's onboarding wizard knows about.
+ * The set of LLM providers Kabuqina's onboarding wizard knows about.
  * Each provider lists:
  *   - id            stable internal id matched in the Python overlay
  *   - host          the API host added to the network allowlist

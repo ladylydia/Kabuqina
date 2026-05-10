@@ -97,7 +97,10 @@ fn random_token() -> String {
 }
 
 async fn serve(listener: TcpListener, state: Arc<State>) {
-    log::info!("bridge serve loop started on {:?}", listener.local_addr().ok());
+    log::info!(
+        "bridge serve loop started on {:?}",
+        listener.local_addr().ok()
+    );
     loop {
         let (stream, peer) = match listener.accept().await {
             Ok(p) => p,
@@ -168,7 +171,9 @@ async fn handle_conn(mut stream: TcpStream, st: Arc<State>) -> std::io::Result<(
 
     // GET /shell-chat/<token> — redirect Tauri main webview back to the shell /chat (Hermes banner link).
     if method == "GET" && path.starts_with("/shell-chat/") {
-        let tok = path.trim_start_matches("/shell-chat/").trim_start_matches('/');
+        let tok = path
+            .trim_start_matches("/shell-chat/")
+            .trim_start_matches('/');
         if !tok.is_empty() && tok == st.desk_auth_token {
             let target = shell_chat_redirect_target(&st.app);
             return write_redirect(&mut stream, 302, &target).await;
@@ -179,7 +184,14 @@ async fn handle_conn(mut stream: TcpStream, st: Arc<State>) -> std::io::Result<(
     // GET /secret/<token>
     if method == "GET" && path == format!("/secret/{}", st.secret_token) {
         let body = crate::secrets::read_current_secret(&st.app).unwrap_or_default();
-        return write_response(&mut stream, 200, "OK", "text/plain; charset=utf-8", body.into_bytes()).await;
+        return write_response(
+            &mut stream,
+            200,
+            "OK",
+            "text/plain; charset=utf-8",
+            body.into_bytes(),
+        )
+        .await;
     }
 
     // POST /approval/<token>
@@ -189,7 +201,8 @@ async fn handle_conn(mut stream: TcpStream, st: Arc<State>) -> std::io::Result<(
         while body.len() < content_length {
             let need = content_length - body.len();
             let mut tmp = vec![0u8; need.min(4096)];
-            let n = match tokio::time::timeout(Duration::from_secs(30), stream.read(&mut tmp)).await {
+            let n = match tokio::time::timeout(Duration::from_secs(30), stream.read(&mut tmp)).await
+            {
                 Ok(Ok(0)) => break,
                 Ok(Ok(n)) => n,
                 Ok(Err(e)) => return Err(e),
@@ -200,12 +213,31 @@ async fn handle_conn(mut stream: TcpStream, st: Arc<State>) -> std::io::Result<(
 
         let payload: serde_json::Value =
             serde_json::from_slice(&body).unwrap_or(serde_json::json!({}));
-        let cmd = payload.get("command").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let cwd = payload.get("cwd").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let reason = payload.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let cmd = payload
+            .get("command")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let cwd = payload
+            .get("cwd")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let reason = payload
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let allowed = ask_user_to_approve(&st.app, &cmd, &cwd, &reason).await;
         let resp_body = serde_json::json!({"allowed": allowed}).to_string();
-        return write_response(&mut stream, 200, "OK", "application/json", resp_body.into_bytes()).await;
+        return write_response(
+            &mut stream,
+            200,
+            "OK",
+            "application/json",
+            resp_body.into_bytes(),
+        )
+        .await;
     }
 
     write_status(&mut stream, 404, "Not Found").await
@@ -263,17 +295,12 @@ async fn ask_user_to_approve(app: &AppHandle, cmd: &str, cwd: &str, reason: &str
     } else {
         format!("{reason}\n\nCommand:\n{cmd}\n\nFolder:\n{cwd}")
     };
-    let title = "HermesDesk wants to run a command".to_string();
+    let title = "Kabuqina wants to run a command".to_string();
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        let dlg = app_clone
-            .dialog()
-            .message(body)
-            .title(title)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Allow this once".into(),
-                "Deny".into(),
-            ));
+        let dlg = app_clone.dialog().message(body).title(title).buttons(
+            MessageDialogButtons::OkCancelCustom("Allow this once".into(), "Deny".into()),
+        );
         dlg.show(move |allowed| {
             let _ = tx.send(allowed);
         });

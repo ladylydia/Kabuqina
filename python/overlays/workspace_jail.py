@@ -152,12 +152,20 @@ def install() -> None:
 
     if bundle_env:
         extra_read.append(Path(bundle_env))
-    if data_env:
+
+    # Gateway children (bots) must NOT get the full data_dir in extra_write —
+    # that would allow cross-profile reads/writes via the file tool.  They only
+    # get their own HERMES_HOME (a per-platform profile), set by the Rust
+    # supervisor at spawn time.  The host (desktop agent) gets the full
+    # data_dir as before.
+    is_gateway_child = bool(os.environ.get("HERMESDESK_GATEWAY_PLATFORM"))
+    if data_env and not is_gateway_child:
         extra_write.append(Path(data_env))
 
     # Hermes' own config/cache root (set by desktop_entrypoint to a path
     # inside HERMESDESK_DATA_DIR). Without this Hermes can't persist its
     # config.yaml, sessions, or permanent allowlist.
+    # For gateway children HERMES_HOME is set to <data_dir>/hermes-home/profiles/<platform>/.
     hermes_home = os.environ.get("HERMES_HOME")
     if hermes_home:
         extra_write.append(Path(hermes_home))

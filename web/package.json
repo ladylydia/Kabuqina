@@ -1,9 +1,9 @@
 {
-  "name": "hermesdesk-web",
+  "name": "kabuqina-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "HermesDesk onboarding wizard + UI overlays. Loaded by the Tauri shell before handing off to the Hermes web UI.",
+  "description": "Kabuqina onboarding wizard + UI overlays. Loaded by the Tauri shell before handing off to the local dashboard.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

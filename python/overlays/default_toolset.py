@@ -13,6 +13,11 @@ For HermesDesk we *write* a deterministic config on first launch (and on
 every launch when the Power-user toggle changes), so the user never has
 to use `hermes tools` from a terminal they don't have.
 
+Beyond the desktop (``cli``) key, this overlay **locks every gateway platform
+key** (``telegram``, ``weixin``, ``discord``, etc.) to the non-power-user
+keep-list.  Gateway bots never receive expanded tools regardless of the
+power-user toggle.  See ``ToolPolicy.gateway_keep_list()``.
+
 The toolset-resolution logic is delegated to
 ``python/src/tool_policy.py`` (Phase 3D).  This overlay only
 writes the config file.
@@ -42,6 +47,7 @@ def _resolved_set() -> list[str]:
 
 def install() -> None:
     enabled = _resolved_set()
+    wrote = False
 
     try:
         from hermes_cli.config import load_config, save_config  # type: ignore
@@ -64,10 +70,29 @@ def install() -> None:
     # also call this overlay's `install()` after writing).
     if current != enabled:
         pts["cli"] = enabled
-        try:
-            save_config(cfg)
-            log.info("seeded platform_toolsets[cli] -> %s", enabled)
-        except Exception as e:
-            log.warning("could not save toolset config: %s", e)
+        wrote = True
+        log.info("seeded platform_toolsets[cli] -> %s", enabled)
     else:
         log.debug("toolset config already matches desired set")
+
+    # Force all gateway platform toolset keys to non-power-user keep-list.
+    # Gateway bots (weixin, telegram, etc.) never get expanded tools.
+    try:
+        from hermes_cli.platforms import PLATFORMS as _PLATFORMS
+        gw_list = ToolPolicy.gateway_keep_list()
+        for key in _PLATFORMS.keys():
+            if key == "cli":
+                continue
+            if pts.get(key) != gw_list:
+                pts[key] = gw_list
+                wrote = True
+                log.info("locked platform_toolsets[%s] -> %s", key, gw_list)
+    except Exception as e:
+        log.warning("could not seed gateway platform toolsets: %s", e)
+
+    if wrote:
+        try:
+            save_config(cfg)
+            log.info("toolset config saved")
+        except Exception as e:
+            log.warning("could not save toolset config: %s", e)

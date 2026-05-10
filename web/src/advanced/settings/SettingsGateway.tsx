@@ -1,7 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../lib/i18n";
 import {
   Bot,
   Building2,
+  ChevronRight,
+  Mail,
   MessageCircle,
   QrCode,
   Send,
@@ -10,13 +13,6 @@ import {
 import { Button } from "../../components/ui/Button";
 import { Section } from "../../components/ui/Section";
 import { Toggle } from "../../components/ui/Toggle";
-import { DingTalkSettingsBlock } from "../../components/DingTalkSettingsBlock";
-import { FeishuQrRouteBlock } from "../../components/FeishuQrRouteBlock";
-import { PairingSettingsBlock } from "../../components/PairingSettingsBlock";
-import { TelegramSettingsBlock } from "../../components/TelegramSettingsBlock";
-import { QqbotQrRouteBlock } from "../../components/QqbotQrRouteBlock";
-import { WeComSettingsBlock } from "../../components/WeComSettingsBlock";
-import { WeixinQrRouteCBlock } from "../../components/WeixinQrRouteCBlock";
 import type { Status } from "../Settings";
 import type { GatewayStatus } from "../../features/gateway/useGatewayStatus";
 
@@ -24,7 +20,6 @@ interface Props {
   gatewayStatus: GatewayStatus;
   autoStartGateway: boolean;
   onToggleAutoStart: (next: boolean) => void;
-  onOpenConsole: (subPath?: string | null) => void;
   onStatusChange: (status: Status | null) => void;
   status: Status | null;
 }
@@ -41,15 +36,23 @@ function platformLabel(key: string): string {
   return map[key] ?? key;
 }
 
+const platformItems = [
+  { key: "telegram", label: "Telegram", icon: Send, path: "/settings/telegram" },
+  { key: "feishu", label: "飞书", icon: Building2, path: "/settings/feishu" },
+  { key: "qq", label: "QQ", icon: Bot, path: "/settings/qq" },
+  { key: "weixin", label: "微信", icon: QrCode, path: "/settings/weixin" },
+  { key: "dingtalk", label: "钉钉", icon: Store, path: "/settings/dingtalk" },
+  { key: "wecom", label: "企微", icon: Store, path: "/settings/wecom" },
+  { key: "email", label: "Email", icon: Mail, path: "/settings/email" },
+];
+
 export function SettingsGateway({
   gatewayStatus,
   autoStartGateway,
   onToggleAutoStart,
-  onOpenConsole,
-  onStatusChange,
-  status,
 }: Props) {
   const { t } = useI18n();
+  const nav = useNavigate();
   const {
     running: gatewayRunning,
     eligible: gatewayEligible,
@@ -67,12 +70,7 @@ export function SettingsGateway({
     <>
       <Section icon={MessageCircle} title={t("settings.gatewayTitle")} desc={t("settings.gatewayLead")}>
         <div className="w-full min-w-0 space-y-3">
-          <div>
-            <Button type="button" onClick={() => void onOpenConsole("/env")}>
-              {t("settings.gatewayOpenKeys")}
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-700 dark:text-zinc-200">{t("settings.gatewayAuto")}</span>
             <Toggle value={autoStartGateway} onChange={(v) => onToggleAutoStart(v)} />
           </div>
@@ -86,17 +84,7 @@ export function SettingsGateway({
               {t("settings.gatewayEmbedStale")}
             </p>
           ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => void startGateway()}
-              disabled={!gatewayEligible || gatewayStarting}
-            >
-              {gatewayStarting ? t("settings.gatewayStarting") : t("settings.gatewayStart")}
-            </Button>
-            <Button type="button" onClick={() => void stopGateway()} disabled={gatewayStarting}>
-              {t("settings.gatewayStop")}
-            </Button>
+          <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-zinc-600 dark:text-zinc-300">
               {gatewayStarting
                 ? t("settings.gatewayStatusChecking")
@@ -104,6 +92,18 @@ export function SettingsGateway({
                   ? t("settings.gatewayStatusRunning")
                   : t("settings.gatewayStatusStopped")}
             </span>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                type="button"
+                onClick={() => void startGateway()}
+                disabled={!gatewayEligible || gatewayStarting}
+              >
+                {gatewayStarting ? t("settings.gatewayStarting") : t("settings.gatewayStart")}
+              </Button>
+              <Button type="button" onClick={() => void stopGateway()} disabled={gatewayStarting}>
+                {t("settings.gatewayStop")}
+              </Button>
+            </div>
           </div>
           {gatewayEligible && gatewayStarting && gatewayPlatforms ? (
             <div className="rounded-md border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
@@ -157,49 +157,21 @@ export function SettingsGateway({
         </div>
       </Section>
 
-      <Section icon={Send} title={t("settings.telegramTitle")} desc={t("settings.telegramLead")}>
-        <TelegramSettingsBlock />
-        <div className="mt-4 border-t border-zinc-200/80 pt-3 dark:border-zinc-700/80">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-2">
-            {t("settings.telegramPairingTitle")}
-          </p>
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-500 mb-3">
-            {t("settings.telegramPairingLead")}
-          </p>
-          <PairingSettingsBlock platform="telegram" />
+      <Section title={t("settings.platformTitle")}>
+        <div className="space-y-1">
+          {platformItems.map(({ key, label, icon: Icon, path }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => nav(path)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60"
+            >
+              <Icon className="size-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-200">{label}</span>
+              <ChevronRight className="size-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
+            </button>
+          ))}
         </div>
-      </Section>
-
-      <Section icon={Building2} title={t("settings.feishuTitle")} desc={t("settings.feishuLead")}>
-        <FeishuQrRouteBlock
-          onHermesRunningChange={(running) =>
-            onStatusChange(status ? { ...status, pythonRunning: running } : status)
-          }
-        />
-      </Section>
-
-      <Section icon={Bot} title={t("settings.qqTitle")} desc={t("settings.qqLead")}>
-        <QqbotQrRouteBlock
-          onHermesRunningChange={(running) =>
-            onStatusChange(status ? { ...status, pythonRunning: running } : status)
-          }
-        />
-      </Section>
-
-      <Section icon={QrCode} title={t("settings.weixinTitle")} desc={t("settings.weixinLead")}>
-        <WeixinQrRouteCBlock
-          onHermesRunningChange={(running) =>
-            onStatusChange(status ? { ...status, pythonRunning: running } : status)
-          }
-        />
-      </Section>
-
-      <Section icon={Store} title={t("settings.dingtalkTitle")} desc={t("settings.dingtalkLead")}>
-        <DingTalkSettingsBlock />
-      </Section>
-
-      <Section icon={Store} title={t("settings.wecomTitle")} desc={t("settings.wecomLead")}>
-        <WeComSettingsBlock />
       </Section>
     </>
   );

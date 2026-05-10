@@ -1,14 +1,27 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
+  CHAT_STREAM_EVENT,
+  cmdChatPreview,
   cmdChatSend,
+  cmdChatSendStream,
   cmdDeskStop,
   fileToDeskAttachment,
   isRecord,
   parseChatSend,
+  type ChatStreamEnvelope,
+  type ChatStreamEvent,
   type DeskAttachmentPayload,
   type UiMsg,
 } from "../chat-api";
+import {
+  applyEvents,
+  emptyProgress,
+  type AgentProgressState,
+} from "./useAgentProgress";
+
+const POLL_INTERVAL_MS = 300;
 
 export function useSendMessage({
   activeSessionId,
@@ -25,15 +38,29 @@ export function useSendMessage({
   threadModel: string;
   setThreadModel: (model: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<UiMsg[]>>;
-  loadSessions: () => Promise<void>;
+  loadSessions: (options?: { silent?: boolean }) => Promise<void>;
   setApiRequiredOpen: (open: boolean) => void;
   setSendErr: (err: string | null) => void;
 }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<AgentProgressState | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<DeskAttachmentPayload[]>([]);
   const stopTurnRef = useRef(false);
   const inFlightSessionIdRef = useRef<string | null>(null);
+  const activeSessionIdRef = useRef(activeSessionId);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Latest progress snapshot — read inside poll callback so the next `since` cursor is fresh. */
+  const progressRef = useRef<AgentProgressState | null>(null);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+    const inFlight = inFlightSessionIdRef.current;
+    if (!inFlight) {
+      return;
+    }
+    setProgress(activeSessionId === inFlight ? progressRef.current : null);
+  }, [activeSessionId]);
 
   const onAddFiles = useCallback(async (list: FileList | null) => {
     if (!list?.length) {
@@ -58,12 +85,49 @@ export function useSendMessage({
     setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const stopProgressPoll = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
+  const mergeProgress = useCallback((p: unknown, visibleSessionId: string) => {
+    if (!isRecord(p)) {
+      return;
+    }
+    const prev = progressRef.current ?? emptyProgress();
+    const rawEvents = Array.isArray(p.events) ? p.events : [];
+    const steps = applyEvents(prev.steps, rawEvents as Parameters<typeof applyEvents>[1]);
+    const merged: AgentProgressState = {
+      running: typeof p.running === "boolean" ? p.running : prev.running,
+      status: typeof p.status === "string" ? p.status : prev.status,
+      iteration: typeof p.iteration === "number" ? p.iteration : prev.iteration,
+      max_iterations:
+        typeof p.max_iterations === "number" ? p.max_iterations : prev.max_iterations,
+      current_tool: typeof p.current_tool === "string" ? p.current_tool : null,
+      error: typeof p.error === "string" ? p.error : null,
+      steps,
+      nextSeq:
+        typeof p.next_seq === "number" && p.next_seq > prev.nextSeq
+          ? p.next_seq
+          : prev.nextSeq,
+    };
+    progressRef.current = merged;
+    if (activeSessionIdRef.current === visibleSessionId) {
+      setProgress(merged);
+    }
+  }, []);
+
   const onStopAgent = useCallback(async () => {
     const sid = inFlightSessionIdRef.current || activeSessionId;
     if (!sid) {
       return;
     }
     stopTurnRef.current = true;
+    stopProgressPoll();
+    setProgress(null);
+    progressRef.current = null;
     setSending(false);
     setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
     setSendErr(null);
@@ -79,7 +143,7 @@ export function useSendMessage({
             : String(e);
       setSendErr(msg);
     }
-  }, [activeSessionId, setMessages, setSendErr]);
+  }, [activeSessionId, setMessages, setSendErr, stopProgressPoll]);
 
   const onSend = useCallback(async () => {
     const text = input.trim();
@@ -111,7 +175,15 @@ export function useSendMessage({
           : `desk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       setActiveSessionId(sessionForSend);
     }
+    activeSessionIdRef.current = sessionForSend;
     inFlightSessionIdRef.current = sessionForSend;
+
+    // Reset progress for this turn.
+    const initial = emptyProgress();
+    initial.running = true;
+    initial.status = "starting";
+    progressRef.current = initial;
+    setProgress(initial);
 
     const attLabel =
       atts.length > 0
@@ -125,7 +197,6 @@ export function useSendMessage({
       text: userText,
       timestamp: nowSec,
     };
-    setMessages((m) => [...m, userMsg]);
     const placeholder: UiMsg = {
       id: "pending-assistant",
       role: "assistant",
@@ -133,10 +204,128 @@ export function useSendMessage({
       model: threadModel || undefined,
       timestamp: nowSec,
     };
-    setMessages((m) => [...m, placeholder]);
+    setMessages((m) => [...m, userMsg, placeholder]);
+
+    const isVisible = () => activeSessionIdRef.current === sessionForSend;
+    const requestId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `stream-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    let streamedText = "";
+    let animationFrame: number | null = null;
+    let sawStreamEvent = false;
+    let unlistenStream: UnlistenFn | null = null;
+
+    const upsertPendingAssistant = (nextText: string, finalModel?: string, finalize = false) => {
+      if (!isVisible()) {
+        return;
+      }
+      const ts = Math.floor(Date.now() / 1000);
+      setMessages((m) => {
+        let found = false;
+        const next = m.map((x) => {
+          if (x.id !== "pending-assistant") {
+            return x;
+          }
+          found = true;
+          return {
+            ...x,
+            id: finalize ? `a-${Date.now()}` : x.id,
+            text: nextText || "…",
+            model: finalModel || x.model,
+            timestamp: finalize ? ts : x.timestamp,
+          };
+        });
+        if (found) {
+          return next;
+        }
+        return [
+          ...m,
+          {
+            id: finalize ? `a-${Date.now()}` : "pending-assistant",
+            role: "assistant",
+            text: nextText || "…",
+            model: finalModel || threadModel || undefined,
+            timestamp: ts,
+          },
+        ];
+      });
+    };
+
+    const flushStreamedText = () => {
+      animationFrame = null;
+      upsertPendingAssistant(streamedText);
+    };
+
+    const queueDelta = (delta: string) => {
+      streamedText += delta;
+      if (animationFrame == null) {
+        animationFrame = window.requestAnimationFrame(flushStreamedText);
+      }
+    };
+
+    const startFallbackProgressPoll = () => {
+      let seenRunning = false;
+      let inactivePolls = 0;
+      const pollSid = sessionForSend;
+      const pollProgress = async () => {
+        try {
+          const since = progressRef.current?.nextSeq ?? 0;
+          const p = await cmdChatPreview(pollSid, since);
+          if (p.running) {
+            seenRunning = true;
+          } else if (p.status === "inactive" && !seenRunning && inactivePolls < 12) {
+            inactivePolls += 1;
+            return;
+          }
+          mergeProgress(p, pollSid);
+          if (!p.running && p.status !== "inactive") {
+            stopProgressPoll();
+          }
+        } catch {
+          // Preserve the last visible progress; send completion/error owns cleanup.
+        }
+      };
+      void pollProgress();
+      progressTimerRef.current = setInterval(pollProgress, POLL_INTERVAL_MS);
+    };
+
+    const handleStreamEvent = (event: ChatStreamEvent) => {
+      sawStreamEvent = true;
+      if (event.session_id && event.session_id !== sessionForSend) {
+        return;
+      }
+      if (event.progress) {
+        mergeProgress(event.progress, sessionForSend);
+      }
+      if (event.type === "delta" && typeof event.text === "string" && !stopTurnRef.current) {
+        queueDelta(event.text);
+      }
+      if (event.type === "error" && !stopTurnRef.current && isVisible()) {
+        setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
+        setSendErr(event.detail || event.error || "Stream failed");
+      }
+    };
 
     try {
-      const raw = await cmdChatSend(text, sessionForSend, atts.length ? atts : null);
+      let raw: unknown;
+      try {
+        unlistenStream = await listen<ChatStreamEnvelope>(CHAT_STREAM_EVENT, ({ payload }) => {
+          if (payload?.requestId !== requestId) {
+            return;
+          }
+          handleStreamEvent(payload.event);
+        });
+        raw = await cmdChatSendStream(requestId, text, sessionForSend, atts.length ? atts : null);
+      } catch (streamErr) {
+        unlistenStream?.();
+        unlistenStream = null;
+        if (sawStreamEvent) {
+          throw streamErr;
+        }
+        startFallbackProgressPoll();
+        raw = await cmdChatSend(text, sessionForSend, atts.length ? atts : null);
+      }
       const parsed = parseChatSend(raw);
       if (stopTurnRef.current) {
         setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
@@ -147,29 +336,24 @@ export function useSendMessage({
         setSendErr(parsed.err);
         return;
       }
-      setActiveSessionId(parsed.sessionId);
       const resolvedModel = (parsed.model || "").trim() || threadModel;
-      if (resolvedModel) {
+      if (isVisible()) {
+        setActiveSessionId(parsed.sessionId);
+      }
+      if (resolvedModel && isVisible()) {
         setThreadModel(resolvedModel);
       }
       if (stopTurnRef.current) {
         setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
         return;
       }
-      setMessages((m) =>
-        m.map((x) =>
-          x.id === "pending-assistant"
-            ? {
-                ...x,
-                id: `a-${Date.now()}`,
-                text: parsed.text,
-                model: resolvedModel || undefined,
-                timestamp: Math.floor(Date.now() / 1000),
-              }
-            : x
-        )
-      );
-      void loadSessions();
+      if (animationFrame != null) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      streamedText = parsed.text || streamedText;
+      upsertPendingAssistant(streamedText, resolvedModel || undefined, true);
+      void loadSessions({ silent: true });
     } catch (e) {
       if (!stopTurnRef.current) {
         setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
@@ -182,6 +366,13 @@ export function useSendMessage({
         setSendErr(msg);
       }
     } finally {
+      unlistenStream?.();
+      if (animationFrame != null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      stopProgressPoll();
+      setProgress(null);
+      progressRef.current = null;
       setSending(false);
       stopTurnRef.current = false;
       inFlightSessionIdRef.current = null;
@@ -198,12 +389,15 @@ export function useSendMessage({
     loadSessions,
     setApiRequiredOpen,
     setSendErr,
+    mergeProgress,
+    stopProgressPoll,
   ]);
 
   return {
     input,
     setInput,
     sending,
+    progress,
     pendingAttachments,
     onAddFiles,
     onRemoveAttachment,

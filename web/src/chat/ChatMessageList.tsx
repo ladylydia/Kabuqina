@@ -2,13 +2,16 @@ import { useEffect, useRef } from "react";
 import { BookOpen, Code2, FileText } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import type { UiMsg } from "./chat-api";
+import { AgentProgress } from "./AgentProgress";
 import { ChatMessage } from "./ChatMessage";
 import { cn } from "../lib/cn";
+import type { AgentProgressState } from "./hooks/useAgentProgress";
 
 interface ChatMessageListProps {
   messages: UiMsg[];
   sending?: boolean;
   sendErr?: string | null;
+  progress?: AgentProgressState | null;
   onPromptClick?: (text: string) => void;
 }
 
@@ -43,12 +46,24 @@ function EmptyState({ onPromptClick }: { onPromptClick?: (text: string) => void 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6 py-8 sm:py-10">
       <div className="flex w-full max-w-lg translate-y-5 flex-col items-center text-center sm:translate-y-7">
-        <img
-          src="/hi-agent-wordmark.png"
-          alt={brand}
-          className="mb-6 h-auto max-h-14 w-auto max-w-[min(85vw,280px)] object-contain object-center sm:mb-7 sm:max-h-16 sm:max-w-[320px] dark:opacity-95"
-          decoding="async"
-        />
+        <div className="mb-6 flex flex-col items-center gap-3 sm:mb-7">
+          <img
+            src="/kabuqina_na_blue_128.png"
+            alt={brand}
+            className="h-16 w-16 object-contain object-center dark:opacity-95"
+            width={64}
+            height={64}
+            decoding="async"
+          />
+          <div className="text-center">
+            <div className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              {brand}
+            </div>
+            <div className="mt-1 font-mono text-xs uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+              Kabuqina
+            </div>
+          </div>
+        </div>
         <div
           className="flex flex-wrap justify-center gap-2.5"
           role="group"
@@ -83,6 +98,7 @@ export function ChatMessageList({
   messages,
   sending = false,
   sendErr,
+  progress,
   onPromptClick,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -91,9 +107,12 @@ export function ChatMessageList({
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     });
-  }, [messages, sending]);
+  }, [messages, sending, progress?.nextSeq, progress?.status]);
 
   const isEmpty = messages.length === 0 && !sendErr;
+  const pendingAssistant = messages.find((m) => m.id === "pending-assistant");
+  const completedMessages = messages.filter((m) => m.id !== "pending-assistant");
+  const pendingVisibleText = !!pendingAssistant?.text.trim().replace(/^[.…]+$/, "");
 
   return (
     <div
@@ -106,16 +125,28 @@ export function ChatMessageList({
         <EmptyState onPromptClick={onPromptClick} />
       ) : (
         <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-5">
-          {messages.map((m) => (
+          {completedMessages.map((m) => (
             <ChatMessage
               key={m.id}
               role={m.role}
               text={m.text}
               model={m.model}
               timestamp={m.timestamp}
+              streaming={false}
             />
           ))}
-          {sending && messages[messages.length - 1]?.role !== "assistant" && <TypingIndicator />}
+          {progress?.running && <AgentProgress progress={progress} />}
+          {pendingAssistant && (
+            <ChatMessage
+              key={pendingAssistant.id}
+              role={pendingAssistant.role}
+              text={pendingAssistant.text}
+              model={pendingAssistant.model}
+              timestamp={pendingAssistant.timestamp}
+              streaming={sending}
+            />
+          )}
+          {sending && !progress?.running && !pendingVisibleText && <TypingIndicator />}
           {sendErr && (
             <div className="hd-semantic-error rounded-lg px-3 py-2 text-sm">
               {sendErr}

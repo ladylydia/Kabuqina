@@ -1,4 +1,4 @@
-"""Whitelist dispatch for ``run_builtin_helper`` (needs ``hermes/`` submodule on sys.path)."""
+"""Whitelist dispatch for ``run_builtin_helper`` (needs ``hermes_core/`` on sys.path)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
-_HERMES = _REPO / "hermes"
+_HERMES = _REPO / "hermes_core"
 _PYTHON = _REPO / "python"
 
 
@@ -20,7 +20,7 @@ def _ensure_paths() -> None:
             sys.path.insert(0, p)
 
 
-@unittest.skipUnless(_HERMES.is_dir() and (_HERMES / "tools" / "registry.py").is_file(), "hermes submodule missing")
+@unittest.skipUnless(_HERMES.is_dir() and (_HERMES / "tools" / "registry.py").is_file(), "hermes_core missing")
 class TestBuiltinHelpersOverlay(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

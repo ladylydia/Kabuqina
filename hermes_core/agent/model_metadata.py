@@ -529,8 +529,16 @@ def _add_model_aliases(cache: Dict[str, Dict[str, Any]], model_id: str, entry: D
 
 
 def fetch_model_metadata(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
-    """Fetch model metadata from OpenRouter (cached for 1 hour)."""
+    """Fetch model metadata from OpenRouter (cached for 1 hour).
+
+    HermesDesk gateway children use the user's configured provider only —
+    OpenRouter metadata is irrelevant and the fetch can time out (10 s) on
+    networks where openrouter.ai is slow or gated by a proxy.
+    """
     global _model_metadata_cache, _model_metadata_cache_time
+
+    if os.environ.get("HERMESDESK_GATEWAY_PLATFORM"):
+        return _model_metadata_cache or {}
 
     if not force_refresh and _model_metadata_cache and (time.time() - _model_metadata_cache_time) < _MODEL_CACHE_TTL:
         return _model_metadata_cache

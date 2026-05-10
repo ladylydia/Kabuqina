@@ -1679,6 +1679,9 @@ class AIAgent:
                     self._memory_store = MemoryStore(
                         memory_char_limit=mem_config.get("memory_char_limit", 2200),
                         user_char_limit=mem_config.get("user_char_limit", 1375),
+                        source_platform=self.platform or "cli",
+                        gateway_max_age_hours=mem_config.get("gateway_max_age_hours", 168),
+                        chat_type=self._chat_type or "",
                     )
                     self._memory_store.load_from_disk()
             except Exception:
@@ -4879,6 +4882,17 @@ class AIAgent:
                 user_block = self._memory_store.format_for_system_prompt("user")
                 if user_block:
                     prompt_parts.append(user_block)
+            # Host-shared preferences (read-only preamble, not injected in group
+            # chats — privacy).
+            host_prefs_block = self._memory_store.format_for_system_prompt("host_prefs")
+            if host_prefs_block:
+                rendered = (
+                    "═" * 46 + "\n"
+                    "HOST PREFERENCES (shared with all bots — read-only)\n"
+                    "═" * 46 + "\n"
+                    + host_prefs_block
+                )
+                prompt_parts.append(rendered)
 
         # External memory provider system prompt block (additive to built-in)
         if self._memory_manager:
@@ -4959,6 +4973,22 @@ class AIAgent:
                     prompt_parts.append(_entry.platform_hint)
             except Exception:
                 pass
+
+        # Gateway permission disclosure — non-CLI platforms have reduced
+        # tool access.  Tell the agent its capability tier and instruct it
+        # to be transparent with users.
+        if platform_key and platform_key != "cli":
+            prompt_parts.append(
+                "You are running with standard user permissions on this "
+                "messaging platform.\n\n"
+                "Available tools: web search, file read/write, vision, "
+                "image generation, text-to-speech, skills, todo list, "
+                "and web browser.\n"
+                "NOT available: shell/terminal commands, code execution, "
+                "MCP servers, or mixture-of-agents.\n\n"
+                "If a user asks about your capabilities or permissions, "
+                "be direct and honest about what you can and cannot do."
+            )
 
         return "\n\n".join(p.strip() for p in prompt_parts if p.strip())
 
@@ -10451,6 +10481,11 @@ class AIAgent:
         # Main conversation loop
         api_call_count = 0
         final_response = None
+        self._progress = {
+            "running": True, "status": "starting",
+            "iteration": 0, "max_iterations": self.max_iterations,
+            "current_tool": None, "error": None,
+        }
         interrupted = False
         codex_ack_continuations = 0
         length_continue_retries = 0
@@ -10512,6 +10547,7 @@ class AIAgent:
             
             api_call_count += 1
             self._api_call_count = api_call_count
+            self._progress.update({"status": "thinking", "iteration": api_call_count, "current_tool": None})
             self._touch_activity(f"starting API call #{api_call_count}")
 
             # Grace call: the budget is exhausted but we gave the model one
@@ -13002,6 +13038,9 @@ class AIAgent:
                         except Exception:
                             pass
 
+                    tool_names = [tc.function.name for tc in (assistant_message.tool_calls or [])]
+                    self._progress.update({"status": "tool" if tool_names else "thinking", "current_tool": tool_names[0] if tool_names else None})
+
                     self._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
 
                     # Reset per-turn retry counters after successful tool
@@ -13369,6 +13408,7 @@ class AIAgent:
                     _turn_exit_reason = f"text_response(finish_reason={finish_reason})"
                     if not self.quiet_mode:
                         self._safe_print(f"🎉 Conversation completed after {api_call_count} OpenAI-compatible API call(s)")
+                    self._progress.update({"running": False, "status": "done", "current_tool": None})
                     break
                 
             except Exception as e:
@@ -13416,6 +13456,7 @@ class AIAgent:
                 if api_call_count >= self.max_iterations - 1:
                     _turn_exit_reason = f"error_near_max_iterations({error_msg[:80]})"
                     final_response = f"I apologize, but I encountered repeated errors: {error_msg}"
+                    self._progress.update({"running": False, "status": "error", "error": error_msg, "current_tool": None})
                     # Append as assistant so the history stays valid for
                     # session resume (avoids consecutive user messages).
                     messages.append({"role": "assistant", "content": final_response})
@@ -13439,8 +13480,8 @@ class AIAgent:
                     "— requesting summary..."
                 )
             final_response = self._handle_max_iterations(messages, api_call_count)
-        
-        # Determine if conversation completed successfully
+
+        self._progress.update({"running": False, "status": self._progress.get("status", "done") if final_response else "interrupted"})
         completed = final_response is not None and api_call_count < self.max_iterations
 
         # Save trajectory if enabled.  ``user_message`` may be a multimodal

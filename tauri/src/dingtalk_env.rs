@@ -59,13 +59,18 @@ pub fn cmd_dingtalk_save_config(
     let mut found_allow_all = false;
     for line in &mut lines {
         let trimmed = line.trim();
-        if trimmed.starts_with("DINGTALK_CLIENT_ID=") || trimmed.starts_with("DINGTALK_CLIENT_ID ") {
+        if trimmed.starts_with("DINGTALK_CLIENT_ID=") || trimmed.starts_with("DINGTALK_CLIENT_ID ")
+        {
             *line = format!("DINGTALK_CLIENT_ID={}", cid);
             found_id = true;
-        } else if trimmed.starts_with("DINGTALK_CLIENT_SECRET=") || trimmed.starts_with("DINGTALK_CLIENT_SECRET ") {
+        } else if trimmed.starts_with("DINGTALK_CLIENT_SECRET=")
+            || trimmed.starts_with("DINGTALK_CLIENT_SECRET ")
+        {
             *line = format!("DINGTALK_CLIENT_SECRET={}", csec);
             found_secret = true;
-        } else if trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS=") || trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS ") {
+        } else if trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS=")
+            || trimmed.starts_with("DINGTALK_ALLOW_ALL_USERS ")
+        {
             *line = "DINGTALK_ALLOW_ALL_USERS=true".to_string();
             found_allow_all = true;
         }

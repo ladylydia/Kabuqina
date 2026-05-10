@@ -11,8 +11,9 @@ import os
 
 log = logging.getLogger("hermesdesk.toolset")
 
-KEEP_LIST = ["web", "file", "vision", "image_gen", "tts", "skills", "todo"]
-POWER_USER_EXTRA = ["browser", "terminal", "code_execution", "moa"]
+KEEP_LIST = ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser"]
+POWER_USER_EXTRA = ["terminal", "code_execution", "moa"]
+GATEWAY_KEEP_LIST = ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser"]
 
 
 class ToolPolicy:
@@ -27,3 +28,7 @@ class ToolPolicy:
     @staticmethod
     def is_power_user() -> bool:
         return os.environ.get("HERMESDESK_POWER_USER") == "1"
+
+    @staticmethod
+    def gateway_keep_list() -> list[str]:
+        return list(GATEWAY_KEEP_LIST)

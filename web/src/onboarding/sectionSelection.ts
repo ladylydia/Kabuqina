@@ -8,6 +8,7 @@ export type PostPassSelectionMode = "none" | "single" | "multi";
 /** Per post-pass section: how the roster behaves in the UI. */
 export const SECTION_SELECTION_MODE: Record<PostPassSectionId, PostPassSelectionMode> = {
   tts: "single",
+  stt: "single",
   terminal: "single",
   gateway: "multi",
   tools: "multi",
@@ -31,7 +32,12 @@ export function getInitialSectionSelection(
     return { kind: "skip" };
   }
   const items = CATALOG_BY_SECTION[section];
-  if (section === "tts" || section === "terminal" || section === "agent") {
+  if (
+    section === "tts" ||
+    section === "stt" ||
+    section === "terminal" ||
+    section === "agent"
+  ) {
     const id = findRecommendedSingleId(items);
     if (id) return { kind: "single", optionId: id };
   }

@@ -197,7 +197,7 @@ export function QqbotQrRouteBlock({ className, onSuccess, onHermesRunningChange 
     qqExitStreak.current = 0;
   }
 
-  async function manualRestartHermes() {
+  async function manualRestartAssistant() {
     setRestartErr(null);
     setRestartBusy(true);
     try {
@@ -296,7 +296,7 @@ export function QqbotQrRouteBlock({ className, onSuccess, onHermesRunningChange 
               type="button"
               className={btnClass}
               disabled={restartBusy}
-              onClick={() => void manualRestartHermes()}
+              onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.qqRestartBusy") : t("settings.qqRestart")}
             </button>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { startTransition, useCallback, useRef, useState } from "react";
 import {
   cmdGetSessionMessages,
   cmdGetSessions,
@@ -6,6 +6,7 @@ import {
   type SessionRow,
   type UiMsg,
 } from "../chat-api";
+import type { LoadSessionsOptions } from "./useSessions";
 
 const LAST_SESSION_KEY = "hermesdesk.shell.chat.lastSessionId";
 
@@ -53,7 +54,7 @@ function rowsToUiMessages(rows: MessageRow[], sessionModel: string): UiMsg[] {
       continue;
     }
     const text = contentToString(m.content).trim();
-    if (!text && role !== "assistant") {
+    if (!text) {
       continue;
     }
     if (role === "system") {
@@ -91,30 +92,40 @@ function persistSession(id: string | null) {
 export function useChatState({
   loadSessions,
 }: {
-  loadSessions: () => Promise<void>;
+  loadSessions: (options?: LoadSessionsOptions) => Promise<void>;
 }) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [threadModel, setThreadModel] = useState("");
   const [messages, setMessages] = useState<UiMsg[]>([]);
   const [apiRequiredOpen, setApiRequiredOpen] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
+  const loadSeqRef = useRef(0);
 
   const loadThread = useCallback(
     async (sid: string) => {
+      const seq = ++loadSeqRef.current;
       setSendErr(null);
+      setActiveSessionId(sid);
+      persistSession(sid);
       try {
         const [r, list] = await Promise.all([
           cmdGetSessionMessages(sid),
-          cmdGetSessions(100, 0),
+          cmdGetSessions(100, 0, "hermesdesk"),
         ]);
+        if (seq !== loadSeqRef.current) {
+          return;
+        }
         const row = (list.sessions ?? []).find((s: SessionRow) => s.id === sid);
         const m = (row?.model ?? "").trim();
-        setThreadModel(m);
-        setMessages(rowsToUiMessages(r.messages ?? [], m));
-        setActiveSessionId(sid);
-        persistSession(sid);
-        void loadSessions();
+        startTransition(() => {
+          setThreadModel(m);
+          setMessages(rowsToUiMessages(r.messages ?? [], m));
+        });
+        void loadSessions({ silent: true });
       } catch (e) {
+        if (seq !== loadSeqRef.current) {
+          return;
+        }
         console.error(e);
         setMessages([]);
         setThreadModel("");
@@ -126,6 +137,7 @@ export function useChatState({
   );
 
   const onNewChat = useCallback(() => {
+    loadSeqRef.current += 1;
     setActiveSessionId(null);
     setThreadModel("");
     setMessages([]);

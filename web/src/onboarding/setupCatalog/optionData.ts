@@ -81,6 +81,98 @@ export const CATALOG_TTS: SetupCatalogOption[] = [
   },
 ];
 
+/**
+ * STT (speech-to-text) providers exposed in the wizard. Row `id`s match the
+ * canonical `stt.provider` strings recognised by `tools.transcription_tools`,
+ * so the wizard can write them to `config.yaml` directly without a UI→backend
+ * id mapping. The one exception is ``local_whisper_cpp`` which is a UI-only
+ * label for the bundled whisper.cpp wrapper — ``SectionPlaceholderStep``
+ * maps it to ``local_command`` before persisting.
+ */
+export const CATALOG_STT: SetupCatalogOption[] = [
+  {
+    id: "local_whisper_cpp",
+    name: L("本地识别（推荐）", "Local (recommended)"),
+    defaultHint: L(
+      "无需 API Key，首次使用约 60MB 模型一次性下载。",
+      "No API key. Downloads ~60 MB on first use, then runs offline."
+    ),
+    isDefault: true,
+  },
+  {
+    id: "groq",
+    name: L("Groq Whisper（云端，需 Key）", "Groq Whisper (cloud, requires key)"),
+    defaultHint: L("免费额度高的云端备选", "Free-tier cloud alternative"),
+    configFields: [
+      F(
+        "GROQ_API_KEY",
+        L("GROQ_API_KEY", "GROQ_API_KEY"),
+        L("https://console.groq.com 免费创建", "Create at https://console.groq.com"),
+        "password"
+      ),
+    ],
+  },
+  {
+    id: "openai",
+    name: L("OpenAI Whisper", "OpenAI Whisper"),
+    defaultHint: L("VOICE_TOOLS_OPENAI_KEY 或 OPENAI_API_KEY", "VOICE_TOOLS_OPENAI_KEY or OPENAI_API_KEY"),
+    configFields: [
+      F(
+        "VOICE_TOOLS_OPENAI_KEY",
+        L("VOICE_TOOLS_OPENAI_KEY（STT 专用，留空则用 OPENAI_API_KEY）", "VOICE_TOOLS_OPENAI_KEY (optional if OPENAI_API_KEY set)"),
+        L("选填", "optional"),
+        "password"
+      ),
+      F(
+        "OPENAI_API_KEY",
+        L("OPENAI_API_KEY（共享聊天/TTS/STT 时填这个）", "OPENAI_API_KEY (shared with chat/TTS)"),
+        L("选填", "optional"),
+        "password"
+      ),
+    ],
+  },
+  {
+    id: "mistral",
+    name: L("Mistral Voxtral STT", "Mistral Voxtral STT"),
+    defaultHint: L("MISTRAL_API_KEY", "MISTRAL_API_KEY"),
+    configFields: [
+      F("MISTRAL_API_KEY", L("MISTRAL_API_KEY", "MISTRAL_API_KEY"), L("Mistral 控制台", "Mistral console"), "password"),
+    ],
+  },
+  {
+    id: "xai",
+    name: L("xAI Grok STT", "xAI Grok STT"),
+    defaultHint: L("XAI_API_KEY", "XAI_API_KEY"),
+    configFields: [
+      F("XAI_API_KEY", L("XAI_API_KEY", "XAI_API_KEY"), L("xAI 控制台", "xAI console"), "password"),
+    ],
+  },
+  {
+    id: "local",
+    name: L("本地 faster-whisper", "Local faster-whisper"),
+    defaultHint: L("零成本；需先在本机安装 faster-whisper", "Free; requires faster-whisper installed locally"),
+  },
+  {
+    id: "local_command",
+    name: L("本地外部命令", "Local external command"),
+    defaultHint: L("HERMES_LOCAL_STT_COMMAND", "HERMES_LOCAL_STT_COMMAND"),
+    configFields: [
+      F(
+        "HERMES_LOCAL_STT_COMMAND",
+        L("HERMES_LOCAL_STT_COMMAND", "HERMES_LOCAL_STT_COMMAND"),
+        L("如 whisper 或 whisper.cpp 路径", "e.g. path to whisper / whisper.cpp"),
+        "text"
+      ),
+      F(
+        "HERMES_LOCAL_STT_LANGUAGE",
+        L("HERMES_LOCAL_STT_LANGUAGE（可空）", "HERMES_LOCAL_STT_LANGUAGE (optional)"),
+        L("如 zh、en", "e.g. zh, en"),
+        "text"
+      ),
+    ],
+  },
+];
+
 export const CATALOG_TERMINAL: SetupCatalogOption[] = [
   {
     id: "local",
@@ -295,6 +387,7 @@ export const CATALOG_API_KEY: SetupCatalogOption[] = [
 
 export const CATALOG_BY_SECTION: Record<PostPassSectionId, SetupCatalogOption[]> = {
   tts: CATALOG_TTS,
+  stt: CATALOG_STT,
   terminal: CATALOG_TERMINAL,
   gateway: CATALOG_GATEWAY,
   tools: CATALOG_TOOLS,

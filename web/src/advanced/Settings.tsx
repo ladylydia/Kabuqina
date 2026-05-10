@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { Activity, ArrowDown, ArrowUp } from "lucide-react";
 import { AppScaffold } from "../components/AppScaffold";
+import { BackButton } from "../components/ui/BackButton";
+import { Section } from "../components/ui/Section";
 import { useI18n } from "../lib/i18n";
-import { getLocale } from "../lib/i18n-core";
-import { cmdGetHermesPort } from "../chat/chat-api";
+import { usePowerUser, setPowerUser } from "../lib/powerUser";
 import { useFontSize } from "../lib/ui-prefs";
-import { clearAllowChatWithoutApi } from "../lib/apiKeyGate";
 import { useGatewayStatus } from "../features/gateway/useGatewayStatus";
 import { SettingsLLM } from "./settings/SettingsLLM";
 import { SettingsGateway } from "./settings/SettingsGateway";
 import { SettingsDisplay } from "./settings/SettingsDisplay";
+import { SettingsSharedPrefs } from "./settings/SettingsSharedPrefs";
 
 type ProxyStatusResponse = {
   system: { url: string | null; enabled: boolean };
@@ -28,9 +30,9 @@ export interface Status {
 export function Settings() {
   const { t } = useI18n();
   const nav = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status | null>(null);
-  const [powerUser, setPowerUser] = useState(false);
-  const [showRecipeMarket, setShowRecipeMarket] = useState(false);
+  const powerUser = usePowerUser();
   const { size: fontSize, setSize: setFontSize } = useFontSize();
   const [autoStartGateway, setAutoStartGateway] = useState(true);
   const gatewayStatus = useGatewayStatus();
@@ -52,12 +54,6 @@ export function Settings() {
       try {
         const v = await invoke<boolean>("cmd_get_power_user");
         setPowerUser(!!v);
-      } catch {
-        /* optional */
-      }
-      try {
-        const m = await invoke<boolean>("cmd_get_show_recipe_market");
-        setShowRecipeMarket(!!m);
       } catch {
         /* optional */
       }
@@ -108,45 +104,6 @@ export function Settings() {
     void saveProxy();
   }, [saveProxy]);
 
-  const openHermesConsole = useCallback(async (subPath?: string | null) => {
-    const loc = getLocale();
-    const path =
-      subPath && subPath.trim() && subPath.trim() !== "/"
-        ? subPath.trim().startsWith("/")
-          ? subPath.trim()
-          : `/${subPath.trim()}`
-        : null;
-    try {
-      await invoke("cmd_open_hermes_dashboard", { shellLocale: loc, path });
-    } catch (e) {
-      console.error(e);
-      try {
-        const port = await cmdGetHermesPort();
-        if (port) {
-          const u = new URL(`http://127.0.0.1:${port}/`);
-          if (path) {
-            u.pathname = path;
-          }
-          if (loc === "en" || loc === "zh") {
-            u.searchParams.set("hermesdesk_lang", loc);
-          }
-          window.open(u.toString(), "_blank", "noopener,noreferrer");
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }, []);
-
-  async function toggleRecipeMarket(next: boolean) {
-    try {
-      await invoke("cmd_set_show_recipe_market", { enabled: next });
-      setShowRecipeMarket(next);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   async function togglePowerUser(next: boolean) {
     if (next) {
       const ok = await ask(t("settings.powerAsk"), {
@@ -163,28 +120,13 @@ export function Settings() {
     }
   }
 
-  async function clearKey() {
-    const ok = await ask(t("settings.signOutAsk"), {
-      title: t("settings.signOutTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
-    await invoke("cmd_clear_secret");
-    clearAllowChatWithoutApi();
-    setStatus((s) => (s ? { ...s, hasSecret: false } : s));
-  }
-
   return (
-    <AppScaffold className="h-full overflow-y-auto">
+    <AppScaffold className="h-full overflow-y-auto" ref={scrollRef}>
       <div className="mx-auto max-w-2xl space-y-5 px-[var(--hd-page-pad-x)] py-8 sm:py-10">
         <div>
-          <button
-            type="button"
-            onClick={() => nav("/chat")}
-            className="mb-2 text-sm text-zinc-500 underline-offset-4 transition hover:text-zinc-800 active:scale-[0.99] dark:text-zinc-500 dark:hover:text-zinc-200"
-          >
+          <BackButton onClick={() => nav("/chat")}>
             {t("settings.back")}
-          </button>
+          </BackButton>
           <h1 className="hd-page-title">{t("settings.title")}</h1>
           {t("settings.pageLead") && (
             <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
@@ -192,6 +134,48 @@ export function Settings() {
             </p>
           )}
         </div>
+
+        <Section icon={Activity} title={t("settings.status")}>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block h-2 w-2 rounded-full ${status?.pythonRunning ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+              <span>{t("settings.pyRunning")}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {status?.pythonRunning ? t("settings.yes") : t("settings.no")}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`inline-block h-2 w-2 rounded-full ${status?.hasSecret ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+              <span>{t("settings.hasPass")}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {status?.hasSecret ? t("settings.yes") : t("settings.no")}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`inline-block h-2 w-2 rounded-full ${gatewayStatus.running ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+              <span>{t("settings.gatewayShort")}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {gatewayStatus.running ? t("settings.yes") : t("settings.no")}
+              </span>
+            </div>
+          </div>
+        </Section>
+
+        <SettingsGateway
+          gatewayStatus={gatewayStatus}
+          autoStartGateway={autoStartGateway}
+          onToggleAutoStart={toggleAutoStartGateway}
+          onStatusChange={setStatus}
+          status={status}
+        />
+
+        <SettingsDisplay
+          status={status}
+          powerUser={powerUser}
+          onTogglePowerUser={togglePowerUser}
+          fontSize={fontSize}
+          onSetFontSize={setFontSize}
+        />
 
         <SettingsLLM
           proxyDetected={proxyDetected}
@@ -202,30 +186,36 @@ export function Settings() {
           proxySaving={proxySaving}
           onSaveProxy={saveProxy}
           onClearProxy={clearProxy}
-          hasSecret={status?.hasSecret}
-          onClearKey={clearKey}
-          onOpenConsole={openHermesConsole}
         />
 
-        <SettingsGateway
-          gatewayStatus={gatewayStatus}
-          autoStartGateway={autoStartGateway}
-          onToggleAutoStart={toggleAutoStartGateway}
-          onOpenConsole={openHermesConsole}
-          onStatusChange={setStatus}
-          status={status}
-        />
+        <SettingsSharedPrefs />
+      </div>
 
-        <SettingsDisplay
-          status={status}
-          powerUser={powerUser}
-          onTogglePowerUser={togglePowerUser}
-          showRecipeMarket={showRecipeMarket}
-          onToggleRecipeMarket={toggleRecipeMarket}
-          fontSize={fontSize}
-          onSetFontSize={setFontSize}
-          gatewayRunning={gatewayStatus.running}
-        />
+      {/* Floating scroll buttons */}
+      <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={t("settings.scrollTop")}
+          title={t("settings.scrollTop")}
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            scrollRef.current?.scrollTo({
+              top: scrollRef.current.scrollHeight,
+              behavior: "smooth",
+            })
+          }
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={t("settings.scrollBottom")}
+          title={t("settings.scrollBottom")}
+        >
+          <ArrowDown className="h-5 w-5" />
+        </button>
       </div>
     </AppScaffold>
   );

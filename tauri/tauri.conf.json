@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HermesDesk",
+  "productName": "Kabuqina",
   "version": "0.1.0",
-  "identifier": "com.hermesdesk.app",
+  "identifier": "com.kabuqina.app",
   "build": {
     "frontendDist": "../web/dist",
     "devUrl": "http://localhost:5173",
@@ -19,7 +19,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "HermesDesk",
+        "title": "Kabuqina",
         "width": 1100,
         "height": 760,
         "minWidth": 720,
@@ -36,13 +36,15 @@
       "iconPath": "icons/tray.png",
       "iconAsTemplate": false,
       "menuOnLeftClick": false,
-      "tooltip": "HermesDesk"
+      "tooltip": "Kabuqina"
     },
     "security": {
       "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: data: blob: http://127.0.0.1:* https:; connect-src ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:* https://api.openrouter.ai https://openrouter.ai https://api.openai.com https://api.anthropic.com https://portal.nousresearch.com https://api.groq.com https://api.mistral.ai https:; style-src 'self' 'unsafe-inline'; script-src 'self'",
       "assetProtocol": {
         "enable": true,
         "scope": [
+          "$APPDATA/Kabuqina/**",
+          "$LOCALDATA/Kabuqina/**",
           "$APPDATA/HermesDesk/**",
           "$LOCALDATA/HermesDesk/**"
         ]
@@ -52,10 +54,10 @@
   "bundle": {
     "active": true,
     "targets": ["msi"],
-    "publisher": "HermesDesk Contributors",
+    "publisher": "Kabuqina Contributors",
     "category": "Productivity",
-    "shortDescription": "Friendly AI helper for your PC",
-    "longDescription": "HermesDesk is a safe, easy-to-use AI assistant for Windows powered by the open-source Hermes Agent.",
+    "shortDescription": "Kabuqina, a friendly AI helper for your PC",
+    "longDescription": "Kabuqina is a safe, easy-to-use AI assistant for Windows powered by the open-source Hermes Agent.",
     "copyright": "MIT licensed; see LICENSE",
     "icon": [
       "icons/32x32.png",
@@ -85,7 +87,7 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/your-org/hermesdesk/releases/latest/download/latest.json"
+        "https://github.com/your-org/kabuqina/releases/latest/download/latest.json"
       ],
       "dialog": false,
       "pubkey": "REPLACE_WITH_TAURI_GENERATED_PUBKEY"

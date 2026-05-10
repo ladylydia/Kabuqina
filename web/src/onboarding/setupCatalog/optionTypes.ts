@@ -1,4 +1,4 @@
-export type PostPassSectionId = "tts" | "terminal" | "gateway" | "tools" | "agent";
+export type PostPassSectionId = "tts" | "stt" | "terminal" | "gateway" | "tools" | "agent";
 
 export type LocaleKey = "zh" | "en";
 

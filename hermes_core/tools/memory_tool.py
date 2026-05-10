@@ -16,11 +16,21 @@ The snapshot refreshes on the next session start.
 Entry delimiter: § (section sign). Entries can be multiline.
 Character limits (not tokens) because char counts are model-independent.
 
+Every entry is tagged with metadata on write::
+
+    [src:<platform>] [ts:<epoch>] [scope:<private|shared>] content here
+
+Tags are parsed out on read and used for cross-platform filtering so that
+gateway bots (weixin, telegram, etc.) only see own-source and ``scope:shared``
+entries within a configurable time window.  The LLM never sees tags — they
+are stripped before system prompt injection and before tool-response return.
+
 Design:
 - Single `memory` tool with action parameter: add, replace, remove, read
 - replace/remove use short unique substring matching (not full text or IDs)
 - Behavioral guidance lives in the tool schema description
 - Frozen snapshot pattern: system prompt is stable, tool responses show live state
+- Tags managed by ``_strip_entry_tags()`` and ``_make_tagged_entry()``
 """
 
 import json
@@ -28,6 +38,7 @@ import logging
 import os
 import re
 import tempfile
+import time as _time
 from contextlib import contextmanager
 from pathlib import Path
 from hermes_constants import get_hermes_home
@@ -57,6 +68,43 @@ def get_memory_dir() -> Path:
     return get_hermes_home() / "memories"
 
 ENTRY_DELIMITER = "\n§\n"
+
+# Tag prefix regex for entry metadata: [key:value] [key:value] ... content
+_TAG_RE = re.compile(r'^\[(\w+):([^\]]*)\]\s*')
+
+
+# ---------------------------------------------------------------------------
+# Entry tagging helpers — source platform, timestamp, and scope metadata.
+# ---------------------------------------------------------------------------
+
+def _strip_entry_tags(entry: str) -> tuple[Dict[str, str], str]:
+    """Parse leading tag prefix from an entry.
+
+    Returns (tags_dict, content_without_tags).
+    Untagged entries return ({}, entry) with src="legacy".
+    """
+    tags: Dict[str, str] = {}
+    rest = entry.strip()
+    while True:
+        m = _TAG_RE.match(rest)
+        if not m:
+            break
+        tags[m.group(1)] = m.group(2)
+        rest = rest[m.end():]
+    if not tags:
+        tags["src"] = "legacy"
+    return tags, rest.strip()
+
+
+def _make_tagged_entry(content: str, source_platform: str) -> str:
+    """Build a tag-prefixed entry string for storage.
+
+    Desktop (cli) entries default to scope=shared — visible across all platforms.
+    Gateway entries default to scope=private — visible only on the same platform.
+    """
+    ts = int(_time.time())
+    scope = "shared" if source_platform == "cli" else "private"
+    return f"[src:{source_platform}] [ts:{ts}] [scope:{scope}] {content.strip()}"
 
 
 # ---------------------------------------------------------------------------
@@ -115,16 +163,61 @@ class MemoryStore:
         Tool responses always reflect this live state.
     """
 
-    def __init__(self, memory_char_limit: int = 2200, user_char_limit: int = 1375):
+    def __init__(self, memory_char_limit: int = 2200, user_char_limit: int = 1375,
+                 source_platform: str = "cli", gateway_max_age_hours: int = 168,
+                 chat_type: str = ""):
         self.memory_entries: List[str] = []
         self.user_entries: List[str] = []
         self.memory_char_limit = memory_char_limit
         self.user_char_limit = user_char_limit
+        self.source_platform = source_platform
+        self._chat_type = chat_type
+        self._is_group = (chat_type == "group")
+        self.gateway_max_age_seconds: Optional[int] = (
+            gateway_max_age_hours * 3600 if gateway_max_age_hours > 0 else None
+        )
         # Frozen snapshot for system prompt -- set once at load_from_disk()
         self._system_prompt_snapshot: Dict[str, str] = {"memory": "", "user": ""}
+        # Host preferences preamble (read-only, injected separately from memory).
+        self._host_prefs: str = ""
+
+    def _filter_entries(self, entries: List[str]) -> List[str]:
+        """Filter entries by platform scope and recency.
+
+        Desktop (source_platform=="cli") sees everything unfiltered.
+        Gateway platforms see only own-source/scope:shared entries within the
+        time window.  Legacy (untagged) entries are visible to all.
+        """
+        if self.source_platform == "cli":
+            return list(entries)
+
+        now = _time.time()
+        result: List[str] = []
+        for e in entries:
+            tags, _content = _strip_entry_tags(e)
+            src = tags.get("src", "legacy")
+            scope = tags.get("scope", "private")
+            ts = int(tags.get("ts", "0"))
+
+            # Legacy (pre-tagging) entries are visible to everyone.
+            if src == "legacy":
+                result.append(e)
+                continue
+
+            # Visible if it's from the same platform or marked shared.
+            if src != self.source_platform and scope != "shared":
+                continue
+
+            # Time-window check for gateway platforms.
+            if self.gateway_max_age_seconds is not None and ts > 0:
+                if (now - ts) >= self.gateway_max_age_seconds:
+                    continue
+
+            result.append(e)
+        return result
 
     def load_from_disk(self):
-        """Load entries from MEMORY.md and USER.md, capture system prompt snapshot."""
+        """Load entries from MEMORY.md, USER.md, and _host_prefs.md; capture system prompt snapshot."""
         mem_dir = get_memory_dir()
         mem_dir.mkdir(parents=True, exist_ok=True)
 
@@ -135,10 +228,36 @@ class MemoryStore:
         self.memory_entries = list(dict.fromkeys(self.memory_entries))
         self.user_entries = list(dict.fromkeys(self.user_entries))
 
+        # Load _host_prefs.md (host-shared preferences, read-only).
+        # Not present in group chats (privacy).
+        self._host_prefs = ""
+        if not self._is_group:
+            prefs_path = get_hermes_home() / "_host_prefs.md"
+            try:
+                raw = prefs_path.read_text(encoding="utf-8").strip()
+                if raw:
+                    self._host_prefs = raw
+            except (OSError, IOError):
+                pass
+
+        # Apply platform-scope and age filters for the system prompt snapshot.
+        # The in-memory state (self.memory_entries / self.user_entries) keeps ALL
+        # entries so mutations (add/replace/remove) never lose cross-platform data.
+        visible_mem = self._filter_entries(self.memory_entries)
+        visible_user = self._filter_entries(self.user_entries)
+
+        # In group chats, memory blocks are emptied (system prompt never leaks
+        # user-specific data).  The in-memory state is NOT cleared — tool calls
+        # still use it for internal decision-making — but the snapshot for the
+        # LLM is blanked.
+        if self._is_group:
+            visible_mem = []
+            visible_user = []
+
         # Capture frozen snapshot for system prompt injection
         self._system_prompt_snapshot = {
-            "memory": self._render_block("memory", self.memory_entries),
-            "user": self._render_block("user", self.user_entries),
+            "memory": self._render_block("memory", visible_mem),
+            "user": self._render_block("user", visible_user),
         }
 
     @staticmethod
@@ -214,7 +333,9 @@ class MemoryStore:
         entries = self._entries_for(target)
         if not entries:
             return 0
-        return len(ENTRY_DELIMITER.join(entries))
+        # Count content without tag overhead to keep char budgets predictable.
+        stripped_entries = [_strip_entry_tags(e)[1] for e in entries]
+        return len(ENTRY_DELIMITER.join(stripped_entries))
 
     def _char_limit(self, target: str) -> int:
         if target == "user":
@@ -222,10 +343,16 @@ class MemoryStore:
         return self.memory_char_limit
 
     def add(self, target: str, content: str) -> Dict[str, Any]:
-        """Append a new entry. Returns error if it would exceed the char limit."""
+        """Append a new entry. Returns error if group chat or would exceed limit."""
         content = content.strip()
         if not content:
             return {"success": False, "error": "Content cannot be empty."}
+
+        if self._is_group:
+            return {
+                "success": False,
+                "error": "Memory writes are disabled in group/ multi-user chats to protect participant privacy.",
+            }
 
         # Scan for injection/exfiltration before accepting
         scan_error = _scan_memory_content(content)
@@ -239,13 +366,18 @@ class MemoryStore:
             entries = self._entries_for(target)
             limit = self._char_limit(target)
 
-            # Reject exact duplicates
-            if content in entries:
+            # Reject exact duplicates — match against stripped content
+            stripped_entries = [_strip_entry_tags(e)[1] for e in entries]
+            if content in stripped_entries:
                 return self._success_response(target, "Entry already exists (no duplicate added).")
 
-            # Calculate what the new total would be
-            new_entries = entries + [content]
-            new_total = len(ENTRY_DELIMITER.join(new_entries))
+            # Tag the content before storing
+            tagged = _make_tagged_entry(content, self.source_platform)
+
+            # Calculate what the new total would be (char budget against content only)
+            new_entries = entries + [tagged]
+            stripped_new = stripped_entries + [content]
+            new_total = len(ENTRY_DELIMITER.join(stripped_new))
 
             if new_total > limit:
                 current = self._char_count(target)
@@ -256,11 +388,11 @@ class MemoryStore:
                         f"Adding this entry ({len(content)} chars) would exceed the limit. "
                         f"Replace or remove existing entries first."
                     ),
-                    "current_entries": entries,
+                    "current_entries": stripped_entries,
                     "usage": f"{current:,}/{limit:,}",
                 }
 
-            entries.append(content)
+            entries.append(tagged)
             self._set_entries(target, entries)
             self.save_to_disk(target)
 
@@ -275,6 +407,12 @@ class MemoryStore:
         if not new_content:
             return {"success": False, "error": "new_content cannot be empty. Use 'remove' to delete entries."}
 
+        if self._is_group:
+            return {
+                "success": False,
+                "error": "Memory writes are disabled in group/ multi-user chats to protect participant privacy.",
+            }
+
         # Scan replacement content for injection/exfiltration
         scan_error = _scan_memory_content(new_content)
         if scan_error:
@@ -284,16 +422,18 @@ class MemoryStore:
             self._reload_target(target)
 
             entries = self._entries_for(target)
-            matches = [(i, e) for i, e in enumerate(entries) if old_text in e]
+            # Match old_text against stripped content (LLM never sees tags)
+            stripped_pairs = [(i, e, _strip_entry_tags(e)[1]) for i, e in enumerate(entries)]
+            matches = [(i, e) for i, e, s in stripped_pairs if old_text in s]
 
             if not matches:
                 return {"success": False, "error": f"No entry matched '{old_text}'."}
 
             if len(matches) > 1:
-                # If all matches are identical (exact duplicates), operate on the first one
-                unique_texts = set(e for _, e in matches)
+                # Check if all matches have the same stripped content
+                unique_texts = set(s for _, _, s in stripped_pairs if old_text in s)
                 if len(unique_texts) > 1:
-                    previews = [e[:80] + ("..." if len(e) > 80 else "") for _, e in matches]
+                    previews = [s[:80] + ("..." if len(s) > 80 else "") for _, _, s in stripped_pairs if old_text in s]
                     return {
                         "success": False,
                         "error": f"Multiple entries matched '{old_text}'. Be more specific.",
@@ -304,10 +444,13 @@ class MemoryStore:
             idx = matches[0][0]
             limit = self._char_limit(target)
 
-            # Check that replacement doesn't blow the budget
-            test_entries = entries.copy()
-            test_entries[idx] = new_content
-            new_total = len(ENTRY_DELIMITER.join(test_entries))
+            # Tag the replacement content
+            tagged = _make_tagged_entry(new_content, self.source_platform)
+
+            # Check budget against stripped content only
+            stripped_all = [_strip_entry_tags(e)[1] for e in entries]
+            stripped_all[idx] = new_content
+            new_total = len(ENTRY_DELIMITER.join(stripped_all))
 
             if new_total > limit:
                 return {
@@ -318,32 +461,40 @@ class MemoryStore:
                     ),
                 }
 
-            entries[idx] = new_content
+            entries[idx] = tagged
             self._set_entries(target, entries)
             self.save_to_disk(target)
 
         return self._success_response(target, "Entry replaced.")
 
     def remove(self, target: str, old_text: str) -> Dict[str, Any]:
-        """Remove the entry containing old_text substring."""
+        """Find entry containing old_text substring, remove it."""
         old_text = old_text.strip()
         if not old_text:
             return {"success": False, "error": "old_text cannot be empty."}
+
+        if self._is_group:
+            return {
+                "success": False,
+                "error": "Memory writes are disabled in group/ multi-user chats to protect participant privacy.",
+            }
 
         with self._file_lock(self._path_for(target)):
             self._reload_target(target)
 
             entries = self._entries_for(target)
-            matches = [(i, e) for i, e in enumerate(entries) if old_text in e]
+            # Match old_text against stripped content (LLM never sees tags)
+            stripped_pairs = [(i, e, _strip_entry_tags(e)[1]) for i, e in enumerate(entries)]
+            matches = [(i, e) for i, e, s in stripped_pairs if old_text in s]
 
             if not matches:
                 return {"success": False, "error": f"No entry matched '{old_text}'."}
 
             if len(matches) > 1:
-                # If all matches are identical (exact duplicates), remove the first one
-                unique_texts = set(e for _, e in matches)
+                # Check if all matches have the same stripped content
+                unique_texts = set(s for _, _, s in stripped_pairs if old_text in s)
                 if len(unique_texts) > 1:
-                    previews = [e[:80] + ("..." if len(e) > 80 else "") for _, e in matches]
+                    previews = [s[:80] + ("..." if len(s) > 80 else "") for _, _, s in stripped_pairs if old_text in s]
                     return {
                         "success": False,
                         "error": f"Multiple entries matched '{old_text}'. Be more specific.",
@@ -366,8 +517,11 @@ class MemoryStore:
         state. Mid-session writes do not affect this. This keeps the system
         prompt stable across all turns, preserving the prefix cache.
 
+        Supports targets: "memory", "user", "host_prefs".
         Returns None if the snapshot is empty (no entries at load time).
         """
+        if target == "host_prefs":
+            return self._host_prefs if self._host_prefs else None
         block = self._system_prompt_snapshot.get(target, "")
         return block if block else None
 
@@ -375,6 +529,8 @@ class MemoryStore:
 
     def _success_response(self, target: str, message: str = None) -> Dict[str, Any]:
         entries = self._entries_for(target)
+        # Strip tags so the LLM never sees metadata.
+        stripped = [_strip_entry_tags(e)[1] for e in entries]
         current = self._char_count(target)
         limit = self._char_limit(target)
         pct = min(100, int((current / limit) * 100)) if limit > 0 else 0
@@ -382,9 +538,9 @@ class MemoryStore:
         resp = {
             "success": True,
             "target": target,
-            "entries": entries,
+            "entries": stripped,
             "usage": f"{pct}% — {current:,}/{limit:,} chars",
-            "entry_count": len(entries),
+            "entry_count": len(stripped),
         }
         if message:
             resp["message"] = message
@@ -396,7 +552,9 @@ class MemoryStore:
             return ""
 
         limit = self._char_limit(target)
-        content = ENTRY_DELIMITER.join(entries)
+        # Strip tags so metadata is never visible to the LLM.
+        stripped = [_strip_entry_tags(e)[1] for e in entries]
+        content = ENTRY_DELIMITER.join(stripped)
         current = len(content)
         pct = min(100, int((current / limit) * 100)) if limit > 0 else 0
 

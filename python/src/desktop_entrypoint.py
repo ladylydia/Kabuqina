@@ -68,6 +68,133 @@ def _write_handshake(port: int) -> None:
     Path(path).write_text(str(port), encoding="utf-8")
 
 
+def _wire_tts_voice(log: logging.Logger) -> None:
+    """Auto-configure Edge TTS voice based on system language.
+
+    Sets a language-appropriate Edge TTS voice (e.g. ``zh-CN-XiaoxiaoNeural``
+    for Chinese users) if the user hasn't explicitly configured one.
+    Respects an existing ``tts.edge.voice`` in ``config.yaml``.
+    """
+    # Determine the appropriate voice from system locale
+    if sys.platform == "win32":
+        import ctypes
+
+        try:
+            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            primary_lang = lang_id & 0x3FF
+            if primary_lang != 0x04:  # LANG_CHINESE
+                return
+            desired_voice = "zh-CN-XiaoxiaoNeural"
+        except Exception:
+            return
+    else:
+        try:
+            import locale
+
+            loc = locale.getlocale()[0] or ""
+            if not loc.lower().startswith("zh"):
+                return
+            desired_voice = "zh-CN-XiaoxiaoNeural"
+        except Exception:
+            return
+
+    # Write to config.yaml only if voice is still the English default.
+    # If the user has explicitly set a voice we respect it.
+    try:
+        from hermes_cli.config import load_config, save_config
+
+        cfg = load_config() or {}
+        tts = cfg.setdefault("tts", {})
+        edge = tts.setdefault("edge", {})
+        current = (edge.get("voice") or "").strip()
+        if current in ("", "en-US-AriaNeural"):
+            edge["voice"] = desired_voice
+            save_config(cfg)
+            log.info(
+                "TTS voice auto-configured to %s (system locale: Chinese)",
+                desired_voice,
+            )
+    except Exception as e:
+        log.warning("failed to auto-configure TTS voice: %s", e)
+
+
+def _wire_local_stt(log: logging.Logger) -> None:
+    """Auto-configure ``HERMES_LOCAL_STT_COMMAND`` to use the bundled whisper.cpp.
+
+    HermesDesk ships ``stt-bin/whisper-cli.exe`` + ``stt-bin/ffmpeg.exe`` and a
+    ``stt_wrapper.py`` translator alongside this entrypoint (see
+    ``python/build_bundle.ps1`` step 6b). When present, we point Hermes'
+    ``local_command`` STT path at the wrapper so transcription works
+    out-of-the-box without an API key — the user only sees a one-time prompt
+    to lazy-download the ~57 MB GGML model on first mic click.
+
+    Honours an existing override: if ``HERMES_LOCAL_STT_COMMAND`` is already
+    set (power user pointing at a system-wide whisper install) we leave it
+    alone.
+    """
+    if os.environ.get("HERMES_LOCAL_STT_COMMAND", "").strip():
+        log.info("HERMES_LOCAL_STT_COMMAND already set; skipping auto-wire")
+        return
+
+    here = Path(__file__).resolve().parent
+    wrapper = here / "stt_wrapper.py"
+    bin_dir = here / "stt-bin"
+    whisper_cli = bin_dir / "whisper-cli.exe"
+    if not wrapper.is_file() or not whisper_cli.is_file():
+        log.info("local STT wrapper or binaries missing (wrapper=%s exists=%s, whisper=%s exists=%s); leaving HERMES_LOCAL_STT_COMMAND unset",
+                 wrapper, wrapper.is_file(), whisper_cli, whisper_cli.is_file())
+        return
+
+    # Double-quote the python.exe + script paths so Windows cmd.exe (Hermes
+    # runs the command via shell=True) parses them as single argv items even
+    # when the install path has spaces. Hermes shlex-quotes each placeholder
+    # value before substituting; the wrapper strips surrounding quotes back
+    # off so paths like 'C:\\Users\\X 1\\Temp\\foo.webm' survive the round
+    # trip.
+    template = (
+        f'"{sys.executable}" "{wrapper}" '
+        f'{{input_path}} {{output_dir}} {{language}} {{model}}'
+    )
+    os.environ["HERMES_LOCAL_STT_COMMAND"] = template
+    # Default language: auto-detect for most users, but force "zh" when the
+    # Windows display language is Chinese so Whisper outputs simplified
+    # characters instead of traditional.
+    default_lang = "auto"
+    if sys.platform == "win32":
+        import ctypes
+
+        try:
+            # GetUserDefaultUILanguage returns a LANGID; 0x0804 = zh-CN, 0x0404 = zh-TW, 0x0C04 = zh-HK
+            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            # Primary language ID is the lower 10 bits
+            primary_lang = lang_id & 0x3FF
+            if primary_lang == 0x04:  # LANG_CHINESE
+                default_lang = "zh"
+        except Exception:
+            pass
+    else:
+        try:
+            import locale
+
+            loc = locale.getlocale()[0] or ""
+            if loc.lower().startswith("zh"):
+                default_lang = "zh"
+        except Exception:
+            pass
+    os.environ.setdefault("HERMES_LOCAL_STT_LANGUAGE", default_lang)
+    log.info("HERMES_LOCAL_STT_COMMAND -> bundled whisper.cpp (%s), lang=%s", whisper_cli, default_lang)
+
+    # Add stt-bin to PATH so Hermes' _find_ffmpeg_binary() (called by
+    # _prepare_local_audio before the local_command template runs) can
+    # locate the bundled ffmpeg.exe. Without this, non-WAV browser
+    # recordings (WebM/Opus) fail with "ffmpeg not found" even though
+    # stt_wrapper.py has its own copy — the core pre-conversion runs first.
+    ffmpeg_in_bin = bin_dir / "ffmpeg.exe"
+    if ffmpeg_in_bin.is_file() and str(bin_dir) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+        log.info("PATH += %s (for bundled ffmpeg)", bin_dir)
+
+
 def _redirect_hermes_home() -> Path:
     """Force Hermes' config/cache root inside the per-user data dir.
 
@@ -173,6 +300,8 @@ def main() -> int:
     _verify_bundle_deps(log)
     hermes_home = _redirect_hermes_home()
     log.info("HERMES_HOME -> %s", hermes_home)
+    _wire_local_stt(log)
+    _wire_tts_voice(log)
 
     # 0. Contract version check.  Must match the Tauri shell's expectation.
     from desktop_contract import CONTRACT_VERSION as _EXPECTED_CONTRACT

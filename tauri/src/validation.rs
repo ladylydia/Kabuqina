@@ -35,8 +35,7 @@ pub fn validate_env_value(value: &str) -> Result<(), String> {
 ///     extracted from `saved_api_base` (so a compromised renderer cannot
 ///     substitute an untrusted host).
 pub fn validate_public_endpoint(url_str: &str, saved_api_base: Option<&str>) -> Result<(), String> {
-    let parsed =
-        url::Url::parse(url_str).map_err(|e| format!("Invalid URL: {e}"))?;
+    let parsed = url::Url::parse(url_str).map_err(|e| format!("Invalid URL: {e}"))?;
 
     if parsed.scheme() != "https" {
         return Err("Only HTTPS endpoints are allowed for custom API validation".into());
@@ -238,11 +237,7 @@ mod tests {
     #[test]
     fn endpoint_ok_known_provider_no_base_match() {
         // openrouter allows any https public URL when no api_base_url saved
-        assert!(validate_public_endpoint(
-            "https://openrouter.ai/api/v1/auth/key",
-            None
-        )
-        .is_ok());
+        assert!(validate_public_endpoint("https://openrouter.ai/api/v1/auth/key", None).is_ok());
     }
 
     #[test]

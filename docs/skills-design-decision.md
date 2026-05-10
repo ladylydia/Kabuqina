@@ -44,6 +44,24 @@ power user          all            any source        full editor
                                                       v1.2+)
 ```
 
+### 2026-05 amendment: desktop capability catalog
+
+HermesDesk now also exposes a desktop-shell **Capability Catalog** for
+Skills, toolsets, and dashboard plugins. This does not replace the L1/L2/L3
+action-tier model above; it maps the current desktop state into effective
+roles:
+
+- `default`: normal desktop mode.
+- `advanced`: normal mode with the recipe market / advanced discovery toggle
+  enabled.
+- `power`: existing Power user mode.
+
+Catalog visibility is enforced server-side by `CapabilityPolicy`; React only
+renders the already-filtered result. Users can browse visible tools and plugins
+but cannot edit them directly. Editing Skills or installing recommended
+capabilities is started as an agent-assisted chat task, so existing approvals
+and `skill_manage` / hub-install safeguards remain the write boundary.
+
 ### What goes in each tier
 
 **L1 — Use built-in Skills (always on, all users)**
