@@ -12,6 +12,8 @@ The selected direction is a three-column workbench:
 - Center: live chat and active work stream.
 - Right panel: current workspace context.
 
+The three columns must be flexible. Like Codex or Cursor, users should be able to collapse side panels and focus the center chat when they want uninterrupted conversation or writing space.
+
 This is not a B2B agent task board. The mission-board direction was rejected because it makes tasks primary in a way that better fits enterprise agent management than Kabuqina's current personal assistant positioning.
 
 ## Goals
@@ -19,6 +21,8 @@ This is not a B2B agent task board. The mission-board direction was rejected bec
 - Make chat feel taskful and workspace-like without turning it into a project-management app.
 - Keep the shell UI as the primary product experience instead of sending users into the Hermes dashboard.
 - Give users a stable place to see current materials, task state, outputs, and useful actions.
+- Let users collapse the left rail and right workspace panel independently.
+- Provide a focus mode where the center chat becomes the dominant workspace.
 - Preserve the existing friendly Nana tone while adding stronger work affordances.
 - Improve first-run UI polish so onboarding hands users into the workbench with confidence.
 
@@ -58,6 +62,17 @@ The center should not become visually empty or purely decorative. Empty state pr
 ### Top Actions
 
 Settings should stay in a top position because that matches current user expectations. The previous "Open console" action should be removed from primary chat surfaces. If console/dashboard access remains, it should live under advanced diagnostics in Settings.
+
+### Flexible Panel Behavior
+
+The default desktop layout is three columns, but the user should not feel trapped in a dense control surface. The layout should support:
+
+- Left rail collapse: hides labels and history detail, leaving a compact navigation strip or a reopen control.
+- Right workspace collapse: hides the context panel while preserving the center chat width.
+- Focus mode: collapses both side areas and gives the center chat the most space. Settings remains reachable from the top, and Capability/Workspace can be reopened without leaving chat.
+- Restorable state: returning from focus should restore the user's previous panel choices where practical.
+
+The first implementation can use fixed expanded widths and animated collapse states. Resizable panel widths can be a later enhancement if the fixed widths feel too rigid after use.
 
 ### Right Workspace Panel
 
@@ -99,9 +114,18 @@ When Nana is working:
 - The right panel may highlight the current step or the material being used.
 - Stop remains easy to reach in the composer.
 
+### Focused Chat
+
+When the user enters focus mode:
+
+- The center chat and composer become visually dominant.
+- The left rail and right workspace panel collapse out of the way.
+- A compact affordance remains to reopen Capability/navigation and Workspace context.
+- Running progress, stop, attachments, screenshot, voice, and send controls remain available.
+
 ### Narrow Window
 
-On smaller widths, the right workspace panel collapses behind a Workspace button or drawer. The center chat stays primary. The left rail may reduce to icons or a compact navigation surface if needed.
+On smaller widths, the right workspace panel collapses behind a Workspace button or drawer. The center chat stays primary. The left rail may reduce to icons or a compact navigation surface if needed. Focus mode should still be available as a simple "chat first" layout.
 
 ## Onboarding Direction
 
@@ -126,6 +150,7 @@ The onboarding architecture does not need a large behavioral redesign for this p
 
 - The likely first implementation target is `web/src/chat/ChatPage.tsx` plus new presentational components for the right workspace panel.
 - `ChatSidebar` should evolve into the left rail, with Capability added as a first-class navigation item.
+- Add local UI state for panel visibility and focus mode, likely alongside existing UI preference helpers.
 - `ChatMessageList` and `ChatInput` should keep their core behavior but be tuned for the workbench layout.
 - Existing routes for `/settings`, `/capabilities`, `/settings/cron`, and `/export` should remain native shell routes.
 - Avoid touching `hermes_core/` for this UX pass.
@@ -136,5 +161,6 @@ The onboarding architecture does not need a large behavioral redesign for this p
 - Keep existing chat UX tests passing.
 - Run `npm run lint` and `npm run build` in `web/`.
 - Use the browser to visually verify desktop and narrow-window layouts.
+- Verify expanded, left-collapsed, right-collapsed, and focused chat states.
 - Verify that Settings and Capability navigation works from the new shell structure.
 - Verify that temporary brainstorming files under `.superpowers/` are not tracked.
