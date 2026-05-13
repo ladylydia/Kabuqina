@@ -225,15 +225,47 @@ pub fn cmd_read_shared_prefs(app: AppHandle) -> Result<String, String> {
     }
 }
 
-/// Write a text file to an arbitrary path (used by the export flow after the
-/// user picks the save location via the save dialog).
+/// Write a text file to a path chosen by the user via the save dialog.
 ///
-/// Safety: the user explicitly chose the path in the save dialog, so there is
-/// no shell-injection risk. We only write, never read at this path.
+/// Rejects paths that target sensitive system locations (Windows, Program
+/// Files, startup folders) to prevent abuse if the IPC is ever reached
+/// without a genuine save-dialog interaction.
 #[tauri::command]
 pub fn cmd_write_text_file(path_str: String, content: String) -> Result<(), String> {
     use std::io::Write;
     let path = std::path::PathBuf::from(&path_str);
+
+    let canonical = path
+        .canonicalize()
+        .or_else(|_| {
+            if let Some(p) = path.parent() {
+                std::fs::create_dir_all(p).ok();
+            }
+            Ok::<_, std::io::Error>(path.clone())
+        })
+        .map_err(|e| format!("resolve path: {e}"))?;
+    let low = canonical
+        .to_string_lossy()
+        .to_lowercase()
+        .replace('/', "\\");
+
+    let blocked = [
+        "\\windows\\",
+        "\\program files\\",
+        "\\program files (x86)\\",
+        "\\programdata\\",
+        "\\system32\\",
+        "\\syswow64\\",
+        "\\startup\\",
+    ];
+    for prefix in &blocked {
+        if low.contains(prefix) {
+            return Err(format!(
+                "Refusing to write to protected system path: {path_str}"
+            ));
+        }
+    }
+
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
     }

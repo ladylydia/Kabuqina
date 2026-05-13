@@ -39,10 +39,11 @@ except ImportError:
     from network_policy import NetworkPolicy  # type: ignore[import-untyped]
 
 _policy: NetworkPolicy | None = None
+_net_open: bool = False
 
 
 def _check_url(url: str) -> None:
-    if os.environ.get("HERMESDESK_NET_OPEN") == "1":
+    if _net_open:
         return
     if _policy is not None:
         try:
@@ -62,7 +63,8 @@ def _check_url(url: str) -> None:
 
 
 def install() -> None:
-    global _policy
+    global _policy, _net_open
+    _net_open = os.environ.get("HERMESDESK_NET_OPEN") == "1"
     _policy = NetworkPolicy(
         llm_host=os.environ.get("HERMESDESK_LLM_HOST", ""),
         extra_hosts=os.environ.get("HERMESDESK_EXTRA_HOSTS", ""),

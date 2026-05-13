@@ -341,19 +341,29 @@ pub async fn cmd_validate_endpoint(
 ) -> Result<(), String> {
     log::info!("cmd_validate_endpoint called: url={}", url);
 
-    // Validate the URL before ever sending an API key over the wire.
     let cfg = read_provider_cfg(&app);
     let saved_base = cfg.as_ref().and_then(|c| c.api_base_url.as_deref());
     crate::validation::validate_public_endpoint(&url, saved_base)?;
+
+    let trimmed = api_key.trim();
+    let is_anthropic = url.contains("api.anthropic.com");
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .no_proxy()
         .build()
         .map_err(|e| format!("client build error: {}", e))?;
-    let res = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", api_key.trim()))
+
+    let mut req = client.get(&url);
+    if is_anthropic {
+        req = req
+            .header("x-api-key", trimmed)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+        req = req.header("Authorization", format!("Bearer {trimmed}"));
+    }
+
+    let res = req
         .send()
         .await
         .map_err(|e| format!("Couldn't reach that API address: {} (url={})", e, url))?;
@@ -362,8 +372,6 @@ pub async fn cmd_validate_endpoint(
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err("That pass didn't work. Double-check you copied the whole thing.".into());
     }
-    // 400 means the server is reachable — some OpenAI-compatible APIs return 400
-    // for unauthenticated /models requests instead of 401.
     if !status.is_success() && status != reqwest::StatusCode::BAD_REQUEST {
         return Err(format!(
             "That API address answered {}. Check the URL ends with /v1.",

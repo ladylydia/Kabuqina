@@ -33,51 +33,20 @@ export async function validateCustomEndpoint(
 
   const modelsUrl = `${base}/models`;
 
-  if (hasTauriInvoke()) {
-    try {
-      await invoke("cmd_validate_endpoint", {
-        url: modelsUrl,
-        apiKey: trimmed,
-      });
-      return { ok: true };
-    } catch (e: unknown) {
-      const msg =
-        e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
-      return { ok: false, message: msg || translate("validate.unreachable", loc()) };
-    }
+  if (!hasTauriInvoke()) {
+    return { ok: false, message: translate("validate.unreachable", loc()) };
   }
 
   try {
-    const resp = await fetch("/api/validate-endpoint", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: modelsUrl, api_key: trimmed }),
+    await invoke("cmd_validate_endpoint", {
+      url: modelsUrl,
+      apiKey: trimmed,
     });
-    const data = (await resp.json()) as { ok?: boolean; message?: string };
-    if (data.ok) return { ok: true };
-    return { ok: false, message: data.message || translate("validate.validationFailed", loc()) };
-  } catch {
-    try {
-      const res = await fetch(modelsUrl, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${trimmed}` },
-      });
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, message: translate("validate.badKey", loc()) };
-      }
-      if (res.status >= 500) {
-        return {
-          ok: false,
-          message: translate("validate.badCode", loc(), { code: res.status }),
-        };
-      }
-      return { ok: true };
-    } catch {
-      return {
-        ok: false,
-        message: translate("validate.network", loc()),
-      };
-    }
+    return { ok: true };
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+    return { ok: false, message: msg || translate("validate.unreachable", loc()) };
   }
 }
 
@@ -105,33 +74,19 @@ export async function validateKey(
     };
   }
 
+  if (!hasTauriInvoke()) {
+    return { ok: false, message: translate("validate.unreachable", l) };
+  }
+
   try {
-    const res = await fetch(provider.validateUrl, {
-      method: "GET",
-      headers: {
-        Authorization: provider.validateAuth(trimmed),
-        ...(provider.id === "anthropic"
-          ? { "x-api-key": trimmed, "anthropic-version": "2023-06-01" }
-          : {}),
-      },
+    await invoke("cmd_validate_endpoint", {
+      url: provider.validateUrl,
+      apiKey: trimmed,
     });
-    if (res.status === 401 || res.status === 403) {
-      return { ok: false, message: translate("validate.badKey", l) };
-    }
-    if (!res.ok) {
-      return {
-        ok: false,
-        message: translate("validate.providerStatus", l, {
-          label: provider.label,
-          code: res.status,
-        }),
-      };
-    }
     return { ok: true };
-  } catch {
-    return {
-      ok: false,
-      message: translate("validate.providerReach", l, { label: provider.label }),
-    };
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+    return { ok: false, message: msg || translate("validate.providerReach", l, { label: provider.label }) };
   }
 }

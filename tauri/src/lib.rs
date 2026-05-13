@@ -15,10 +15,13 @@ mod bridge;
 mod capabilities;
 mod capture;
 mod chat;
+mod companion;
 mod cron;
+mod desktop_organizer;
 mod dingtalk_env;
 mod edge_browser;
 mod email_env;
+mod email_oauth;
 mod feishu_env;
 mod feishu_qr;
 mod gateway_env_patch;
@@ -47,10 +50,12 @@ use url::Url;
 
 /// Fallback ``taskkill`` when the supervisor mutex is contended and
 /// ``try_lock`` cannot acquire it at shutdown.
-fn _emergency_kill_python_child() {
-    let _ = std::process::Command::new("taskkill")
-        .args(&["/f", "/im", "python.exe"])
-        .status();
+fn _emergency_kill_python_child(pid: Option<u32>) {
+    if let Some(id) = pid {
+        let _ = std::process::Command::new("taskkill")
+            .args(&["/f", "/pid", &id.to_string()])
+            .status();
+    }
 }
 
 pub struct AppState {
@@ -78,6 +83,8 @@ pub struct AppState {
     pub hermes_port: Arc<Mutex<Option<u16>>>,
     /// Same value as Python `HERMESDESK_BRIDGE_SECRET` for `X-HermesDesk-Auth`.
     pub desk_auth_token: Arc<Mutex<Option<String>>>,
+    /// Last known PID of the Python child for emergency kill.
+    pub python_child_pid: Arc<std::sync::Mutex<Option<u32>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -103,14 +110,12 @@ pub fn run() {
         desktop_messages: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         hermes_port: Arc::new(Mutex::new(None)),
         desk_auth_token: Arc::new(Mutex::new(None)),
+        python_child_pid: Arc::new(std::sync::Mutex::new(None)),
     };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            crate::companion::focus_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -145,6 +150,13 @@ pub fn run() {
             cmd_gateway_stop,
             cmd_get_hermes_port,
             cmd_open_hermes_dashboard,
+            companion::cmd_show_companion,
+            companion::cmd_hide_companion,
+            companion::cmd_focus_main_window,
+            desktop_organizer::cmd_desktop_organize_run,
+            desktop_organizer::cmd_desktop_organize_preview,
+            desktop_organizer::cmd_desktop_organize_apply,
+            desktop_organizer::cmd_desktop_organize_undo,
             capabilities::cmd_capabilities_catalog,
             capabilities::cmd_capability_skill_detail,
             chat::cmd_chat_send,
@@ -176,6 +188,9 @@ pub fn run() {
             email_env::cmd_email_env_status,
             email_env::cmd_email_save_config,
             email_env::cmd_email_env_remove,
+            email_oauth::cmd_email_oauth_status,
+            email_oauth::cmd_email_oauth_device_start,
+            email_oauth::cmd_email_oauth_device_finish,
             wecom_env::cmd_wecom_env_status,
             wecom_env::cmd_wecom_env_remove,
             wecom_env::cmd_wecom_save_config,
@@ -230,6 +245,11 @@ pub fn run() {
                 let weixin_qr = state.weixin_qr_child.clone();
                 let qqbot_qr = state.qqbot_qr_child.clone();
                 let feishu_qr = state.feishu_qr_child.clone();
+                let last_pid = state
+                    .python_child_pid
+                    .lock()
+                    .ok()
+                    .and_then(|g| *g);
                 std::mem::drop(state);
                 let sup_lock = supervisor.try_lock();
                 if let Ok(mut sup) = sup_lock {
@@ -237,15 +257,13 @@ pub fn run() {
                         let _ = s.shutdown();
                     }
                 } else {
-                    _emergency_kill_python_child();
+                    _emergency_kill_python_child(last_pid);
                 }
                 let gw_lock = gateway.try_lock();
                 if let Ok(mut gw) = gw_lock {
                     if let Some(g) = gw.take() {
                         let _ = g.shutdown();
                     }
-                } else {
-                    _emergency_kill_python_child();
                 }
                 let wq_lock = weixin_qr.try_lock();
                 if let Ok(mut wq) = wq_lock {
@@ -632,6 +650,9 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
 
         {
             let state: tauri::State<AppState> = app.state();
+            if let Ok(mut pid_guard) = state.python_child_pid.lock() {
+                *pid_guard = supervisor.pid;
+            }
             *state.supervisor.lock().await = Some(supervisor);
             *state.hermes_port.lock().await = Some(port);
         }
@@ -683,6 +704,9 @@ pub(crate) async fn respawn_embedded_hermes_python(app: tauri::AppHandle) -> Res
         .wait_for_port()
         .await
         .map_err(|e| e.to_string())?;
+    if let Ok(mut pid_guard) = state.python_child_pid.lock() {
+        *pid_guard = supervisor.pid;
+    }
     *state.supervisor.lock().await = Some(supervisor);
     *state.hermes_port.lock().await = Some(port);
     log::info!("embedded Python respawned: port {port} power_user={power_user}");

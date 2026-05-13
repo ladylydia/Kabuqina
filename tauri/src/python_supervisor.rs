@@ -36,6 +36,7 @@ pub struct SpawnConfig {
 pub struct Supervisor {
     child: Child,
     port_file: PathBuf,
+    pub pid: Option<u32>,
 }
 
 impl Supervisor {
@@ -98,6 +99,7 @@ impl Supervisor {
             // without Node.js / Playwright. Set unconditionally; the browser
             // tool checks connectivity at runtime.
             .env("BROWSER_CDP_URL", crate::edge_browser::cdp_url())
+            .env("HERMESDESK_OVERLAY_LENIENT", "0")
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUTF8", "1")
             .env("PYTHONUNBUFFERED", "1")
@@ -138,6 +140,7 @@ impl Supervisor {
         }
 
         let mut child = cmd.spawn().context("spawn python")?;
+        let pid = child.id();
 
         if let Some(out) = child.stdout.take() {
             tokio::spawn(forward("py.out", out));
@@ -146,7 +149,7 @@ impl Supervisor {
             tokio::spawn(forward("py.err", err));
         }
 
-        Ok(Self { child, port_file })
+        Ok(Self { child, port_file, pid })
     }
 
     pub async fn wait_for_port(&self) -> Result<u16> {
