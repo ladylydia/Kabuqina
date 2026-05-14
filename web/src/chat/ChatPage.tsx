@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { usePowerUser, setPowerUser } from "../lib/powerUser";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Maximize2, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -9,6 +10,7 @@ import { useI18n } from "../lib/i18n";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSidebar } from "./ChatSidebar";
+import { WorkspacePanel } from "./WorkspacePanel";
 import { runDesktopOrganize } from "./desktop-organizer-api";
 import {
   armPendingChatSecretGateBypass,
@@ -23,6 +25,7 @@ import { useHermesReadiness } from "./hooks/useHermesReadiness";
 import { useSessions } from "./hooks/useSessions";
 import { useChatState } from "./hooks/useChatState";
 import { useSendMessage } from "./hooks/useSendMessage";
+import { useWorkbenchLayout } from "./hooks/useWorkbenchLayout";
 import { type CaptureDonePayload } from "../capture/capture-api";
 
 export function ChatPage() {
@@ -30,6 +33,7 @@ export function ChatPage() {
   const nav = useNavigate();
   const location = useLocation();
   const powerUser = usePowerUser();
+  const workbench = useWorkbenchLayout();
 
   const { hermesReady, bootErr } = useHermesReadiness();
   const { sessions, listLoading, loadSessions, deleteSession } = useSessions({ hermesReady });
@@ -238,6 +242,22 @@ export function ChatPage() {
     }
   };
 
+  const openLeftRail = () => {
+    if (workbench.focusMode && workbench.leftOpen) {
+      workbench.toggleFocusMode();
+      return;
+    }
+    workbench.toggleLeft();
+  };
+
+  const openWorkspace = () => {
+    if (workbench.focusMode && workbench.rightOpen) {
+      workbench.toggleFocusMode();
+      return;
+    }
+    workbench.toggleRight();
+  };
+
   if (bootErr) {
     return (
       <AppScaffold surface="chat" className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -296,15 +316,57 @@ export function ChatPage() {
         </div>
       </ShellModal>
       <div className="flex min-h-0 flex-1">
-        <ChatSidebar
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          loading={listLoading}
-          onNewChat={onNewChat}
-          onSelectSession={onPickSession}
-          onDeleteSession={handleDelete}
-        />
-        <main className="flex-1 min-w-0 flex flex-col">
+        {workbench.showLeftRail && (
+          <ChatSidebar
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            loading={listLoading}
+            collapsed={!workbench.leftOpen || workbench.isNarrow}
+            onToggleCollapsed={workbench.toggleLeft}
+            onNewChat={onNewChat}
+            onSelectSession={onPickSession}
+            onDeleteSession={handleDelete}
+          />
+        )}
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 bg-zinc-50/90 px-3 dark:border-zinc-800 dark:bg-[#0F172A]">
+            <p className="truncate text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">
+              {t("chat.activeWork")}
+            </p>
+            <div className="flex items-center gap-1">
+              {!workbench.showLeftRail && (
+                <button
+                  type="button"
+                  onClick={openLeftRail}
+                  className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                  aria-label={t("chat.leftRailExpand")}
+                  title={t("chat.leftRailExpand")}
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </button>
+              )}
+              {!workbench.showRightPanel && (
+                <button
+                  type="button"
+                  onClick={openWorkspace}
+                  className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                  aria-label={t("chat.workspaceExpand")}
+                  title={t("chat.workspaceExpand")}
+                >
+                  <PanelRightOpen className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={workbench.toggleFocusMode}
+                className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                aria-label={workbench.focusMode ? t("chat.focusExit") : t("chat.focusEnter")}
+                title={workbench.focusMode ? t("chat.focusExit") : t("chat.focusEnter")}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <ChatMessageList
             messages={messages}
             sending={sending}
@@ -326,6 +388,12 @@ export function ChatPage() {
             onTogglePowerUser={togglePowerUser}
           />
         </main>
+        {workbench.showRightPanel && (
+          <WorkspacePanel
+            onCollapse={workbench.toggleRight}
+            onOrganizeDesktop={handleOrganizeDesktop}
+          />
+        )}
       </div>
     </AppScaffold>
   );

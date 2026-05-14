@@ -166,6 +166,24 @@ assert.match(
   "One-click desktop organizing should add a visible user action and assistant result to chat.",
 );
 
+assert.match(
+  chatPageSource,
+  /useWorkbenchLayout/,
+  "ChatPage should use the workbench layout hook.",
+);
+
+assert.match(
+  chatPageSource,
+  /WorkspacePanel/,
+  "ChatPage should render the workspace panel.",
+);
+
+assert.match(
+  chatPageSource,
+  /toggleFocusMode/,
+  "ChatPage should expose focus mode controls.",
+);
+
 assert.doesNotMatch(
   chatPageSource,
   /DesktopOrganizerModal|desktopOrganizerOpen|setDesktopOrganizerOpen/,
