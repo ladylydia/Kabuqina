@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AlarmClock, FileText, Image as ImageIcon, PenLine } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import type { UiMsg } from "./chat-api";
 import { AgentProgress } from "./AgentProgress";
@@ -11,6 +12,8 @@ interface ChatMessageListProps {
   sending?: boolean;
   sendErr?: string | null;
   progress?: AgentProgressState | null;
+  onPickSuggestion?: (prompt: string) => void;
+  onOrganizeDesktop?: () => void;
 }
 
 function TypingIndicator() {
@@ -31,16 +34,36 @@ function TypingIndicator() {
   );
 }
 
-function EmptyState() {
+function EmptyState({
+  onPickSuggestion,
+  onOrganizeDesktop,
+}: {
+  onPickSuggestion?: (prompt: string) => void;
+  onOrganizeDesktop?: () => void;
+}) {
   const { t, locale } = useI18n();
   const brand = t("brand");
   const wordmarkBase =
     locale === "zh" ? "/kabuqina_logo_chinese" : "/kabuqina_logo_english";
   const greeting = t("chat.greeting", { name: brand });
   const greetingParts = greeting.split(brand);
+  const actions =
+    locale === "zh"
+      ? [
+          { label: "提醒我休息", prompt: "提醒我 30 分钟后休息一下", icon: AlarmClock },
+          { label: t("chat.organizeDesktopButton"), onClick: onOrganizeDesktop, icon: FileText },
+          { label: "总结图片", prompt: "帮我看看这张图片里有什么", icon: ImageIcon },
+          { label: "写消息", prompt: "帮我把这段话写得更自然：", icon: PenLine },
+        ]
+      : [
+          { label: "Set a reminder", prompt: "Remind me to take a break in 30 minutes", icon: AlarmClock },
+          { label: t("chat.organizeDesktopButton"), onClick: onOrganizeDesktop, icon: FileText },
+          { label: "Summarize an image", prompt: "Help me understand what is in this image", icon: ImageIcon },
+          { label: "Write a message", prompt: "Make this message sound more natural:", icon: PenLine },
+        ];
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6 py-8 sm:py-10">
-      <div className="flex w-full max-w-lg translate-y-5 flex-col items-center text-center sm:translate-y-7">
+      <div className="flex w-full max-w-xl translate-y-2 flex-col items-center text-center sm:translate-y-3">
         <div className="mb-5 flex flex-col items-center sm:mb-6">
           <picture className="block leading-none">
             <source type="image/avif" srcSet={`${wordmarkBase}.avif`} />
@@ -60,6 +83,39 @@ function EmptyState() {
             {greetingParts[1]}
           </p>
         </div>
+        <div
+          className="mt-1 flex w-full flex-wrap justify-center gap-2"
+          aria-label={t("chat.emptyActionsLabel")}
+        >
+          {actions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => {
+                  if ("onClick" in action && action.onClick) {
+                    action.onClick();
+                    return;
+                  }
+                  if ("prompt" in action && action.prompt) {
+                    onPickSuggestion?.(action.prompt);
+                  }
+                }}
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium",
+                  "border-zinc-200 bg-white/85 text-zinc-700 shadow-sm transition",
+                  "hover:border-sky-200 hover:bg-sky-50 hover:text-sky-900 active:scale-[0.99]",
+                  "dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200",
+                  "dark:hover:border-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-100"
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" strokeWidth={2.1} aria-hidden />
+                <span>{action.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -70,6 +126,8 @@ export function ChatMessageList({
   sending = false,
   sendErr,
   progress,
+  onPickSuggestion,
+  onOrganizeDesktop,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +150,7 @@ export function ChatMessageList({
       )}
     >
       {isEmpty ? (
-        <EmptyState />
+        <EmptyState onPickSuggestion={onPickSuggestion} onOrganizeDesktop={onOrganizeDesktop} />
       ) : (
         <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-5">
           {completedMessages.map((m) => (

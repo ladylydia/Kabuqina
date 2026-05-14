@@ -20,6 +20,7 @@ import { WeComPage } from "./advanced/pages/WeComPage";
 import { EmailPage } from "./advanced/pages/EmailPage";
 import { ScheduledTasksPage } from "./advanced/pages/ScheduledTasks";
 import { OverlayWindow } from "./capture/OverlayWindow";
+import { CompanionWindow } from "./companion/CompanionWindow";
 import { applyFontSize } from "./lib/ui-prefs";
 import "./index.css";
 
@@ -38,6 +39,14 @@ if (windowLabel === "capture-overlay") {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <OverlayWindow />
+    </React.StrictMode>,
+  );
+} else if (windowLabel === "companion") {
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <I18nProvider>
+        <CompanionWindow />
+      </I18nProvider>
     </React.StrictMode>,
   );
 } else {

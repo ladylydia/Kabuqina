@@ -9,6 +9,7 @@ import { useI18n } from "../lib/i18n";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSidebar } from "./ChatSidebar";
+import { runDesktopOrganize } from "./desktop-organizer-api";
 import {
   armPendingChatSecretGateBypass,
   getDraftPrompt,
@@ -25,7 +26,7 @@ import { useSendMessage } from "./hooks/useSendMessage";
 import { type CaptureDonePayload } from "../capture/capture-api";
 
 export function ChatPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const nav = useNavigate();
   const location = useLocation();
   const powerUser = usePowerUser();
@@ -67,6 +68,7 @@ export function ChatPage() {
     loadSessions,
     setApiRequiredOpen,
     setSendErr,
+    locale,
   });
 
   useEffect(() => {
@@ -175,6 +177,53 @@ export function ChatPage() {
     }
   }, [t]);
 
+  const handleOrganizeDesktop = useCallback(async () => {
+    const now = Date.now();
+    const pendingId = `desktop-organizer-assistant-${now}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `desktop-organizer-user-${now}`,
+        role: "user" as const,
+        text: t("desktopOrganizer.userAction"),
+        timestamp: now / 1000,
+      },
+      {
+        id: pendingId,
+        role: "assistant" as const,
+        text: t("desktopOrganizer.running"),
+        timestamp: now / 1000,
+      },
+    ]);
+
+    try {
+      const result = await runDesktopOrganize(locale);
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: result.message || t("desktopOrganizer.doneOneClick", { count: result.movedCount }),
+              }
+            : message,
+        ),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e || "");
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: t("desktopOrganizer.runFailed", { msg }),
+              }
+            : message,
+        ),
+      );
+    }
+  }, [locale, setMessages, t]);
+
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(t("chat.confirmDelete"))) {
@@ -261,6 +310,8 @@ export function ChatPage() {
             sending={sending}
             sendErr={sendErr}
             progress={progress}
+            onPickSuggestion={setInput}
+            onOrganizeDesktop={handleOrganizeDesktop}
           />
           <ChatInput
             value={input}

@@ -1,9 +1,9 @@
 //! Read/write arbitrary gateway-related keys in the host ``hermes-home/.env``.
 //! Used by Settings UI for per-channel behavior (connection mode, DM policy, …).
 
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use serde::Deserialize;
 use tauri::AppHandle;
 
 use crate::gateway_supervisor::{hermes_home_path, parse_dotenv_upper};
@@ -122,9 +122,7 @@ fn strip_wrapping_quotes(s: &str) -> String {
     let t = s.trim();
     if t.len() >= 2 {
         let b = t.as_bytes();
-        if (b[0] == b'"' && b[t.len() - 1] == b'"')
-            || (b[0] == b'\'' && b[t.len() - 1] == b'\'')
-        {
+        if (b[0] == b'"' && b[t.len() - 1] == b'"') || (b[0] == b'\'' && b[t.len() - 1] == b'\'') {
             return t[1..t.len() - 1].to_string();
         }
     }

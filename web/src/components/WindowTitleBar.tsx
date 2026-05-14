@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Maximize2, Minus, X } from "lucide-react";
+import { Maximize2, Minus, Sparkles, X } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
@@ -51,6 +51,13 @@ export function WindowTitleBar() {
       return;
     }
     void getCurrentWindow().close();
+  };
+
+  const onShowCompanion = () => {
+    if (!inApp) {
+      return;
+    }
+    void invoke("cmd_show_companion");
   };
 
   const isChat = location.pathname === "/chat";
@@ -133,6 +140,15 @@ export function WindowTitleBar() {
         {inApp && (
           <>
             <div className="mx-0.5 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+            <button
+              type="button"
+              onClick={onShowCompanion}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-sky-100 hover:text-sky-700 dark:hover:bg-sky-950 dark:hover:text-sky-300"
+              title={t("companion.show")}
+              aria-label={t("companion.show")}
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={2.25} />
+            </button>
             <button
               type="button"
               onClick={onMinimize}

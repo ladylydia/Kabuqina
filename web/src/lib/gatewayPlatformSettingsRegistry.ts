@@ -400,6 +400,64 @@ export const GATEWAY_PLATFORM_REGISTRY: GatewayPlatformRegistryEntry[] = [
     platform: "email",
     sections: [
       {
+        id: "connection",
+        titleKey: `${GW}.sectionConnection`,
+        fields: [
+          {
+            envKey: "EMAIL_AUTH_MODE",
+            labelKey: `${GW}.emailAuthMode`,
+            descriptionKey: `${GW}.emailAuthModeDesc`,
+            type: "enum",
+            enumValues: ["password", "oauth2"],
+            recommended: "password",
+          },
+          {
+            envKey: "EMAIL_OAUTH2_ACCESS_TOKEN",
+            labelKey: `${GW}.emailOauth2AccessToken`,
+            descriptionKey: `${GW}.emailOauth2AccessTokenDesc`,
+            type: "secret",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_CLIENT_ID",
+            labelKey: `${GW}.emailOauth2ClientId`,
+            type: "string",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_REFRESH_TOKEN",
+            labelKey: `${GW}.emailOauth2RefreshToken`,
+            type: "secret",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_CLIENT_SECRET",
+            labelKey: `${GW}.emailOauth2ClientSecret`,
+            type: "secret",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_TENANT",
+            labelKey: `${GW}.emailOauth2Tenant`,
+            descriptionKey: `${GW}.emailOauth2TenantDesc`,
+            type: "string",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_TOKEN_URL",
+            labelKey: `${GW}.emailOauth2TokenUrl`,
+            type: "string",
+            advanced: true,
+          },
+          {
+            envKey: "EMAIL_OAUTH2_SCOPE",
+            labelKey: `${GW}.emailOauth2Scope`,
+            type: "string",
+            advanced: true,
+          },
+        ],
+      },
+      {
         id: "dm",
         titleKey: `${GW}.sectionDm`,
         fields: [

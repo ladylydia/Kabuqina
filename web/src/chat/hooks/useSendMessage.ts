@@ -20,6 +20,8 @@ import {
   emptyProgress,
   type AgentProgressState,
 } from "./useAgentProgress";
+import type { Locale } from "../../lib/i18n-core";
+import { friendlyChatError } from "../friendlyError";
 
 const POLL_INTERVAL_MS = 300;
 
@@ -32,6 +34,7 @@ export function useSendMessage({
   loadSessions,
   setApiRequiredOpen,
   setSendErr,
+  locale,
 }: {
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
@@ -41,6 +44,7 @@ export function useSendMessage({
   loadSessions: (options?: { silent?: boolean }) => Promise<void>;
   setApiRequiredOpen: (open: boolean) => void;
   setSendErr: (err: string | null) => void;
+  locale: Locale;
 }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -137,20 +141,20 @@ export function useSendMessage({
     progressRef.current = null;
     setSending(false);
     setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
-    setSendErr(null);
-    try {
-      await cmdDeskStop(sid);
-    } catch (e) {
-      console.error(e);
+      setSendErr(null);
+      try {
+        await cmdDeskStop(sid);
+      } catch (e) {
+        console.error(e);
       const msg =
         typeof e === "string"
           ? e
           : e && isRecord(e) && typeof e.message === "string"
             ? e.message
             : String(e);
-      setSendErr(msg);
+      setSendErr(friendlyChatError(msg, locale));
     }
-  }, [activeSessionId, setMessages, setSendErr, stopProgressPoll]);
+  }, [activeSessionId, locale, setMessages, setSendErr, stopProgressPoll]);
 
   const onSend = useCallback(async () => {
     const text = input.trim();
@@ -309,8 +313,9 @@ export function useSendMessage({
         queueDelta(event.text);
       }
       if (event.type === "error" && !stopTurnRef.current && isVisible()) {
+        console.error("chat stream error:", event);
         setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
-        setSendErr(event.detail || event.error || "Stream failed");
+        setSendErr(friendlyChatError(event.detail || event.error || "Stream failed", locale));
       }
     };
 
@@ -339,8 +344,9 @@ export function useSendMessage({
         return;
       }
       if (!parsed.ok) {
+        console.error("chat send failed:", parsed.err);
         setMessages((m) => m.filter((x) => x.id !== "pending-assistant"));
-        setSendErr(parsed.err);
+        setSendErr(friendlyChatError(parsed.err, locale));
         return;
       }
       const resolvedModel = (parsed.model || "").trim() || threadModel;
@@ -370,7 +376,7 @@ export function useSendMessage({
             : e && isRecord(e) && typeof e.message === "string"
               ? e.message
               : String(e);
-        setSendErr(msg);
+        setSendErr(friendlyChatError(msg, locale));
       }
     } finally {
       unlistenStream?.();
@@ -386,6 +392,7 @@ export function useSendMessage({
     }
   }, [
     input,
+    locale,
     pendingAttachments,
     sending,
     activeSessionId,

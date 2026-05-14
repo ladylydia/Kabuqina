@@ -93,6 +93,7 @@ class QQCloseError(Exception):
 
 from gateway.platforms.qqbot.constants import (
     API_BASE,
+    SANDBOX_API_BASE,
     TOKEN_URL,
     GATEWAY_URL_PATH,
     DEFAULT_API_TIMEOUT,
@@ -169,6 +170,8 @@ class QQAdapter(BasePlatformAdapter):
             extra.get("client_secret") or os.getenv("QQ_CLIENT_SECRET", "")
         ).strip()
         self._markdown_support = bool(extra.get("markdown_support", True))
+        self._sandbox = bool(extra.get("sandbox", False))
+        self._api_base = SANDBOX_API_BASE if self._sandbox else API_BASE
 
         # Auth/ACL policies
         self._dm_policy = str(extra.get("dm_policy", "open")).strip().lower()
@@ -362,7 +365,7 @@ class QQAdapter(BasePlatformAdapter):
         token = await self._ensure_token()
         try:
             resp = await self._http_client.get(
-                f"{API_BASE}{GATEWAY_URL_PATH}",
+                f"{self._api_base}{GATEWAY_URL_PATH}",
                 headers={
                     "Authorization": f"QQBot {token}",
                     "User-Agent": build_user_agent(),
@@ -1805,7 +1808,7 @@ class QQAdapter(BasePlatformAdapter):
         try:
             resp = await self._http_client.request(
                 method,
-                f"{API_BASE}{path}",
+                f"{self._api_base}{path}",
                 headers=headers,
                 json=body,
                 timeout=timeout,

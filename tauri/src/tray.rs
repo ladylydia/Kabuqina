@@ -4,7 +4,7 @@ use anyhow::Result;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-    App, Manager,
+    App,
 };
 
 pub fn install(app: &mut App) -> Result<()> {
@@ -18,23 +18,40 @@ pub fn install(app: &mut App) -> Result<()> {
         true,
         None::<&str>,
     )?;
+    let companion = MenuItem::with_id(
+        &handle,
+        "companion",
+        "Show Nana companion",
+        true,
+        None::<&str>,
+    )?;
     let updates = MenuItem::with_id(&handle, "updates", "Check for updates", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(&handle)?;
     let quit = MenuItem::with_id(&handle, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(&handle, &[&show, &workspace, &updates, &sep, &quit])?;
+    let menu = Menu::with_items(
+        &handle,
+        &[&show, &companion, &workspace, &updates, &sep, &quit],
+    )?;
 
     let _ = TrayIconBuilder::with_id("kabuqina-tray")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "show" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+                crate::companion::focus_main_window(&app);
             }
             "workspace" => {
                 let _ = crate::paths::cmd_open_workspace(app.clone());
+            }
+            "companion" => {
+                tauri::async_runtime::spawn({
+                    let app = app.clone();
+                    async move {
+                        if let Err(e) = crate::companion::show_companion(app).await {
+                            log::error!("show companion: {e}");
+                        }
+                    }
+                });
             }
             "updates" => {
                 #[cfg(desktop)]
@@ -58,10 +75,7 @@ pub fn install(app: &mut App) -> Result<()> {
             } = event
             {
                 let app = tray.app_handle();
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+                crate::companion::focus_main_window(app);
             }
         })
         .build(app)?;

@@ -11,19 +11,33 @@ Environment variables:
     EMAIL_SMTP_PORT     — SMTP server port (default: 587)
     EMAIL_ADDRESS       — Email address for the agent
     EMAIL_PASSWORD      — Email password or app-specific password
+    EMAIL_AUTH_MODE     — password (default) or oauth2
+    EMAIL_OAUTH2_ACCESS_TOKEN  — OAuth2 access token for XOAUTH2
+    EMAIL_OAUTH2_REFRESH_TOKEN — OAuth2 refresh token (optional)
+    EMAIL_OAUTH2_CLIENT_ID     — OAuth2 app client id for refresh token flow
+    EMAIL_OAUTH2_CLIENT_SECRET — OAuth2 app secret, if your app requires one
+    EMAIL_OAUTH2_TENANT        — Microsoft tenant for token refresh (default: common)
+    EMAIL_OAUTH2_TOKEN_URL     — Custom token endpoint; defaults to Microsoft v2
+    EMAIL_OAUTH2_SCOPE         — Scope used when refreshing Microsoft tokens
     EMAIL_POLL_INTERVAL — Seconds between mailbox checks (default: 15)
     EMAIL_ALLOWED_USERS — Comma-separated list of allowed sender addresses
 """
 
 import asyncio
+import base64
 import email as email_lib
 import imaplib
+import json
 import logging
 import os
 import re
 import smtplib
 import ssl
+import time
+import urllib.parse
+import urllib.request
 import uuid
+from dataclasses import dataclass
 from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -65,6 +79,22 @@ MAX_MESSAGE_LENGTH = 50_000
 # Supported image extensions for inline detection
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
+EMAIL_AUTH_MODE_PASSWORD = "password"
+EMAIL_AUTH_MODE_OAUTH2 = "oauth2"
+MICROSOFT_DEFAULT_SCOPE = (
+    "https://outlook.office.com/IMAP.AccessAsUser.All "
+    "https://outlook.office.com/SMTP.Send "
+    "offline_access"
+)
+
+
+@dataclass
+class OAuth2Token:
+    access_token: str
+    refresh_token: str = ""
+    expires_in: int = 3600
+
+
 def _is_automated_sender(address: str, headers: dict) -> bool:
     """Return True if this email is from an automated/noreply source."""
     addr = address.lower()
@@ -82,9 +112,77 @@ def check_email_requirements() -> bool:
     pwd = os.getenv("EMAIL_PASSWORD")
     imap = os.getenv("EMAIL_IMAP_HOST")
     smtp = os.getenv("EMAIL_SMTP_HOST")
-    if not all([addr, pwd, imap, smtp]):
+    if not all([addr, imap, smtp]):
+        return False
+    if _email_uses_oauth2():
+        return _email_oauth2_configured()
+    if not pwd:
         return False
     return True
+
+
+def _email_uses_oauth2() -> bool:
+    return os.getenv("EMAIL_AUTH_MODE", EMAIL_AUTH_MODE_PASSWORD).strip().lower() in {
+        EMAIL_AUTH_MODE_OAUTH2,
+        "xoauth2",
+    }
+
+
+def _email_oauth2_configured() -> bool:
+    if os.getenv("EMAIL_OAUTH2_ACCESS_TOKEN", "").strip():
+        return True
+    return bool(
+        os.getenv("EMAIL_OAUTH2_CLIENT_ID", "").strip()
+        and os.getenv("EMAIL_OAUTH2_REFRESH_TOKEN", "").strip()
+    )
+
+
+def _build_xoauth2_payload(user: str, access_token: str) -> bytes:
+    return f"user={user}\x01auth=Bearer {access_token}\x01\x01".encode("utf-8")
+
+
+def _smtp_auth_xoauth2(smtp: smtplib.SMTP, user: str, access_token: str) -> None:
+    payload = base64.b64encode(_build_xoauth2_payload(user, access_token)).decode("ascii")
+    code, response = smtp.docmd("AUTH", f"XOAUTH2 {payload}")
+    if code not in (235, 503):
+        raise smtplib.SMTPAuthenticationError(code, response)
+
+
+def _refresh_oauth2_access_token(
+    *,
+    client_id: str,
+    refresh_token: str,
+    client_secret: str = "",
+    token_url: str = "",
+    tenant: str = "common",
+    scope: str = "",
+) -> OAuth2Token:
+    tenant = (tenant or "common").strip()
+    token_url = (token_url or f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token").strip()
+    form = {
+        "client_id": client_id,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "scope": scope or MICROSOFT_DEFAULT_SCOPE,
+    }
+    if client_secret:
+        form["client_secret"] = client_secret
+    req = urllib.request.Request(
+        token_url,
+        data=urllib.parse.urlencode(form).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    access_token = str(payload.get("access_token", "")).strip()
+    if not access_token:
+        raise RuntimeError("OAuth2 token endpoint did not return an access_token")
+    return OAuth2Token(
+        access_token=access_token,
+        refresh_token=str(payload.get("refresh_token", "")).strip(),
+        expires_in=int(payload.get("expires_in", 3600) or 3600),
+    )
 
 
 def _decode_header_value(raw: str) -> str:
@@ -227,11 +325,20 @@ class EmailAdapter(BasePlatformAdapter):
 
         self._address = os.getenv("EMAIL_ADDRESS", "")
         self._password = os.getenv("EMAIL_PASSWORD", "")
+        self._auth_mode = os.getenv("EMAIL_AUTH_MODE", EMAIL_AUTH_MODE_PASSWORD).strip().lower()
         self._imap_host = os.getenv("EMAIL_IMAP_HOST", "")
         self._imap_port = int(os.getenv("EMAIL_IMAP_PORT", "993"))
         self._smtp_host = os.getenv("EMAIL_SMTP_HOST", "")
         self._smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
         self._poll_interval = int(os.getenv("EMAIL_POLL_INTERVAL", "15"))
+        self._oauth2_access_token = os.getenv("EMAIL_OAUTH2_ACCESS_TOKEN", "").strip()
+        self._oauth2_refresh_token = os.getenv("EMAIL_OAUTH2_REFRESH_TOKEN", "").strip()
+        self._oauth2_client_id = os.getenv("EMAIL_OAUTH2_CLIENT_ID", "").strip()
+        self._oauth2_client_secret = os.getenv("EMAIL_OAUTH2_CLIENT_SECRET", "").strip()
+        self._oauth2_tenant = os.getenv("EMAIL_OAUTH2_TENANT", "common").strip() or "common"
+        self._oauth2_token_url = os.getenv("EMAIL_OAUTH2_TOKEN_URL", "").strip()
+        self._oauth2_scope = os.getenv("EMAIL_OAUTH2_SCOPE", "").strip()
+        self._oauth2_expires_at = 0.0
 
         # Skip attachments — configured via config.yaml:
         #   platforms:
@@ -248,7 +355,47 @@ class EmailAdapter(BasePlatformAdapter):
         # Map chat_id (sender email) -> last subject + message-id for threading
         self._thread_context: Dict[str, Dict[str, str]] = {}
 
-        logger.info("[Email] Adapter initialized for %s", self._address)
+        logger.info("[Email] Adapter initialized for %s (auth=%s)", self._address, self._auth_mode)
+
+    def _uses_oauth2(self) -> bool:
+        return self._auth_mode in {EMAIL_AUTH_MODE_OAUTH2, "xoauth2"}
+
+    def _get_access_token(self) -> str:
+        if not self._uses_oauth2():
+            return ""
+        now = time.time()
+        if self._oauth2_access_token and (not self._oauth2_refresh_token or now < self._oauth2_expires_at - 60):
+            return self._oauth2_access_token
+        if not self._oauth2_client_id or not self._oauth2_refresh_token:
+            if self._oauth2_access_token:
+                return self._oauth2_access_token
+            raise RuntimeError("Email OAuth2 requires EMAIL_OAUTH2_ACCESS_TOKEN or CLIENT_ID + REFRESH_TOKEN")
+        token = _refresh_oauth2_access_token(
+            client_id=self._oauth2_client_id,
+            refresh_token=self._oauth2_refresh_token,
+            client_secret=self._oauth2_client_secret,
+            token_url=self._oauth2_token_url,
+            tenant=self._oauth2_tenant,
+            scope=self._oauth2_scope,
+        )
+        self._oauth2_access_token = token.access_token
+        if token.refresh_token:
+            self._oauth2_refresh_token = token.refresh_token
+        self._oauth2_expires_at = now + max(60, token.expires_in)
+        return self._oauth2_access_token
+
+    def _login_imap(self, imap: imaplib.IMAP4_SSL) -> None:
+        if self._uses_oauth2():
+            token = self._get_access_token()
+            imap.authenticate("XOAUTH2", lambda _: _build_xoauth2_payload(self._address, token))
+        else:
+            imap.login(self._address, self._password)
+
+    def _login_smtp(self, smtp: smtplib.SMTP) -> None:
+        if self._uses_oauth2():
+            _smtp_auth_xoauth2(smtp, self._address, self._get_access_token())
+        else:
+            smtp.login(self._address, self._password)
 
     def _trim_seen_uids(self) -> None:
         """Keep only the most recent UIDs to prevent unbounded memory growth.
@@ -275,7 +422,7 @@ class EmailAdapter(BasePlatformAdapter):
         try:
             # Test IMAP connection
             imap = imaplib.IMAP4_SSL(self._imap_host, self._imap_port, timeout=30)
-            imap.login(self._address, self._password)
+            self._login_imap(imap)
             # Mark all existing messages as seen so we only process new ones
             imap.select("INBOX")
             status, data = imap.uid("search", None, "ALL")
@@ -294,7 +441,7 @@ class EmailAdapter(BasePlatformAdapter):
             # Test SMTP connection
             smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
             smtp.starttls(context=ssl.create_default_context())
-            smtp.login(self._address, self._password)
+            self._login_smtp(smtp)
             smtp.quit()
             logger.info("[Email] SMTP connection test passed.")
         except Exception as e:
@@ -343,7 +490,7 @@ class EmailAdapter(BasePlatformAdapter):
         try:
             imap = imaplib.IMAP4_SSL(self._imap_host, self._imap_port, timeout=30)
             try:
-                imap.login(self._address, self._password)
+                self._login_imap(imap)
                 imap.select("INBOX")
 
                 status, data = imap.uid("search", None, "UNSEEN")
@@ -514,7 +661,7 @@ class EmailAdapter(BasePlatformAdapter):
         smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
         try:
             smtp.starttls(context=ssl.create_default_context())
-            smtp.login(self._address, self._password)
+            self._login_smtp(smtp)
             smtp.send_message(msg)
         finally:
             try:
@@ -636,7 +783,7 @@ class EmailAdapter(BasePlatformAdapter):
         smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
         try:
             smtp.starttls(context=ssl.create_default_context())
-            smtp.login(self._address, self._password)
+            self._login_smtp(smtp)
             smtp.send_message(msg)
         finally:
             try:
@@ -715,7 +862,7 @@ class EmailAdapter(BasePlatformAdapter):
         smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
         try:
             smtp.starttls(context=ssl.create_default_context())
-            smtp.login(self._address, self._password)
+            self._login_smtp(smtp)
             smtp.send_message(msg)
         finally:
             try:

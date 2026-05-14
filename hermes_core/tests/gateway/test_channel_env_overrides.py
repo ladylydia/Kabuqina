@@ -53,6 +53,19 @@ def test_qq_group_policy_and_allowlist_from_env(hermes_home, monkeypatch):
     assert q.extra.get("group_allow_from") == "grp_a,grp_b"
 
 
+def test_qq_advanced_flags_from_env(hermes_home, monkeypatch):
+    monkeypatch.setenv("QQ_APP_ID", "qid")
+    monkeypatch.setenv("QQ_CLIENT_SECRET", "qsec")
+    monkeypatch.setenv("QQ_MARKDOWN_SUPPORT", "false")
+    monkeypatch.setenv("QQ_SANDBOX", "true")
+
+    cfg = load_gateway_config()
+    q = cfg.platforms.get(Platform.QQBOT)
+    assert q is not None
+    assert q.extra.get("markdown_support") is False
+    assert q.extra.get("sandbox") is True
+
+
 def test_wecom_bot_credentials_from_env(hermes_home, monkeypatch):
     monkeypatch.setenv("WECOM_BOT_ID", "bot_1")
     monkeypatch.setenv("WECOM_SECRET", "sec_1")

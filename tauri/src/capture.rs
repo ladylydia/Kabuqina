@@ -23,8 +23,7 @@ struct CaptureDonePayload {
 fn save_capture(app: &tauri::AppHandle, png_bytes: &[u8]) -> Result<PathBuf, String> {
     let workspace = crate::paths::ensure_workspace(app).map_err(|e| e.to_string())?;
     let captures_dir = workspace.join("captures");
-    std::fs::create_dir_all(&captures_dir)
-        .map_err(|e| format!("create captures dir: {e}"))?;
+    std::fs::create_dir_all(&captures_dir).map_err(|e| format!("create captures dir: {e}"))?;
     let filename = format!("{}.png", uuid::Uuid::new_v4());
     let dest = captures_dir.join(&filename);
     std::fs::write(&dest, png_bytes).map_err(|e| format!("write capture: {e}"))?;
@@ -41,10 +40,7 @@ fn encode_png(img: &ImageBuf) -> Result<Vec<u8>, String> {
 }
 
 /// Finish a capture: encode, save, emit event, hide overlay.
-fn finish_capture(
-    app: &tauri::AppHandle,
-    img: &ImageBuf,
-) -> Result<String, String> {
+fn finish_capture(app: &tauri::AppHandle, img: &ImageBuf) -> Result<String, String> {
     let png_bytes = encode_png(img)?;
     let path = save_capture(app, &png_bytes)?;
     let path_str = path.to_string_lossy().to_string();
@@ -54,20 +50,18 @@ fn finish_capture(
         .unwrap_or_else(|| "capture.png".into());
     let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
 
-    let _ = app
-        .get_webview_window("main")
-        .and_then(|w| {
-            w.emit(
-                "capture-done",
-                CaptureDonePayload {
-                    path: path_str.clone(),
-                    name,
-                    mime: "image/png".into(),
-                    data: b64,
-                },
-            )
-            .ok()
-        });
+    let _ = app.get_webview_window("main").and_then(|w| {
+        w.emit(
+            "capture-done",
+            CaptureDonePayload {
+                path: path_str.clone(),
+                name,
+                mime: "image/png".into(),
+                data: b64,
+            },
+        )
+        .ok()
+    });
 
     if let Some(w) = app.get_webview_window("capture-overlay") {
         let _ = w.hide();
@@ -84,8 +78,7 @@ pub async fn cmd_capture_region(
     w: u32,
     h: u32,
 ) -> Result<String, String> {
-    let monitors =
-        xcap::Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
+    let monitors = xcap::Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
     if monitors.is_empty() {
         return Err("no monitors found".into());
     }
@@ -98,10 +91,7 @@ pub async fn cmd_capture_region(
         .find(|m| {
             let mx = m.x();
             let my = m.y();
-            cx >= mx
-                && cy >= my
-                && cx < mx + (m.width() as i32)
-                && cy < my + (m.height() as i32)
+            cx >= mx && cy >= my && cx < mx + (m.width() as i32) && cy < my + (m.height() as i32)
         })
         .unwrap_or(&monitors[0]);
 
@@ -128,8 +118,7 @@ pub async fn cmd_capture_region(
 
 #[tauri::command]
 pub async fn cmd_capture_fullscreen(app: tauri::AppHandle) -> Result<String, String> {
-    let monitors =
-        xcap::Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
+    let monitors = xcap::Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
     if monitors.is_empty() {
         return Err("no monitors found".into());
     }
@@ -191,17 +180,19 @@ pub fn register_global_shortcut(app: &tauri::AppHandle) {
 
     // `on_shortcut` registers the hotkey and attaches the handler; do not call
     // `register` separately or the OS returns "already registered".
-    match app.global_shortcut().on_shortcut(shortcut_str, move |_app, _shortcut, event| {
-        if !matches!(event.state, ShortcutState::Pressed) {
-            return;
-        }
-        let h = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = cmd_show_capture_overlay(h).await {
-                log::error!("show capture overlay: {e}");
+    match app
+        .global_shortcut()
+        .on_shortcut(shortcut_str, move |_app, _shortcut, event| {
+            if !matches!(event.state, ShortcutState::Pressed) {
+                return;
             }
-        });
-    }) {
+            let h = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = cmd_show_capture_overlay(h).await {
+                    log::error!("show capture overlay: {e}");
+                }
+            });
+        }) {
         Ok(_) => log::info!("global shortcut '{}' registered", shortcut_str),
         Err(e) => log::error!("register global shortcut '{}' failed: {e}", shortcut_str),
     }

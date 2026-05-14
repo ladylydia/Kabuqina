@@ -135,7 +135,9 @@ fn chrono_iso_now() -> String {
     // just for a timestamp. Local time with millisecond precision is fine
     // — Python parses any ISO-8601 with offset.
     use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = now.as_secs() as i64;
     let micros = now.subsec_micros();
 
@@ -208,17 +210,49 @@ fn job_to_entry(job: &serde_json::Value) -> CronJobEntry {
     };
 
     CronJobEntry {
-        id: job.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        name: job.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        id: job
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        name: job
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         schedule: schedule_str,
-        prompt: job.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        deliver: job.get("deliver").and_then(|v| v.as_str()).unwrap_or("desktop").to_string(),
+        prompt: job
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        deliver: job
+            .get("deliver")
+            .and_then(|v| v.as_str())
+            .unwrap_or("desktop")
+            .to_string(),
         paused: job.get("paused").and_then(|v| v.as_bool()).unwrap_or(false),
-        next_run_at: job.get("next_run_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        last_run_at: job.get("last_run_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        state: job.get("state").and_then(|v| v.as_str()).unwrap_or("scheduled").to_string(),
-        completed_at: job.get("completed_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        last_status: job.get("last_status").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        next_run_at: job
+            .get("next_run_at")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        last_run_at: job
+            .get("last_run_at")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        state: job
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("scheduled")
+            .to_string(),
+        completed_at: job
+            .get("completed_at")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        last_status: job
+            .get("last_status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     }
 }
 

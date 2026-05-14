@@ -57,12 +57,28 @@ class TestConfigEnvOverrides(unittest.TestCase):
         self.assertIsNotNone(home)
         self.assertEqual(home.chat_id, "user@test.com")
 
-    @patch.dict(os.environ, {}, clear=True)
+    @patch.dict(os.environ, {"HERMES_HOME": "."}, clear=True)
     def test_email_not_loaded_without_env(self):
         from gateway.config import GatewayConfig, Platform, _apply_env_overrides
         config = GatewayConfig()
         _apply_env_overrides(config)
         self.assertNotIn(Platform.EMAIL, config.platforms)
+
+    @patch.dict(os.environ, {
+        "HERMES_HOME": ".",
+        "EMAIL_ADDRESS": "hermes@test.com",
+        "EMAIL_AUTH_MODE": "oauth2",
+        "EMAIL_OAUTH2_ACCESS_TOKEN": "access-token",
+        "EMAIL_IMAP_HOST": "imap.test.com",
+        "EMAIL_SMTP_HOST": "smtp.test.com",
+    }, clear=True)
+    def test_email_oauth2_config_loaded_from_env_without_password(self):
+        from gateway.config import GatewayConfig, Platform, _apply_env_overrides
+        config = GatewayConfig()
+        _apply_env_overrides(config)
+        self.assertIn(Platform.EMAIL, config.platforms)
+        self.assertTrue(config.platforms[Platform.EMAIL].enabled)
+        self.assertEqual(config.platforms[Platform.EMAIL].extra["auth_mode"], "oauth2")
 
 class TestCheckRequirements(unittest.TestCase):
     """Verify check_email_requirements function."""
@@ -88,6 +104,98 @@ class TestCheckRequirements(unittest.TestCase):
     def test_requirements_empty_env(self):
         from gateway.platforms.email import check_email_requirements
         self.assertFalse(check_email_requirements())
+
+    @patch.dict(os.environ, {
+        "EMAIL_ADDRESS": "a@b.com",
+        "EMAIL_AUTH_MODE": "oauth2",
+        "EMAIL_OAUTH2_ACCESS_TOKEN": "access-token",
+        "EMAIL_IMAP_HOST": "imap.b.com",
+        "EMAIL_SMTP_HOST": "smtp.b.com",
+    }, clear=True)
+    def test_oauth2_access_token_requirements_met_without_password(self):
+        from gateway.platforms.email import check_email_requirements
+        self.assertTrue(check_email_requirements())
+
+    @patch.dict(os.environ, {
+        "EMAIL_ADDRESS": "a@b.com",
+        "EMAIL_AUTH_MODE": "oauth2",
+        "EMAIL_OAUTH2_CLIENT_ID": "client-id",
+        "EMAIL_OAUTH2_REFRESH_TOKEN": "refresh-token",
+        "EMAIL_IMAP_HOST": "imap.b.com",
+        "EMAIL_SMTP_HOST": "smtp.b.com",
+    }, clear=True)
+    def test_oauth2_refresh_token_requirements_met_without_password(self):
+        from gateway.platforms.email import check_email_requirements
+        self.assertTrue(check_email_requirements())
+
+    @patch.dict(os.environ, {
+        "EMAIL_ADDRESS": "a@b.com",
+        "EMAIL_AUTH_MODE": "oauth2",
+        "EMAIL_IMAP_HOST": "imap.b.com",
+        "EMAIL_SMTP_HOST": "smtp.b.com",
+    }, clear=True)
+    def test_oauth2_requires_token_or_refresh_config(self):
+        from gateway.platforms.email import check_email_requirements
+        self.assertFalse(check_email_requirements())
+
+
+class TestOAuth2Helpers(unittest.TestCase):
+    """Verify OAuth2/XOAUTH2 helper behavior."""
+
+    def test_xoauth2_payload_contains_user_and_bearer_token(self):
+        from gateway.platforms.email import _build_xoauth2_payload
+        payload = _build_xoauth2_payload("user@example.com", "ya29.token")
+        self.assertIn(b"user=user@example.com", payload)
+        self.assertIn(b"auth=Bearer ya29.token", payload)
+        self.assertTrue(payload.endswith(b"\x01\x01"))
+
+    def test_smtp_auth_xoauth2_uses_sasl_payload(self):
+        from gateway.platforms.email import _smtp_auth_xoauth2
+        smtp = MagicMock()
+        smtp.docmd.return_value = (235, b"2.7.0 Authentication successful")
+
+        _smtp_auth_xoauth2(smtp, "user@example.com", "access-token")
+
+        command, argument = smtp.docmd.call_args[0]
+        self.assertEqual(command, "AUTH")
+        self.assertTrue(argument.startswith("XOAUTH2 "))
+
+    @patch.dict(os.environ, {
+        "EMAIL_OAUTH2_CLIENT_ID": "client-id",
+        "EMAIL_OAUTH2_REFRESH_TOKEN": "refresh-token",
+        "EMAIL_OAUTH2_TENANT": "common",
+    }, clear=True)
+    def test_refresh_token_requests_microsoft_token_endpoint(self):
+        from gateway.platforms.email import _refresh_oauth2_access_token
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600}'
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()) as mock_urlopen:
+            token = _refresh_oauth2_access_token(
+                client_id="client-id",
+                refresh_token="refresh-token",
+                client_secret="",
+                token_url="",
+                tenant="common",
+                scope="",
+            )
+
+        self.assertEqual(token.access_token, "new-access")
+        self.assertEqual(token.refresh_token, "new-refresh")
+        req = mock_urlopen.call_args[0][0]
+        self.assertIn("/common/oauth2/v2.0/token", req.full_url)
+        body = req.data.decode("utf-8")
+        self.assertIn("grant_type=refresh_token", body)
+        self.assertIn("client_id=client-id", body)
+        self.assertIn("refresh_token=refresh-token", body)
 
 
 class TestHelperFunctions(unittest.TestCase):
@@ -557,6 +665,33 @@ class TestSendMethods(unittest.TestCase):
             mock_server.send_message.assert_called_once()
             mock_server.quit.assert_called_once()
 
+    def test_send_uses_oauth2_when_configured(self):
+        """OAuth2 mode should authenticate SMTP with XOAUTH2, not password login."""
+        import asyncio
+        from gateway.config import PlatformConfig
+        with patch.dict(os.environ, {
+            "EMAIL_ADDRESS": "hermes@test.com",
+            "EMAIL_AUTH_MODE": "oauth2",
+            "EMAIL_OAUTH2_ACCESS_TOKEN": "access-token",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        }, clear=True):
+            from gateway.platforms.email import EmailAdapter
+            adapter = EmailAdapter(PlatformConfig(enabled=True))
+
+        with patch("smtplib.SMTP") as mock_smtp:
+            mock_server = MagicMock()
+            mock_server.docmd.return_value = (235, b"2.7.0 Authentication successful")
+            mock_smtp.return_value = mock_server
+
+            result = asyncio.run(adapter.send("user@test.com", "Hello from Hermes!"))
+
+        self.assertTrue(result.success)
+        mock_server.login.assert_not_called()
+        mock_server.docmd.assert_called_once()
+        self.assertEqual(mock_server.docmd.call_args[0][0], "AUTH")
+        self.assertTrue(mock_server.docmd.call_args[0][1].startswith("XOAUTH2 "))
+
     def test_send_failure_returns_error(self):
         """SMTP failure should return SendResult with error."""
         import asyncio
@@ -681,6 +816,39 @@ class TestConnectDisconnect(unittest.TestCase):
             adapter._running = False
             if adapter._poll_task:
                 adapter._poll_task.cancel()
+
+    def test_connect_uses_oauth2_for_imap_and_smtp(self):
+        """OAuth2 mode should authenticate both IMAP and SMTP with XOAUTH2."""
+        import asyncio
+        from gateway.config import PlatformConfig
+        with patch.dict(os.environ, {
+            "EMAIL_ADDRESS": "hermes@test.com",
+            "EMAIL_AUTH_MODE": "oauth2",
+            "EMAIL_OAUTH2_ACCESS_TOKEN": "access-token",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        }, clear=True):
+            from gateway.platforms.email import EmailAdapter
+            adapter = EmailAdapter(PlatformConfig(enabled=True))
+
+        mock_imap = MagicMock()
+        mock_imap.uid.return_value = ("OK", [b""])
+        mock_smtp = MagicMock()
+        mock_smtp.docmd.return_value = (235, b"2.7.0 Authentication successful")
+
+        with patch("imaplib.IMAP4_SSL", return_value=mock_imap), \
+             patch("smtplib.SMTP", return_value=mock_smtp):
+            result = asyncio.run(adapter.connect())
+
+        self.assertTrue(result)
+        mock_imap.login.assert_not_called()
+        mock_imap.authenticate.assert_called()
+        self.assertEqual(mock_imap.authenticate.call_args[0][0], "XOAUTH2")
+        mock_smtp.login.assert_not_called()
+        mock_smtp.docmd.assert_called_once()
+        adapter._running = False
+        if adapter._poll_task:
+            adapter._poll_task.cancel()
 
     def test_connect_imap_failure(self):
         """IMAP connection failure returns False."""

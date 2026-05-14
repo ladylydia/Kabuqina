@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "test:desktop-delivery": "node src/lib/desktopDelivery.test.mjs",
+    "test:chat-ux": "node src/chat/chatUx.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

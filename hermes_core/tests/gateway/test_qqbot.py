@@ -92,6 +92,14 @@ class TestQQAdapterInit:
         adapter = self._make(app_id="a", client_secret="b", markdown_support=False)
         assert adapter._markdown_support is False
 
+    def test_sandbox_uses_sandbox_api_base(self):
+        adapter = self._make(app_id="a", client_secret="b", sandbox=True)
+        assert adapter._api_base == "https://sandbox.api.sgroup.qq.com"
+
+    def test_sandbox_default_uses_production_api_base(self):
+        adapter = self._make(app_id="a", client_secret="b")
+        assert adapter._api_base == "https://api.sgroup.qq.com"
+
     def test_name_property(self):
         adapter = self._make(app_id="a", client_secret="b")
         assert adapter.name == "QQBot"

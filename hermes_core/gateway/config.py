@@ -1165,7 +1165,16 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
     email_pwd = os.getenv("EMAIL_PASSWORD")
     email_imap = os.getenv("EMAIL_IMAP_HOST")
     email_smtp = os.getenv("EMAIL_SMTP_HOST")
-    if all([email_addr, email_pwd, email_imap, email_smtp]):
+    email_auth_mode = os.getenv("EMAIL_AUTH_MODE", "password").strip().lower()
+    email_oauth2_ready = bool(
+        os.getenv("EMAIL_OAUTH2_ACCESS_TOKEN")
+        or (
+            os.getenv("EMAIL_OAUTH2_CLIENT_ID")
+            and os.getenv("EMAIL_OAUTH2_REFRESH_TOKEN")
+        )
+    )
+    email_auth_ready = email_oauth2_ready if email_auth_mode in ("oauth2", "xoauth2") else bool(email_pwd)
+    if all([email_addr, email_auth_ready, email_imap, email_smtp]):
         if Platform.EMAIL not in config.platforms:
             config.platforms[Platform.EMAIL] = PlatformConfig()
         config.platforms[Platform.EMAIL].enabled = True
@@ -1173,6 +1182,7 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
             "address": email_addr,
             "imap_host": email_imap,
             "smtp_host": email_smtp,
+            "auth_mode": email_auth_mode,
         })
     email_home = os.getenv("EMAIL_HOME_ADDRESS")
     if email_home and Platform.EMAIL in config.platforms:
@@ -1410,6 +1420,12 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
         qq_group_policy = os.getenv("QQ_GROUP_POLICY", "").strip().lower()
         if qq_group_policy in ("open", "allowlist", "disabled"):
             extra["group_policy"] = qq_group_policy
+        qq_markdown_support = os.getenv("QQ_MARKDOWN_SUPPORT", "").strip()
+        if qq_markdown_support:
+            extra["markdown_support"] = _coerce_bool(qq_markdown_support, True)
+        qq_sandbox = os.getenv("QQ_SANDBOX", "").strip()
+        if qq_sandbox:
+            extra["sandbox"] = _coerce_bool(qq_sandbox, False)
         qq_home = os.getenv("QQBOT_HOME_CHANNEL", "").strip()
         qq_home_name_env = "QQBOT_HOME_CHANNEL_NAME"
         if not qq_home:

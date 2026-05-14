@@ -213,6 +213,10 @@ pub fn parse_dotenv_upper(home: &Path) -> HashMap<String, String> {
 /// Heuristic: host ``hermes-home/.env`` has at least one messaging platform the gateway can connect.
 pub fn dotenv_suggests_messaging_gateway(home: &Path) -> bool {
     let keys = parse_dotenv_upper(home);
+    email_configured_from_keys(&keys) || dotenv_suggests_non_email_messaging_gateway(&keys)
+}
+
+fn dotenv_suggests_non_email_messaging_gateway(keys: &HashMap<String, String>) -> bool {
     let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
 
     if nonempty("WEIXIN_ACCOUNT_ID") && nonempty("WEIXIN_TOKEN") {
@@ -238,6 +242,22 @@ pub fn dotenv_suggests_messaging_gateway(home: &Path) -> bool {
         return true;
     }
     false
+}
+
+fn email_configured_from_keys(keys: &HashMap<String, String>) -> bool {
+    let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
+    if !(nonempty("EMAIL_ADDRESS") && nonempty("EMAIL_IMAP_HOST") && nonempty("EMAIL_SMTP_HOST")) {
+        return false;
+    }
+    let auth_mode = keys
+        .get("EMAIL_AUTH_MODE")
+        .map(|s| s.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "password".to_string());
+    if auth_mode == "oauth2" || auth_mode == "xoauth2" {
+        return nonempty("EMAIL_OAUTH2_ACCESS_TOKEN")
+            || (nonempty("EMAIL_OAUTH2_CLIENT_ID") && nonempty("EMAIL_OAUTH2_REFRESH_TOKEN"));
+    }
+    nonempty("EMAIL_PASSWORD")
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +497,12 @@ pub fn discover_configured_platforms(keys: &HashMap<String, String>) -> Vec<Stri
     let nonempty = |k: &str| keys.get(k).map(|s| !s.is_empty()).unwrap_or(false);
     let mut platforms: Vec<String> = Vec::new();
     for &(name, creds) in PLATFORM_CREDENTIAL_KEYS {
+        if name == "email" {
+            if email_configured_from_keys(keys) {
+                platforms.push(name.to_string());
+            }
+            continue;
+        }
         if creds.iter().all(|k| nonempty(k)) {
             platforms.push(name.to_string());
         }
@@ -786,8 +812,19 @@ impl GatewaySupervisor {
         for key in [
             "EMAIL_ADDRESS",
             "EMAIL_PASSWORD",
+            "EMAIL_AUTH_MODE",
+            "EMAIL_OAUTH2_ACCESS_TOKEN",
+            "EMAIL_OAUTH2_REFRESH_TOKEN",
+            "EMAIL_OAUTH2_CLIENT_ID",
+            "EMAIL_OAUTH2_CLIENT_SECRET",
+            "EMAIL_OAUTH2_TENANT",
+            "EMAIL_OAUTH2_TOKEN_URL",
+            "EMAIL_OAUTH2_SCOPE",
             "EMAIL_IMAP_HOST",
+            "EMAIL_IMAP_PORT",
             "EMAIL_SMTP_HOST",
+            "EMAIL_SMTP_PORT",
+            "EMAIL_POLL_INTERVAL",
         ] {
             if let Some(val) = profile_keys.get(key) {
                 cmd.env(key, val);
@@ -1017,12 +1054,10 @@ fn write_profile_dotenv(
         }
     }
 
-    // 4. Pairing gate: inherit from host if the user set it in Settings / .env.
+    // 4. Pairing gate: inherit from host only when the user explicitly set it.
     if !written.contains("GATEWAY_ALLOW_ALL_USERS") {
         if let Some(v) = host_keys.get("GATEWAY_ALLOW_ALL_USERS") {
             content.push_str(&format!("GATEWAY_ALLOW_ALL_USERS={}\n", v));
-        } else {
-            content.push_str("GATEWAY_ALLOW_ALL_USERS=true\n");
         }
     }
 
@@ -1242,8 +1277,7 @@ mod tests {
         let profile_dir = profile_home_path(&data_dir, "telegram");
         std::fs::create_dir_all(&host_home).expect("create host home");
         std::fs::create_dir_all(&profile_dir).expect("create profile dir");
-        std::fs::write(host_home.join("SOUL.md"), "You are Kabuqina.")
-            .expect("write host SOUL");
+        std::fs::write(host_home.join("SOUL.md"), "You are Kabuqina.").expect("write host SOUL");
         std::fs::write(profile_dir.join("SOUL.md"), "You are Hermes Agent.")
             .expect("write stale profile SOUL");
 
@@ -1268,6 +1302,70 @@ mod tests {
         copy_host_soul(&data_dir, &profile_dir).expect("sync missing host SOUL");
 
         assert!(!profile_dir.join("SOUL.md").exists());
+
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[test]
+    fn email_credentials_make_gateway_eligible() {
+        let data_dir = temp_data_dir("email-eligible");
+        let host_home = hermes_home_path(&data_dir);
+        std::fs::create_dir_all(&host_home).expect("create host home");
+        std::fs::write(
+            host_home.join(".env"),
+            [
+                "EMAIL_ADDRESS=user@example.com",
+                "EMAIL_PASSWORD=secret",
+                "EMAIL_IMAP_HOST=imap.example.com",
+                "EMAIL_SMTP_HOST=smtp.example.com",
+                "",
+            ]
+            .join("\n"),
+        )
+        .expect("write dotenv");
+
+        assert!(dotenv_suggests_messaging_gateway(&host_home));
+
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[test]
+    fn email_oauth2_credentials_make_gateway_eligible() {
+        let data_dir = temp_data_dir("email-oauth2-eligible");
+        let host_home = hermes_home_path(&data_dir);
+        std::fs::create_dir_all(&host_home).expect("create host home");
+        std::fs::write(
+            host_home.join(".env"),
+            [
+                "EMAIL_ADDRESS=user@example.com",
+                "EMAIL_AUTH_MODE=oauth2",
+                "EMAIL_OAUTH2_ACCESS_TOKEN=token",
+                "EMAIL_IMAP_HOST=imap.example.com",
+                "EMAIL_SMTP_HOST=smtp.example.com",
+                "",
+            ]
+            .join("\n"),
+        )
+        .expect("write dotenv");
+
+        assert!(dotenv_suggests_messaging_gateway(&host_home));
+
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[test]
+    fn profile_dotenv_does_not_create_global_allow_all_default() {
+        let data_dir = temp_data_dir("no-global-allow-all");
+        let profile_dir = profile_home_path(&data_dir, "telegram");
+        std::fs::create_dir_all(&profile_dir).expect("create profile dir");
+        let mut host_keys = HashMap::new();
+        host_keys.insert("TELEGRAM_BOT_TOKEN".to_string(), "token".to_string());
+
+        write_profile_dotenv(&data_dir, "telegram", &host_keys).expect("write profile dotenv");
+
+        let profile_env =
+            std::fs::read_to_string(profile_dir.join(".env")).expect("read profile dotenv");
+        assert!(!profile_env.contains("GATEWAY_ALLOW_ALL_USERS="));
 
         let _ = std::fs::remove_dir_all(data_dir);
     }

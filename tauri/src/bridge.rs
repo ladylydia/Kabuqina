@@ -75,7 +75,10 @@ pub struct DesktopMessage {
 /// ``AppState.desktop_messages`` so POST /desktop-delivery and
 /// ``cmd_desktop_messages`` share one queue — otherwise cron delivery logs
 /// "ok" while the frontend always drains an empty Vec.
-pub async fn spawn(app: AppHandle, desktop_messages: Arc<Mutex<Vec<DesktopMessage>>>) -> Result<Bridge> {
+pub async fn spawn(
+    app: AppHandle,
+    desktop_messages: Arc<Mutex<Vec<DesktopMessage>>>,
+) -> Result<Bridge> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
 
@@ -235,8 +238,7 @@ async fn handle_approval(
     content_length: usize,
 ) -> std::io::Result<()> {
     let body = read_body(stream, buf, header_end, content_length).await?;
-    let payload: serde_json::Value =
-        serde_json::from_slice(&body).unwrap_or(serde_json::json!({}));
+    let payload: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::json!({}));
 
     let approval_type = payload
         .get("type")
@@ -325,8 +327,7 @@ async fn handle_desktop_delivery(
     content_length: usize,
 ) -> std::io::Result<()> {
     let body = read_body(stream, buf, header_end, content_length).await?;
-    let payload: serde_json::Value =
-        serde_json::from_slice(&body).unwrap_or(serde_json::json!({}));
+    let payload: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::json!({}));
 
     let title = payload
         .get("title")

@@ -1236,6 +1236,12 @@ async def _send_email(extra, chat_id, message):
     import smtplib
     from email.mime.text import MIMEText
     from email.utils import formatdate
+    from gateway.platforms.email import (
+        _email_oauth2_configured,
+        _email_uses_oauth2,
+        _refresh_oauth2_access_token,
+        _smtp_auth_xoauth2,
+    )
 
     address = extra.get("address") or os.getenv("EMAIL_ADDRESS", "")
     password = os.getenv("EMAIL_PASSWORD", "")
@@ -1245,10 +1251,23 @@ async def _send_email(extra, chat_id, message):
     except (ValueError, TypeError):
         smtp_port = 587
 
-    if not all([address, password, smtp_host]):
-        return {"error": "Email not configured (EMAIL_ADDRESS, EMAIL_PASSWORD, EMAIL_SMTP_HOST required)"}
+    uses_oauth2 = _email_uses_oauth2()
+    if not all([address, smtp_host]) or (uses_oauth2 and not _email_oauth2_configured()) or (not uses_oauth2 and not password):
+        return {"error": "Email not configured (address, SMTP host, and selected auth credentials required)"}
 
     try:
+        if uses_oauth2:
+            access_token = os.getenv("EMAIL_OAUTH2_ACCESS_TOKEN", "").strip()
+            if not access_token:
+                token = _refresh_oauth2_access_token(
+                    client_id=os.getenv("EMAIL_OAUTH2_CLIENT_ID", "").strip(),
+                    refresh_token=os.getenv("EMAIL_OAUTH2_REFRESH_TOKEN", "").strip(),
+                    client_secret=os.getenv("EMAIL_OAUTH2_CLIENT_SECRET", "").strip(),
+                    token_url=os.getenv("EMAIL_OAUTH2_TOKEN_URL", "").strip(),
+                    tenant=os.getenv("EMAIL_OAUTH2_TENANT", "common").strip() or "common",
+                    scope=os.getenv("EMAIL_OAUTH2_SCOPE", "").strip(),
+                )
+                access_token = token.access_token
         msg = MIMEText(message, "plain", "utf-8")
         msg["From"] = address
         msg["To"] = chat_id
@@ -1257,7 +1276,10 @@ async def _send_email(extra, chat_id, message):
 
         server = smtplib.SMTP(smtp_host, smtp_port)
         server.starttls(context=ssl.create_default_context())
-        server.login(address, password)
+        if uses_oauth2:
+            _smtp_auth_xoauth2(server, address, access_token)
+        else:
+            server.login(address, password)
         server.send_message(msg)
         server.quit()
         return {"success": True, "platform": "email", "chat_id": chat_id}
