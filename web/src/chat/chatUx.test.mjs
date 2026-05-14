@@ -120,6 +120,24 @@ assert.match(
 );
 
 assert.match(
+  sidebarSource,
+  /collapsed\?: boolean/,
+  "ChatSidebar should accept a collapsed prop.",
+);
+
+assert.match(
+  sidebarSource,
+  /onToggleCollapsed/,
+  "ChatSidebar should expose a left-rail collapse action.",
+);
+
+assert.match(
+  sidebarSource,
+  /nav\("\/capabilities"\)/,
+  "Capability should be a first-class left rail destination.",
+);
+
+assert.match(
   messageListSource,
   /organizeDesktopButton[\s\S]*onOrganizeDesktop/,
   "The empty-state organize action should open the desktop organizer workflow.",

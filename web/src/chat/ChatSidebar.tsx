@@ -1,4 +1,14 @@
-import { AlarmClock, Download, FileText, Image as ImageIcon, MessageCircle, Plus } from "lucide-react";
+import {
+  AlarmClock,
+  Boxes,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import type { SessionRow } from "./chat-api";
@@ -9,6 +19,8 @@ export interface ChatSidebarProps {
   sessions: SessionRow[];
   activeSessionId: string | null;
   loading?: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed: () => void;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string, e: React.MouseEvent) => void;
@@ -18,6 +30,8 @@ export function ChatSidebar({
   sessions,
   activeSessionId,
   loading = false,
+  collapsed = false,
+  onToggleCollapsed,
   onNewChat,
   onSelectSession,
   onDeleteSession,
@@ -41,31 +55,53 @@ export function ChatSidebar({
     icon === "alarm" ? AlarmClock : icon === "file" ? FileText : icon === "image" ? ImageIcon : MessageCircle;
 
   return (
-    <aside className="flex w-[272px] shrink-0 flex-col border-r border-zinc-200/90 bg-zinc-100/30 dark:border-zinc-700 dark:bg-zinc-900/30">
-      <div className="border-b border-zinc-200/80 p-4 pb-3 dark:border-zinc-700/80">
+    <aside
+      className={cn(
+        "flex shrink-0 flex-col border-r border-zinc-200/90 bg-zinc-100/30 transition-[width] duration-200 ease-out dark:border-zinc-700 dark:bg-zinc-900/30",
+        collapsed ? "w-14" : "w-56",
+      )}
+    >
+      <div className="flex items-center gap-2 border-b border-zinc-200/80 p-3 dark:border-zinc-700/80">
         <button
           type="button"
-          onClick={() => onNewChat()}
-          className="inline-flex w-full items-center justify-start gap-2 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:text-white dark:hover:bg-sky-600"
+          onClick={onToggleCollapsed}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
+          title={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
         >
-          <span>{t("chat.newChat")}</span>
-          <Plus className="h-4 w-4 shrink-0 stroke-[2.75]" aria-hidden />
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => onNewChat()}
+            className="inline-flex min-w-0 flex-1 items-center justify-start gap-2 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:text-white dark:hover:bg-sky-600"
+          >
+            <span className="truncate">{t("chat.newChat")}</span>
+            <Plus className="h-4 w-4 shrink-0 stroke-[2.75]" aria-hidden />
+          </button>
+        )}
       </div>
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4 pt-2">
+      <div className={cn("min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-2", collapsed ? "px-2" : "px-3")}>
         {loading && (
-          <p className="px-1.5 py-2 text-xs text-zinc-400 dark:text-zinc-500">{t("chat.loadingSessions")}</p>
+          <p className={cn("px-1.5 py-2 text-xs text-zinc-400 dark:text-zinc-500", collapsed && "text-center")}>
+            {collapsed ? "..." : t("chat.loadingSessions")}
+          </p>
         )}
         {!loading && sessions.length === 0 && (
-          <p className="px-1.5 py-2 text-center text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
-            {t("chat.noSessions")}
-          </p>
+          !collapsed ? (
+            <p className="px-1.5 py-2 text-center text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+              {t("chat.noSessions")}
+            </p>
+          ) : null
         )}
         {grouped.map((group) => (
           <div key={group.group} className="pt-1">
-            <p className="px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-              {group.group}
-            </p>
+            {!collapsed && (
+              <p className="px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                {group.group}
+              </p>
+            )}
             {group.rows.map(({ session: s, label, icon }) => {
               const active = s.id === activeSessionId;
               const Icon = iconFor(icon);
@@ -81,7 +117,11 @@ export function ChatSidebar({
                     type="button"
                     onClick={() => onSelectSession(s.id)}
                     title={label}
-                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-left"
+                    aria-label={label}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left",
+                      collapsed ? "justify-center px-0" : "px-2.5",
+                    )}
                   >
                     <Icon
                       className={cn(
@@ -91,32 +131,54 @@ export function ChatSidebar({
                       strokeWidth={2.2}
                       aria-hidden
                     />
-                    <div
-                      className={cn(
-                        "truncate text-[13px] leading-snug",
-                        active
-                          ? "font-medium text-zinc-900 dark:text-zinc-100"
-                          : "text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100",
-                      )}
+                    {!collapsed && (
+                      <div
+                        className={cn(
+                          "truncate text-[13px] leading-snug",
+                          active
+                            ? "font-medium text-zinc-900 dark:text-zinc-100"
+                            : "text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100",
+                        )}
+                      >
+                        {label}
+                      </div>
+                    )}
+                  </button>
+                  {!collapsed && (
+                    <button
+                      type="button"
+                      title={t("chat.delete")}
+                      onClick={(e) => onDeleteSession(s.id, e)}
+                      className="shrink-0 px-1.5 text-zinc-300 opacity-0 transition hover:text-red-500 group-hover:opacity-100 dark:text-zinc-600 dark:hover:text-red-400"
                     >
-                      {label}
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    title={t("chat.delete")}
-                    onClick={(e) => onDeleteSession(s.id, e)}
-                    className="shrink-0 px-1.5 text-zinc-300 opacity-0 transition hover:text-red-500 group-hover:opacity-100 dark:text-zinc-600 dark:hover:text-red-400"
-                  >
-                    x
-                  </button>
+                      x
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
         ))}
       </div>
-      <div className="shrink-0 space-y-1.5 border-t border-zinc-200/80 bg-zinc-100/50 px-3 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/50">
+      <div className={cn(
+        "shrink-0 space-y-1.5 border-t border-zinc-200/80 bg-zinc-100/50 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/50",
+        collapsed ? "px-2" : "px-3",
+      )}>
+        <button
+          type="button"
+          onClick={() => nav("/capabilities")}
+          className={cn(
+            "group inline-flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium",
+            "text-zinc-600 transition hover:bg-zinc-200/70 hover:text-zinc-900",
+            "dark:text-zinc-400 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-100",
+            collapsed && "justify-center px-0",
+          )}
+          title={t("capabilities.title")}
+          aria-label={t("capabilities.title")}
+        >
+          <Boxes className="h-4 w-4 shrink-0" aria-hidden />
+          {!collapsed && <span>{t("capabilities.title")}</span>}
+        </button>
         <button
           type="button"
           data-action-priority="primary"
@@ -129,7 +191,10 @@ export function ChatSidebar({
             "active:scale-[0.99]",
             "dark:border-zinc-600 dark:bg-zinc-800/85 dark:text-zinc-100",
             "dark:hover:border-sky-500/60 dark:hover:bg-sky-950/45 dark:hover:text-sky-50 dark:hover:shadow-[0_4px_18px_-6px_rgba(56,189,248,0.22)]",
+            collapsed && "justify-center px-0",
           )}
+          title={t("cron.title")}
+          aria-label={t("cron.title")}
         >
           <AlarmClock
             className={cn(
@@ -139,7 +204,7 @@ export function ChatSidebar({
             strokeWidth={2.25}
             aria-hidden
           />
-          <span className="block leading-snug">{t("cron.title")}</span>
+          {!collapsed && <span className="block leading-snug">{t("cron.title")}</span>}
         </button>
         <button
           type="button"
@@ -153,7 +218,10 @@ export function ChatSidebar({
             "hover:bg-zinc-200/70 hover:text-zinc-800",
             "active:scale-[0.99]",
             "dark:text-zinc-500 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-200",
+            collapsed && "justify-center px-0",
           )}
+          title={t("chat.exportButton")}
+          aria-label={t("chat.exportButton")}
         >
           <Download
             className={cn(
@@ -163,7 +231,7 @@ export function ChatSidebar({
             strokeWidth={2.1}
             aria-hidden
           />
-          <span className="block leading-snug">{t("chat.exportButton")}</span>
+          {!collapsed && <span className="block leading-snug">{t("chat.exportButton")}</span>}
         </button>
       </div>
     </aside>
