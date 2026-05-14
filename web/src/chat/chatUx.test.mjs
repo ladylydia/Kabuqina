@@ -133,6 +133,10 @@ assert.doesNotMatch(
 
 const chatPageSource = fs.readFileSync(new URL("./ChatPage.tsx", import.meta.url), "utf8");
 const desktopApiSource = fs.readFileSync(new URL("./desktop-organizer-api.ts", import.meta.url), "utf8");
+const workbenchLayoutSource = fs.readFileSync(
+  new URL("./hooks/useWorkbenchLayout.ts", import.meta.url),
+  "utf8",
+);
 
 assert.match(
   chatPageSource,
@@ -150,4 +154,22 @@ assert.match(
   desktopApiSource,
   /cmd_desktop_organize_run/,
   "Desktop organizing should call the one-click Tauri command.",
+);
+
+assert.match(
+  workbenchLayoutSource,
+  /WORKBENCH_LAYOUT_KEY\s*=\s*"kabuqina\.workbench\.layout"/,
+  "Workbench layout should persist under a Kabuqina-specific localStorage key.",
+);
+
+assert.match(
+  workbenchLayoutSource,
+  /toggleFocusMode/,
+  "Workbench layout hook should expose a focus mode toggle.",
+);
+
+assert.match(
+  workbenchLayoutSource,
+  /isNarrow/,
+  "Workbench layout hook should track narrow-window behavior.",
 );
