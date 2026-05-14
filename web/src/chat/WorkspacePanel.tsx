@@ -1,4 +1,5 @@
-import { Camera, FilePlus2, FolderKanban, PanelRightClose } from "lucide-react";
+import { Camera, Download, FilePlus2, FolderKanban, PanelRightClose } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
@@ -38,6 +39,7 @@ export function WorkspacePanel({
   onOrganizeDesktop,
 }: WorkspacePanelProps) {
   const { t } = useI18n();
+  const nav = useNavigate();
 
   return (
     <aside
@@ -98,6 +100,14 @@ export function WorkspacePanel({
             >
               <FolderKanban className="mr-2 inline h-4 w-4" aria-hidden />
               {t("chat.workspaceOrganizeDesktop")}
+            </button>
+            <button
+              type="button"
+              onClick={() => nav("/export")}
+              className="hd-btn-ghost justify-start text-left"
+            >
+              <Download className="mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.exportButton")}
             </button>
           </div>
         </section>

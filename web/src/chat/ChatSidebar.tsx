@@ -1,7 +1,5 @@
 import {
   AlarmClock,
-  Boxes,
-  Download,
   FileText,
   Image as ImageIcon,
   MessageCircle,
@@ -61,16 +59,10 @@ export function ChatSidebar({
         collapsed ? "w-14" : "w-56",
       )}
     >
-      <div className="flex items-center gap-2 border-b border-zinc-200/80 p-3 dark:border-zinc-700/80">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-          aria-label={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
-          title={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
-        >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
+      <div className={cn(
+        "flex items-center gap-2 border-b border-zinc-200/80 p-3 dark:border-zinc-700/80",
+        collapsed && "justify-center",
+      )}>
         {!collapsed && (
           <button
             type="button"
@@ -81,6 +73,15 @@ export function ChatSidebar({
             <Plus className="h-4 w-4 shrink-0 stroke-[2.75]" aria-hidden />
           </button>
         )}
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
+          title={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
+        >
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
       </div>
       <div className={cn("min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-2", collapsed ? "px-2" : "px-3")}>
         {loading && (
@@ -166,21 +167,6 @@ export function ChatSidebar({
       )}>
         <button
           type="button"
-          onClick={() => nav("/capabilities")}
-          className={cn(
-            "group inline-flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium",
-            "text-zinc-600 transition hover:bg-zinc-200/70 hover:text-zinc-900",
-            "dark:text-zinc-400 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-100",
-            collapsed && "justify-center px-0",
-          )}
-          title={t("capabilities.title")}
-          aria-label={t("capabilities.title")}
-        >
-          <Boxes className="h-4 w-4 shrink-0" aria-hidden />
-          {!collapsed && <span>{t("capabilities.title")}</span>}
-        </button>
-        <button
-          type="button"
           data-action-priority="primary"
           onClick={() => nav("/settings/cron", { state: { cronBackTo: "/chat" } })}
           className={cn(
@@ -205,33 +191,6 @@ export function ChatSidebar({
             aria-hidden
           />
           {!collapsed && <span className="block leading-snug">{t("cron.title")}</span>}
-        </button>
-        <button
-          type="button"
-          data-action-priority="low"
-          onClick={() => {
-            nav("/export");
-          }}
-          className={cn(
-            "group inline-flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium",
-            "text-zinc-500 transition-[background-color,color,transform] duration-150 ease-out",
-            "hover:bg-zinc-200/70 hover:text-zinc-800",
-            "active:scale-[0.99]",
-            "dark:text-zinc-500 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-200",
-            collapsed && "justify-center px-0",
-          )}
-          title={t("chat.exportButton")}
-          aria-label={t("chat.exportButton")}
-        >
-          <Download
-            className={cn(
-              "h-3.5 w-3.5 shrink-0 text-zinc-400 transition-colors duration-150 ease-out",
-              "group-hover:text-zinc-600 dark:text-zinc-600 dark:group-hover:text-zinc-300",
-            )}
-            strokeWidth={2.1}
-            aria-hidden
-          />
-          {!collapsed && <span className="block leading-snug">{t("chat.exportButton")}</span>}
         </button>
       </div>
     </aside>

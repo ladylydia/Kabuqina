@@ -330,21 +330,23 @@ export function ChatPage() {
         )}
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 bg-zinc-50/90 px-3 dark:border-zinc-800 dark:bg-[#0F172A]">
-            <p className="truncate text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">
-              {t("chat.activeWork")}
-            </p>
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 items-center gap-2">
               {!workbench.showLeftRail && (
                 <button
                   type="button"
                   onClick={openLeftRail}
-                  className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                  className="hd-btn-ghost inline-flex h-8 w-8 shrink-0 items-center justify-center px-0"
                   aria-label={t("chat.leftRailExpand")}
                   title={t("chat.leftRailExpand")}
                 >
                   <PanelLeftOpen className="h-4 w-4" />
                 </button>
               )}
+              <p className="truncate text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">
+                {t("chat.activeWork")}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
               {!workbench.showRightPanel && (
                 <button
                   type="button"

@@ -107,10 +107,10 @@ assert.equal(
   "这个步骤我没成功。你可以换个说法，或把要处理的文件拖进来再试。",
 );
 
-assert.match(
+assert.doesNotMatch(
   sidebarSource,
-  /data-action-priority="low"[\s\S]*t\("chat\.exportButton"\)/,
-  "Export chat should be marked as a low-priority sidebar action.",
+  /data-action-priority="low"[\s\S]*t\("chat\.exportButton"\)|nav\("\/export"\)/,
+  "Export chat should move out of the left rail.",
 );
 
 assert.match(
@@ -131,10 +131,16 @@ assert.match(
   "ChatSidebar should expose a left-rail collapse action.",
 );
 
+assert.doesNotMatch(
+  sidebarSource,
+  /nav\("\/capabilities"\)|t\("capabilities\.title"\)/,
+  "Capability should not be duplicated in the left rail.",
+);
+
 assert.match(
   sidebarSource,
-  /nav\("\/capabilities"\)/,
-  "Capability should be a first-class left rail destination.",
+  /onNewChat[\s\S]*onToggleCollapsed/,
+  "The left-rail collapse button should sit after New Chat in the header.",
 );
 
 assert.match(
@@ -182,6 +188,12 @@ assert.match(
   chatPageSource,
   /toggleFocusMode/,
   "ChatPage should expose focus mode controls.",
+);
+
+assert.match(
+  chatPageSource,
+  /PanelLeftOpen[\s\S]*chat\.activeWork/,
+  "The left-rail expand button should sit on the left side of the center header.",
 );
 
 assert.doesNotMatch(
@@ -236,4 +248,10 @@ assert.match(
   workspacePanelSource,
   /workspace\.quickActions/,
   "Workspace panel should render a Quick Actions section.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /nav\("\/export"\)[\s\S]*chat\.exportButton/,
+  "Workspace quick actions should include Export Chat.",
 );
