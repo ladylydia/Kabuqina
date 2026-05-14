@@ -137,6 +137,10 @@ const workbenchLayoutSource = fs.readFileSync(
   new URL("./hooks/useWorkbenchLayout.ts", import.meta.url),
   "utf8",
 );
+const workspacePanelSource = fs.readFileSync(
+  new URL("./WorkspacePanel.tsx", import.meta.url),
+  "utf8",
+);
 
 assert.match(
   chatPageSource,
@@ -172,4 +176,28 @@ assert.match(
   workbenchLayoutSource,
   /isNarrow/,
   "Workbench layout hook should track narrow-window behavior.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /workspace\.currentGoal/,
+  "Workspace panel should render a Current Goal section.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /workspace\.materials/,
+  "Workspace panel should render a Materials section.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /workspace\.outputs/,
+  "Workspace panel should render an Outputs section.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /workspace\.quickActions/,
+  "Workspace panel should render a Quick Actions section.",
 );

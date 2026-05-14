@@ -1,0 +1,107 @@
+import { Camera, FilePlus2, FolderKanban, PanelRightClose } from "lucide-react";
+import { useI18n } from "../lib/i18n";
+import { cn } from "../lib/cn";
+
+type WorkspacePanelProps = {
+  className?: string;
+  onCollapse: () => void;
+  onOrganizeDesktop?: () => void;
+};
+
+function WorkspaceSection({
+  sectionId,
+  title,
+  body,
+}: {
+  sectionId: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <section
+      data-workspace-section={sectionId}
+      className="border-b border-zinc-200/80 pb-4 last:border-b-0 dark:border-zinc-800"
+    >
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {title}
+      </h3>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+        {body}
+      </p>
+    </section>
+  );
+}
+
+export function WorkspacePanel({
+  className,
+  onCollapse,
+  onOrganizeDesktop,
+}: WorkspacePanelProps) {
+  const { t } = useI18n();
+
+  return (
+    <aside
+      className={cn(
+        "flex w-64 shrink-0 flex-col border-l border-zinc-200/90 bg-white/70 dark:border-zinc-700 dark:bg-zinc-950/40",
+        className,
+      )}
+    >
+      <div className="flex h-14 items-center justify-between border-b border-zinc-200/80 px-4 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t("chat.workspaceTitle")}
+        </h2>
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={t("chat.workspaceCollapse")}
+          title={t("chat.workspaceCollapse")}
+        >
+          <PanelRightClose className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <WorkspaceSection
+          sectionId="workspace.currentGoal"
+          title={t("chat.workspaceCurrentGoal")}
+          body={t("chat.workspaceGoalEmpty")}
+        />
+        <WorkspaceSection
+          sectionId="workspace.materials"
+          title={t("chat.workspaceMaterials")}
+          body={t("chat.workspaceMaterialsEmpty")}
+        />
+        <WorkspaceSection
+          sectionId="workspace.outputs"
+          title={t("chat.workspaceOutputs")}
+          body={t("chat.workspaceOutputsEmpty")}
+        />
+
+        <section data-workspace-section="workspace.quickActions">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            {t("chat.workspaceQuickActions")}
+          </h3>
+          <div className="mt-3 grid gap-2">
+            <button type="button" className="hd-btn-ghost justify-start text-left">
+              <FilePlus2 className="mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.workspaceAddFile")}
+            </button>
+            <button type="button" className="hd-btn-ghost justify-start text-left">
+              <Camera className="mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.workspaceCapture")}
+            </button>
+            <button
+              type="button"
+              onClick={onOrganizeDesktop}
+              className="hd-btn-ghost justify-start text-left"
+            >
+              <FolderKanban className="mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.workspaceOrganizeDesktop")}
+            </button>
+          </div>
+        </section>
+      </div>
+    </aside>
+  );
+}
