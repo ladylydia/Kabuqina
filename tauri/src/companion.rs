@@ -1,8 +1,12 @@
 //! Lightweight companion window controls.
 
-use tauri::{Manager, WebviewWindowBuilder};
+use tauri::{LogicalSize, Manager, Size, WebviewWindowBuilder};
 
 const COMPANION_LABEL: &str = "companion";
+const COMPANION_EXPANDED_WIDTH: f64 = 320.0;
+const COMPANION_EXPANDED_HEIGHT: f64 = 160.0;
+const COMPANION_COMPACT_WIDTH: f64 = 120.0;
+const COMPANION_COMPACT_HEIGHT: f64 = 48.0;
 
 pub async fn show_companion(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(COMPANION_LABEL) {
@@ -25,8 +29,8 @@ pub async fn show_companion(app: tauri::AppHandle) -> Result<(), String> {
     .transparent(true)
     .visible(true)
     .resizable(false)
-    .inner_size(220.0, 88.0)
-    .min_inner_size(220.0, 88.0)
+    .inner_size(COMPANION_EXPANDED_WIDTH, COMPANION_EXPANDED_HEIGHT)
+    .min_inner_size(COMPANION_COMPACT_WIDTH, COMPANION_COMPACT_HEIGHT)
     .skip_taskbar(true)
     .build()
     .map_err(|e| format!("create companion window: {e}"))?;
@@ -59,6 +63,26 @@ pub async fn cmd_hide_companion(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(COMPANION_LABEL) {
         let _ = w.hide();
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_set_companion_mode(
+    app: tauri::AppHandle,
+    mode: String,
+) -> Result<(), String> {
+    let Some(w) = app.get_webview_window(COMPANION_LABEL) else {
+        return Ok(());
+    };
+
+    let (width, height) = match mode.as_str() {
+        "compact" => (COMPANION_COMPACT_WIDTH, COMPANION_COMPACT_HEIGHT),
+        "expanded" => (COMPANION_EXPANDED_WIDTH, COMPANION_EXPANDED_HEIGHT),
+        _ => return Err(format!("invalid companion mode: {mode}")),
+    };
+
+    w.set_size(Size::Logical(LogicalSize { width, height }))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

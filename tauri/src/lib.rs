@@ -152,6 +152,7 @@ pub fn run() {
             cmd_open_hermes_dashboard,
             companion::cmd_show_companion,
             companion::cmd_hide_companion,
+            companion::cmd_set_companion_mode,
             companion::cmd_focus_main_window,
             desktop_organizer::cmd_desktop_organize_run,
             desktop_organizer::cmd_desktop_organize_preview,
