@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type PendingInfo = {
   platform: string;
@@ -22,11 +23,7 @@ export type PairingSnapshot = {
   approved: ApprovedInfo[];
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
 
-const btnSmallClass =
-  "rounded-md border border-zinc-300/90 bg-white px-2 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
 
 export function PairingSettingsBlock({
   platform,
@@ -97,9 +94,9 @@ export function PairingSettingsBlock({
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btnClass} onClick={load} disabled={loading}>
+        <PlatformButton onClick={load} disabled={loading}>
           {loading ? "…" : t("settings.telegramPairingRefresh")}
-        </button>
+        </PlatformButton>
       </div>
 
       {error ? (
@@ -140,13 +137,9 @@ export function PairingSettingsBlock({
                 <span className="text-xs text-zinc-400 dark:text-zinc-500">
                   {p.ageMinutes}m ago
                 </span>
-                <button
-                  type="button"
-                  className={cn(btnSmallClass, "ml-auto")}
-                  onClick={() => handleApprove(p.code)}
-                >
+                <PlatformButton className="ml-auto" onClick={() => handleApprove(p.code)}>
                   {t("settings.telegramPairingApprove")}
-                </button>
+                </PlatformButton>
               </div>
             ))}
           </div>
@@ -170,13 +163,9 @@ export function PairingSettingsBlock({
                 <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
                   {a.userId}
                 </span>
-                <button
-                  type="button"
-                  className={cn(btnSmallClass, "ml-auto")}
-                  onClick={() => handleRevoke(a.userId)}
-                >
+                <PlatformButton variant="danger" className="ml-auto" onClick={() => handleRevoke(a.userId)}>
                   {t("settings.telegramPairingRevoke")}
-                </button>
+                </PlatformButton>
               </div>
             ))}
           </div>

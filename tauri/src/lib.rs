@@ -246,11 +246,7 @@ pub fn run() {
                 let weixin_qr = state.weixin_qr_child.clone();
                 let qqbot_qr = state.qqbot_qr_child.clone();
                 let feishu_qr = state.feishu_qr_child.clone();
-                let last_pid = state
-                    .python_child_pid
-                    .lock()
-                    .ok()
-                    .and_then(|g| *g);
+                let last_pid = state.python_child_pid.lock().ok().and_then(|g| *g);
                 std::mem::drop(state);
                 let sup_lock = supervisor.try_lock();
                 if let Ok(mut sup) = sup_lock {
@@ -633,8 +629,7 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         *state.desk_auth_token.lock().await = Some(bridge.desk_auth_token.clone());
         *state.bridge_secret_url.lock().await = Some(bridge.secret_url.clone());
         *state.bridge_approval_url.lock().await = Some(bridge.approval_url.clone());
-        *state.bridge_desktop_delivery_url.lock().await =
-            Some(bridge.desktop_delivery_url.clone());
+        *state.bridge_desktop_delivery_url.lock().await = Some(bridge.desktop_delivery_url.clone());
     }
 
     // 3. Spawn the Python child (Hermes web_server / desktop_entrypoint).

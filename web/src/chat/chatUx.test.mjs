@@ -32,6 +32,7 @@ const { deriveSessionPresentation } = await importTs("./sessionPresentation.ts")
 const { friendlyChatError } = await importTs("./friendlyError.ts");
 const sidebarSource = fs.readFileSync(new URL("./ChatSidebar.tsx", import.meta.url), "utf8");
 const messageListSource = fs.readFileSync(new URL("./ChatMessageList.tsx", import.meta.url), "utf8");
+const chatMessageSource = fs.readFileSync(new URL("./ChatMessage.tsx", import.meta.url), "utf8");
 
 const now = new Date("2026-05-13T10:00:00+08:00");
 
@@ -155,6 +156,18 @@ assert.doesNotMatch(
   "Desktop organizing should not regress to a prompt-only shortcut.",
 );
 
+assert.doesNotMatch(
+  chatMessageSource,
+  /import\s*\{[^}]*\bUser\b[^}]*\}\s*from "lucide-react"|import\s*\{[^}]*\bSparkles\b[^}]*\}\s*from "lucide-react"|Avatar|h-7 w-7[\s\S]*rounded-full|rounded-full[\s\S]*h-7 w-7/,
+  "Chat message bubbles should not render user or assistant avatars.",
+);
+
+assert.doesNotMatch(
+  messageListSource,
+  /Sparkles|rounded-full[\s\S]*bg-sky-100[\s\S]*text-sky-600/,
+  "Typing and progress rows should not render assistant avatar icons.",
+);
+
 const chatPageSource = fs.readFileSync(new URL("./ChatPage.tsx", import.meta.url), "utf8");
 const desktopApiSource = fs.readFileSync(new URL("./desktop-organizer-api.ts", import.meta.url), "utf8");
 const workbenchLayoutSource = fs.readFileSync(
@@ -252,6 +265,18 @@ assert.match(
 
 assert.match(
   workspacePanelSource,
+  /workspace-section-heading[\s\S]*bg-sky-600[\s\S]*text-white/,
+  "Workspace section headings should use the Kabuqina blue-white emphasis.",
+);
+
+assert.match(
+  workspacePanelSource,
   /nav\("\/export"\)[\s\S]*chat\.exportButton/,
   "Workspace quick actions should include Export Chat.",
+);
+
+assert.doesNotMatch(
+  workspacePanelSource,
+  /workspaceAddFile|workspaceCapture|FilePlus2|Camera/,
+  "Workspace quick actions should not show unfinished Add File or Screenshot actions.",
 );

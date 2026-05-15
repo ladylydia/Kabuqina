@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SlidersHorizontal } from "lucide-react";
 import { Section } from "../components/ui/Section";
+import { StatusBanner } from "../components/ui/StatusBanner";
+import { PlatformButton } from "../components/ui/PlatformButton";
 import { useI18n } from "../lib/i18n";
 import {
   allEnvKeysForPlatform,
@@ -103,7 +105,7 @@ export function GatewayChannelSettingsPanel({ platform }: Props) {
 
       <button
         type="button"
-        className="text-xs text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline mb-3"
+        className="mb-3 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
         onClick={() => setShowAdvanced((v) => !v)}
       >
         {showAdvanced ? t("settings.channelEnv.hideAdvanced") : t("settings.channelEnv.showAdvanced")}
@@ -137,18 +139,13 @@ export function GatewayChannelSettingsPanel({ platform }: Props) {
         </div>
       )}
 
-      {error ? <p className="text-xs text-red-600 dark:text-red-400 mt-3">{error}</p> : null}
-      {message ? <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-3">{message}</p> : null}
+      {error ? <StatusBanner variant="error" className="mt-3" title={error} /> : null}
+      {message ? <StatusBanner variant="success" className="mt-3" title={message} /> : null}
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          disabled={saving || loading}
-          className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-          onClick={() => void save()}
-        >
+        <PlatformButton variant="primary" disabled={saving || loading} onClick={() => void save()}>
           {saving ? "…" : t("settings.channelEnv.save")}
-        </button>
+        </PlatformButton>
         <span className="text-[0.7rem] text-zinc-500">{t("settings.channelEnv.restartHint")}</span>
       </div>
     </Section>
@@ -205,7 +202,7 @@ function FieldRow({
           id={id}
           type={field.type === "secret" ? "password" : "text"}
           autoComplete="off"
-          className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-zinc-600 dark:bg-zinc-900"
+          className="w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 text-sm font-mono dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition"
           value={value}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ArrowUp, Crop, FolderOpen, Paperclip, Square, Zap } from "lucide-react";
+import { ArrowUp, Crop, FolderOpen, Paperclip, Square, X, Zap } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import { Toggle } from "../components/ui/Toggle";
 import { cn } from "../lib/cn";
@@ -261,7 +261,7 @@ export function ChatInput({
                   className="shrink-0 rounded-full p-0.5 text-zinc-400 hover:text-zinc-700 disabled:opacity-40 dark:hover:text-zinc-200"
                   aria-label={t("chat.removeAttachment")}
                 >
-                  ×
+                  <X className="h-3 w-3" strokeWidth={2.5} />
                 </button>
               </span>
             ))}
@@ -276,7 +276,7 @@ export function ChatInput({
           rows={1}
           placeholder={placeholder ?? t("chat.placeholder")}
           disabled={sending}
-          className="max-h-[200px] min-h-[3.25rem] w-full resize-none bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 outline-none disabled:opacity-50 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          className="max-h-[200px] min-h-[3.25rem] w-full resize-none bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:ring-2 focus:ring-sky-500/20 focus:ring-inset disabled:opacity-50 dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
 
         <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-2.5 pb-2.5 pt-1 dark:border-zinc-800">
@@ -437,7 +437,7 @@ export function ChatInput({
               type="button"
               onClick={() => void onSend()}
               disabled={!canSend}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-sm transition hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-[#3B5BC7] dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-sm transition hover:opacity-90 hover:shadow-[0_0_12px_rgba(14,165,233,0.35)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none dark:bg-[#3B5BC7] dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
               title={sending ? t("chat.sending") : t("chat.send")}
               aria-label={sending ? t("chat.sending") : t("chat.send")}
             >
@@ -485,9 +485,7 @@ export function ChatInput({
       <div className="mx-auto mt-2.5 flex max-w-3xl items-center justify-between gap-3">
         <p className="text-xs leading-[1.5] text-zinc-400 dark:text-zinc-500">{t("chat.hint")}</p>
         {onTogglePowerUser && (
-          <button
-            type="button"
-            onClick={() => onTogglePowerUser(!powerUser)}
+          <div
             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-200/50 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
             title={t("settings.powerTitle")}
           >
@@ -500,7 +498,7 @@ export function ChatInput({
             />
             <span>{t("settings.powerTitle")}</span>
             <Toggle value={powerUser} onChange={(v) => onTogglePowerUser(v)} />
-          </button>
+          </div>
         )}
       </div>
     </div>

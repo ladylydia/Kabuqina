@@ -149,7 +149,11 @@ impl Supervisor {
             tokio::spawn(forward("py.err", err));
         }
 
-        Ok(Self { child, port_file, pid })
+        Ok(Self {
+            child,
+            port_file,
+            pid,
+        })
     }
 
     pub async fn wait_for_port(&self) -> Result<u16> {

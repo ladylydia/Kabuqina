@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type FeishuQrProgress = {
   phase?: string;
@@ -38,8 +40,7 @@ type Props = {
   onHermesRunningChange?: (running: boolean) => void;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
+
 
 function ipcErr(e: unknown): string {
   if (typeof e === "string") return e;
@@ -227,46 +228,36 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {feishuEnv?.configured ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-          <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.feishuAlreadyTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-emerald-900/85 dark:text-emerald-100/85">
-            {t("settings.feishuAlreadyLead")}
-          </p>
+        <StatusBanner variant="success" title={t("settings.feishuAlreadyTitle")}>
+          <p>{t("settings.feishuAlreadyLead")}</p>
           {feishuEnv.appIdHint ? (
-            <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-              {t("settings.feishuAppIdHint", { hint: feishuEnv.appIdHint })}
-            </p>
+            <p className="mt-1 font-mono">{t("settings.feishuAppIdHint", { hint: feishuEnv.appIdHint })}</p>
           ) : null}
           {view?.result?.bot_name ? (
-            <p className="mt-1 text-xs text-emerald-900/85 dark:text-emerald-100/85">
-              {t("settings.feishuBotName", { name: view.result.bot_name })}
-            </p>
+            <p className="mt-1">{t("settings.feishuBotName", { name: view.result.bot_name })}</p>
           ) : null}
-        </div>
+        </StatusBanner>
       ) : null}
       {partial && feishuEnv ? (
-        <div className="rounded-lg border border-amber-200/90 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-900/55 dark:bg-amber-950/30">
-          <p className="font-medium text-amber-950 dark:text-amber-100">{t("settings.feishuPartialTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-950/90 dark:text-amber-100/85">
-            {t("settings.feishuPartialLead", { missing: partialMissing.join("、") })}
-          </p>
-        </div>
+        <StatusBanner variant="warning" title={t("settings.feishuPartialTitle")}>
+          {t("settings.feishuPartialLead", { missing: partialMissing.join("、") })}
+        </StatusBanner>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btnClass} onClick={() => void startFeishuQr()} disabled={polling}>
+        <PlatformButton onClick={() => void startFeishuQr()} disabled={polling}>
           {feishuEnv?.configured ? t("settings.feishuRescan") : t("settings.feishuStart")}
-        </button>
+        </PlatformButton>
         {feishuEnv?.configured ? (
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.removePlatformConfig")}
-          </button>
+          </PlatformButton>
         ) : null}
-        <button type="button" className={btnClass} onClick={() => void cancelFeishuQr()} disabled={!polling}>
+        <PlatformButton onClick={() => void cancelFeishuQr()} disabled={!polling}>
           {t("settings.feishuCancel")}
-        </button>
+        </PlatformButton>
       </div>
       {inlineErr ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{inlineErr}</p>
+        <StatusBanner variant="error" title={inlineErr} />
       ) : null}
       {view?.progress?.phase ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-300">{phaseLabel(view.progress.phase)}</p>
@@ -297,22 +288,18 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
             <p className="font-mono text-xs text-zinc-500">App ID: {view.result.app_id}</p>
           ) : null}
           {!restarted ? (
-            <button
-              type="button"
-              className={btnClass}
+            <PlatformButton
               disabled={restartBusy}
               onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.feishuRestartBusy") : t("settings.feishuRestart")}
-            </button>
+            </PlatformButton>
           ) : null}
-          {restartErr ? <p className="text-sm text-red-600 dark:text-red-400">{restartErr}</p> : null}
+          {restartErr ? <StatusBanner variant="error" title={restartErr} /> : null}
         </div>
       ) : null}
       {view?.result && view.result.ok === false ? (
-        <p className="text-sm text-red-600 dark:text-red-400">
-          {t("settings.feishuError", { msg: view.result.error ?? "unknown" })}
-        </p>
+        <StatusBanner variant="error" title={t("settings.feishuError", { msg: view.result.error ?? "unknown" })} />
       ) : null}
     </div>
   );

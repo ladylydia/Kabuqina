@@ -328,20 +328,20 @@ export function ChatMessage({ role, text, model, timestamp, streaming = false }:
   const timeStr = hasTime ? formatChatTime(timestamp, locale) : null;
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[min(100%,42rem)] overflow-visible rounded-lg px-4 py-2.5 shadow-sm",
+          "max-w-[min(100%,42rem)] overflow-visible rounded-2xl px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
           isUser
-            ? "bg-sky-600 text-white dark:bg-[#3B5BC7] dark:text-white"
-            : "border border-zinc-200/90 bg-zinc-100/90 dark:border-zinc-700 dark:bg-zinc-800/90"
+            ? "rounded-tr-sm bg-sky-600 text-white dark:bg-[#3B5BC7] dark:text-white"
+            : "rounded-tl-sm border border-zinc-200/80 bg-white/95 dark:border-zinc-700/80 dark:bg-zinc-800/90"
         )}
       >
         {isUser ? (
           <>
             <p className="whitespace-pre-wrap text-sm leading-[1.6]">{text}</p>
             {timeStr && (
-              <div className="mt-1.5 text-right text-[11px] font-mono tabular-nums text-sky-100/90 dark:text-sky-200/80">
+              <div className="mt-1.5 text-right text-[11px] font-mono tabular-nums text-sky-100/80 dark:text-sky-200/70">
                 {timeStr}
               </div>
             )}

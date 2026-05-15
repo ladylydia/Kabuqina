@@ -103,13 +103,41 @@ pub fn provider_api_key_env(provider: &str) -> String {
         "nous" => "NOUS_PORTAL_API_KEY",
         "groq" => "GROQ_API_KEY",
         "mistral" => "MISTRAL_API_KEY",
+        "gemini" => "GOOGLE_API_KEY",
+        "zai" => "GLM_API_KEY",
+        "kimi-coding" => "KIMI_API_KEY",
+        "kimi-coding-cn" => "KIMI_CN_API_KEY",
+        "stepfun" => "STEPFUN_API_KEY",
+        "minimax" => "MINIMAX_API_KEY",
+        "minimax-cn" => "MINIMAX_CN_API_KEY",
+        "alibaba" => "DASHSCOPE_API_KEY",
         "fireworks" => "FIREWORKS_API_KEY",
         "together" => "TOGETHER_API_KEY",
         "google" => "GOOGLE_API_KEY",
         "xai" => "XAI_API_KEY",
+        "nvidia" => "NVIDIA_API_KEY",
+        "huggingface" => "HF_TOKEN",
+        "arcee" => "ARCEEAI_API_KEY",
+        "gmi" => "GMI_API_KEY",
+        "ollama-cloud" => "OLLAMA_API_KEY",
         _ => "OPENAI_API_KEY",
     }
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::provider_api_key_env;
+
+    #[test]
+    fn provider_api_key_env_covers_native_hermes_providers() {
+        assert_eq!(provider_api_key_env("alibaba"), "DASHSCOPE_API_KEY");
+        assert_eq!(provider_api_key_env("zai"), "GLM_API_KEY");
+        assert_eq!(provider_api_key_env("kimi-coding"), "KIMI_API_KEY");
+        assert_eq!(provider_api_key_env("kimi-coding-cn"), "KIMI_CN_API_KEY");
+        assert_eq!(provider_api_key_env("minimax"), "MINIMAX_API_KEY");
+        assert_eq!(provider_api_key_env("minimax-cn"), "MINIMAX_CN_API_KEY");
+    }
 }
 
 /// Keyring entry only (bridge may still fall back to compile-time vendor key).

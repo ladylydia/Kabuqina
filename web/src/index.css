@@ -11,6 +11,8 @@
   --radius-shell-sm: 0.25rem; /* 4px — chips, inline controls */
   --radius-shell-pill: 9999px;
   --shadow-shell: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -4px rgb(0 0 0 / 0.07);
+  --color-hd-surface-chat: oklch(0.98 0.002 270);
+  --color-hd-surface-chat-dark: #0F172A;
   /* Primary (UI accent; not a “brand mark”) */
   --color-hd-primary-500: oklch(0.62 0.14 250);
   --color-hd-primary-600: oklch(0.55 0.15 250);
@@ -56,7 +58,7 @@
   }
   .hd-glass-subtle {
     @apply rounded-2xl border border-zinc-200/80 bg-zinc-50/90;
-    @apply dark:border-zinc-700/80 dark:bg-zinc-900/90;
+    @apply dark:border-zinc-700/70 dark:bg-zinc-900/90;
   }
   /* Titles: one scale app-wide (adjust per page with text-3xl if needed) */
   .hd-page-title {
@@ -69,7 +71,7 @@
     @apply text-sm font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400;
   }
   .hd-meta {
-    @apply text-xs leading-[1.5] text-zinc-500 dark:text-zinc-500;
+    @apply text-xs leading-[1.5] text-zinc-500 dark:text-zinc-400;
   }
   /* 14px/22px 正文 + 12px/18px 辅助 */
   .hd-body {

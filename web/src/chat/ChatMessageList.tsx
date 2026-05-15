@@ -20,7 +20,7 @@ function TypingIndicator() {
   const { t } = useI18n();
   return (
     <div className="flex justify-start">
-      <div className="max-w-[min(100%,42rem)] rounded-lg border border-zinc-200/90 bg-zinc-100/80 px-4 py-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-800/60">
+      <div className="max-w-[min(100%,42rem)] rounded-2xl rounded-tl-sm border border-zinc-200/80 bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)] dark:border-zinc-700/80 dark:bg-zinc-800/90">
         <p className="mb-2 text-xs text-zinc-400 dark:text-zinc-500">
           {t("chat.typingStatus")}…
         </p>
@@ -163,7 +163,13 @@ export function ChatMessageList({
               streaming={false}
             />
           ))}
-          {progress?.running && <AgentProgress progress={progress} />}
+          {progress?.running && (
+            <div className="flex justify-start">
+              <div className="min-w-0 flex-1 max-w-[min(100%,42rem)]">
+                <AgentProgress progress={progress} />
+              </div>
+            </div>
+          )}
           {pendingAssistant && (
             <ChatMessage
               key={pendingAssistant.id}

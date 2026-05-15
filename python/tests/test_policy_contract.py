@@ -240,6 +240,16 @@ class TestSecretStore(unittest.TestCase):
             result = store.fetch()
             self.assertIsNone(result)
 
+    def test_provider_env_map_covers_native_hermes_providers(self):
+        from secret_store import _PROVIDER_ENV
+
+        self.assertEqual(_PROVIDER_ENV["alibaba"], "DASHSCOPE_API_KEY")
+        self.assertEqual(_PROVIDER_ENV["zai"], "GLM_API_KEY")
+        self.assertEqual(_PROVIDER_ENV["kimi-coding"], "KIMI_API_KEY")
+        self.assertEqual(_PROVIDER_ENV["kimi-coding-cn"], "KIMI_CN_API_KEY")
+        self.assertEqual(_PROVIDER_ENV["minimax"], "MINIMAX_API_KEY")
+        self.assertEqual(_PROVIDER_ENV["minimax-cn"], "MINIMAX_CN_API_KEY")
+
 
 class TestApprovalBackendPolicy(unittest.TestCase):
     def setUp(self):

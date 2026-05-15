@@ -67,10 +67,7 @@ pub async fn cmd_hide_companion(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn cmd_set_companion_mode(
-    app: tauri::AppHandle,
-    mode: String,
-) -> Result<(), String> {
+pub async fn cmd_set_companion_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let Some(w) = app.get_webview_window(COMPANION_LABEL) else {
         return Ok(());
     };

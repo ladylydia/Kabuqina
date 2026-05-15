@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github-dark.css";
+import { usePrefersDark } from "../lib/usePrefersDark";
 
 type Props = {
   text: string;
@@ -10,6 +10,14 @@ type Props = {
 };
 
 export default function ChatMarkdown({ text, className = "" }: Props) {
+  const isDark = usePrefersDark();
+  useEffect(() => {
+    if (isDark) {
+      void import("highlight.js/styles/github-dark.css");
+    } else {
+      void import("highlight.js/styles/github.css");
+    }
+  }, [isDark]);
   return (
     <div
       className={`chat-md text-sm leading-[1.6] text-zinc-800 dark:text-zinc-200 ${className}`}
@@ -50,13 +58,22 @@ export default function ChatMarkdown({ text, className = "" }: Props) {
             ) as React.ReactElement<{ className?: string }> | undefined;
             const lang = (codeEl?.props?.className ?? "").replace("language-", "");
             return (
-              <div className="my-3 rounded-xl overflow-hidden border border-zinc-700/50 shadow-sm">
+              <div className={isDark
+                ? "my-3 rounded-xl overflow-hidden border border-zinc-700/50 shadow-sm"
+                : "my-3 rounded-xl overflow-hidden border border-zinc-200/80 shadow-sm"
+              }>
                 {lang && (
-                  <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800 text-zinc-400 text-[11px] font-mono uppercase tracking-wide">
+                  <div className={isDark
+                    ? "flex items-center justify-between px-3 py-1.5 bg-zinc-800 text-zinc-400 text-[11px] font-mono uppercase tracking-wide"
+                    : "flex items-center justify-between px-3 py-1.5 bg-zinc-100 text-zinc-500 text-[11px] font-mono uppercase tracking-wide"
+                  }>
                     <span>{lang}</span>
                   </div>
                 )}
-                <pre className="p-4 overflow-x-auto bg-zinc-900 font-mono text-zinc-100 text-xs leading-relaxed">
+                <pre className={isDark
+                  ? "p-4 overflow-x-auto bg-zinc-900 font-mono text-zinc-100 text-xs leading-relaxed"
+                  : "p-4 overflow-x-auto bg-zinc-50 font-mono text-zinc-800 text-xs leading-relaxed"
+                }>
                   {children}
                 </pre>
               </div>

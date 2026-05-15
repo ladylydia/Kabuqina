@@ -1,0 +1,88 @@
+import { cn } from "../../lib/cn";
+
+type FieldType = "text" | "password" | "select" | "textarea";
+
+type SelectOption = { label: string; value: string };
+
+type Props = {
+  id?: string;
+  label: string;
+  description?: string;
+  type?: FieldType;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  options?: SelectOption[];
+  className?: string;
+  autoComplete?: string;
+  spellCheck?: boolean;
+};
+
+const inputBase =
+  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 text-sm font-mono dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
+
+export function FormField({
+  id,
+  label,
+  description,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  options,
+  className,
+  autoComplete = "off",
+  spellCheck = false,
+}: Props) {
+  const fieldId = id ?? label;
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <label
+        htmlFor={fieldId}
+        className="block text-sm font-medium text-zinc-800 dark:text-zinc-200"
+      >
+        {label}
+      </label>
+      {description ? (
+        <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+          {description}
+        </p>
+      ) : null}
+      {type === "select" ? (
+        <select
+          id={fieldId}
+          className={cn(inputBase, "cursor-pointer")}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {options?.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      ) : type === "textarea" ? (
+        <textarea
+          id={fieldId}
+          className={cn(inputBase, "min-h-[5rem] resize-y")}
+          value={value}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          spellCheck={spellCheck}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <input
+          id={fieldId}
+          type={type}
+          className={inputBase}
+          value={value}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          spellCheck={spellCheck}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}

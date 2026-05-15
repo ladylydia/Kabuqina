@@ -21,10 +21,23 @@ _PROVIDER_ENV: dict[str, str] = {
     "nous":       "NOUS_PORTAL_API_KEY",
     "groq":       "GROQ_API_KEY",
     "mistral":    "MISTRAL_API_KEY",
+    "gemini":     "GOOGLE_API_KEY",
+    "zai":        "GLM_API_KEY",
+    "kimi-coding": "KIMI_API_KEY",
+    "kimi-coding-cn": "KIMI_CN_API_KEY",
+    "stepfun":    "STEPFUN_API_KEY",
+    "minimax":    "MINIMAX_API_KEY",
+    "minimax-cn": "MINIMAX_CN_API_KEY",
+    "alibaba":    "DASHSCOPE_API_KEY",
     "fireworks":  "FIREWORKS_API_KEY",
     "together":   "TOGETHER_API_KEY",
     "google":     "GOOGLE_API_KEY",
     "xai":        "XAI_API_KEY",
+    "nvidia":     "NVIDIA_API_KEY",
+    "huggingface": "HF_TOKEN",
+    "arcee":      "ARCEEAI_API_KEY",
+    "gmi":        "GMI_API_KEY",
+    "ollama-cloud": "OLLAMA_API_KEY",
 }
 
 
@@ -39,10 +52,9 @@ class SecretStore:
             log.info("no secret handshake URL; assuming dev mode (env-provided keys)")
             return None
 
-        env_name = _PROVIDER_ENV.get(provider)
-        if not env_name:
-            log.warning("unknown provider %r; secret left unfetched", provider)
-            return None
+        env_name = _PROVIDER_ENV.get(provider, "OPENAI_API_KEY")
+        if provider not in _PROVIDER_ENV:
+            log.info("unknown provider %r; loading secret into OPENAI_API_KEY", provider)
 
         try:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

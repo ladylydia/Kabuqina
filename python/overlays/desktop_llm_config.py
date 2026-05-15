@@ -106,7 +106,9 @@ def install() -> None:
         log.warning("could not load config for model seed (%s)", e)
         cfg = {}
 
-    if inf == "custom":
+    provider_for_model = desk_provider or ("custom" if inf == "custom" else "")
+
+    if inf == "custom" or (api_base and provider_for_model):
         prev = cfg.get("model")
         default_model = model
         prev_base = ""
@@ -124,7 +126,7 @@ def install() -> None:
 
         new_block: dict = {
             "default": default_model,
-            "provider": "custom",
+            "provider": provider_for_model or "custom",
         }
         if api_base:
             new_block["base_url"] = api_base

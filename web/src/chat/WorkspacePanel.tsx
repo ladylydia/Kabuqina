@@ -1,4 +1,5 @@
-import { Camera, Download, FilePlus2, FolderKanban, PanelRightClose } from "lucide-react";
+import { Download, FolderKanban, PanelRightClose } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
@@ -8,6 +9,14 @@ type WorkspacePanelProps = {
   onCollapse: () => void;
   onOrganizeDesktop?: () => void;
 };
+
+function WorkspaceSectionHeading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="workspace-section-heading inline-flex rounded-md bg-sky-600 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm shadow-sky-900/10 dark:bg-[#3B5BC7] dark:text-white">
+      {children}
+    </h3>
+  );
+}
 
 function WorkspaceSection({
   sectionId,
@@ -23,9 +32,7 @@ function WorkspaceSection({
       data-workspace-section={sectionId}
       className="border-b border-zinc-200/80 pb-4 last:border-b-0 dark:border-zinc-800"
     >
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        {title}
-      </h3>
+      <WorkspaceSectionHeading>{title}</WorkspaceSectionHeading>
       <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
         {body}
       </p>
@@ -81,18 +88,8 @@ export function WorkspacePanel({
         />
 
         <section data-workspace-section="workspace.quickActions">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            {t("chat.workspaceQuickActions")}
-          </h3>
+          <WorkspaceSectionHeading>{t("chat.workspaceQuickActions")}</WorkspaceSectionHeading>
           <div className="mt-3 grid gap-2">
-            <button type="button" className="hd-btn-ghost justify-start text-left">
-              <FilePlus2 className="mr-2 inline h-4 w-4" aria-hidden />
-              {t("chat.workspaceAddFile")}
-            </button>
-            <button type="button" className="hd-btn-ghost justify-start text-left">
-              <Camera className="mr-2 inline h-4 w-4" aria-hidden />
-              {t("chat.workspaceCapture")}
-            </button>
             <button
               type="button"
               onClick={onOrganizeDesktop}

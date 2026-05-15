@@ -218,7 +218,7 @@ export const MESSAGES = {
       rec: "推荐",
       recommended: "推荐",
       showAll: "更多提供商 — DeepSeek、Mistral、Groq、OpenRouter、自定义…",
-      customTitle: "自定义 OpenAI 兼容 API",
+      customTitle: "自定义AI模型",
       customBody: "任意兼容端点 — 填写你自己的服务地址、模型名称和 API Key。",
       selected: "已选：{{name}}",
       starter: {
@@ -232,6 +232,9 @@ export const MESSAGES = {
       labelProvider: "选择提供商",
       selectProvider: "选择一个提供商…",
       providerCustomLabel: "Custom（手动填入）",
+      labelCustomProviderId: "Provider ID",
+      phCustomProviderId: "custom 或 my-provider",
+      customProviderHint: "高级项。这里会写入 Hermes 的 provider 字段；不确定就留空。",
       steps: {
         s1: "在浏览器打开 {{label}}。",
         s2: "登录后创建密钥。",
@@ -243,8 +246,8 @@ export const MESSAGES = {
       phApiUrl: "https://…",
       labelModel: "模型名字",
       phModel: "对方让你填的那个名字",
-      labelKeyCustom: "密码串",
-      labelKey: "把密码粘贴到这里",
+      labelKeyCustom: "API Key",
+      labelKey: "把API Key粘贴到这里",
       phKey: "粘贴到这里",
       errModel: "请填上对方要求的模型名字。",
       errGeneric: "没通过，请重试。",
@@ -992,6 +995,9 @@ export const MESSAGES = {
       labelProvider: "Select provider",
       selectProvider: "Select a provider…",
       providerCustomLabel: "Custom (manual)",
+      labelCustomProviderId: "Provider ID",
+      phCustomProviderId: "custom or my-provider",
+      customProviderHint: "Advanced. This is written to Hermes as the provider field; leave it blank if unsure.",
       customLead1:
         "Paste the service web address and your secret. It stays in Windows’ secure storage—not a normal file.",
       providerLead:

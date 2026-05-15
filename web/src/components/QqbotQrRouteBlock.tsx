@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type QqbotQrProgress = {
   phase?: string;
@@ -36,8 +38,7 @@ type Props = {
   onHermesRunningChange?: (running: boolean) => void;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
+
 
 function ipcErr(e: unknown): string {
   if (typeof e === "string") return e;
@@ -227,41 +228,33 @@ export function QqbotQrRouteBlock({ className, onSuccess, onHermesRunningChange 
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {qqEnv?.configured ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-          <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.qqAlreadyTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-emerald-900/85 dark:text-emerald-100/85">
-            {t("settings.qqAlreadyLead")}
-          </p>
+        <StatusBanner variant="success" title={t("settings.qqAlreadyTitle")}>
+          <p>{t("settings.qqAlreadyLead")}</p>
           {qqEnv.appIdHint ? (
-            <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-              {t("settings.qqAppIdHint", { hint: qqEnv.appIdHint })}
-            </p>
+            <p className="mt-1 font-mono">{t("settings.qqAppIdHint", { hint: qqEnv.appIdHint })}</p>
           ) : null}
-        </div>
+        </StatusBanner>
       ) : null}
       {qqPartial && qqEnv ? (
-        <div className="rounded-lg border border-amber-200/90 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-900/55 dark:bg-amber-950/30">
-          <p className="font-medium text-amber-950 dark:text-amber-100">{t("settings.qqPartialTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-950/90 dark:text-amber-100/85">
-            {t("settings.qqPartialLead", { missing: qqPartialMissing.join("、") })}
-          </p>
-        </div>
+        <StatusBanner variant="warning" title={t("settings.qqPartialTitle")}>
+          {t("settings.qqPartialLead", { missing: qqPartialMissing.join("、") })}
+        </StatusBanner>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btnClass} onClick={() => void startQqbotQr()} disabled={qqPolling}>
+        <PlatformButton onClick={() => void startQqbotQr()} disabled={qqPolling}>
           {qqEnv?.configured ? t("settings.qqRescan") : t("settings.qqStart")}
-        </button>
+        </PlatformButton>
         {qqEnv?.configured ? (
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.removePlatformConfig")}
-          </button>
+          </PlatformButton>
         ) : null}
-        <button type="button" className={btnClass} onClick={() => void cancelQqbotQr()} disabled={!qqPolling}>
+        <PlatformButton onClick={() => void cancelQqbotQr()} disabled={!qqPolling}>
           {t("settings.qqCancel")}
-        </button>
+        </PlatformButton>
       </div>
       {qqInlineErr ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{qqInlineErr}</p>
+        <StatusBanner variant="error" title={qqInlineErr} />
       ) : null}
       {qqView?.progress?.phase ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-300">{qqPhaseLabel(qqView.progress.phase)}</p>
@@ -292,22 +285,18 @@ export function QqbotQrRouteBlock({ className, onSuccess, onHermesRunningChange 
             <p className="font-mono text-xs text-zinc-500">App ID: {qqView.result.app_id}</p>
           ) : null}
           {!qqRestarted ? (
-            <button
-              type="button"
-              className={btnClass}
+            <PlatformButton
               disabled={restartBusy}
               onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.qqRestartBusy") : t("settings.qqRestart")}
-            </button>
+            </PlatformButton>
           ) : null}
-          {restartErr ? <p className="text-sm text-red-600 dark:text-red-400">{restartErr}</p> : null}
+          {restartErr ? <StatusBanner variant="error" title={restartErr} /> : null}
         </div>
       ) : null}
       {qqView?.result && qqView.result.ok === false ? (
-        <p className="text-sm text-red-600 dark:text-red-400">
-          {t("settings.qqError", { msg: qqView.result.error ?? "unknown" })}
-        </p>
+        <StatusBanner variant="error" title={t("settings.qqError", { msg: qqView.result.error ?? "unknown" })} />
       ) : null}
     </div>
   );

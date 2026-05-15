@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type WeixinQrProgress = {
   phase?: string;
@@ -39,9 +41,6 @@ type Props = {
   /** When embedded Hermes restarts successfully, report new running flag. */
   onHermesRunningChange?: (running: boolean) => void;
 };
-
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
 
 function ipcErr(e: unknown): string {
   if (typeof e === "string") return e;
@@ -229,41 +228,33 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
   return (
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {weixinEnv?.configured ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-          <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.weixinAlreadyTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-emerald-900/85 dark:text-emerald-100/85">
-            {t("settings.weixinAlreadyLead")}
-          </p>
+        <StatusBanner variant="success" title={t("settings.weixinAlreadyTitle")}>
+          <p>{t("settings.weixinAlreadyLead")}</p>
           {weixinEnv.accountIdHint ? (
-            <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-              {t("settings.weixinAccountHint", { hint: weixinEnv.accountIdHint })}
-            </p>
+            <p className="mt-1 font-mono">{t("settings.weixinAccountHint", { hint: weixinEnv.accountIdHint })}</p>
           ) : null}
-        </div>
+        </StatusBanner>
       ) : null}
       {weixinPartial && weixinEnv ? (
-        <div className="rounded-lg border border-amber-200/90 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-900/55 dark:bg-amber-950/30">
-          <p className="font-medium text-amber-950 dark:text-amber-100">{t("settings.weixinPartialTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-950/90 dark:text-amber-100/85">
-            {t("settings.weixinPartialLead", { missing: weixinPartialMissing.join("、") })}
-          </p>
-        </div>
+        <StatusBanner variant="warning" title={t("settings.weixinPartialTitle")}>
+          {t("settings.weixinPartialLead", { missing: weixinPartialMissing.join("、") })}
+        </StatusBanner>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btnClass} onClick={() => void startWeixinQr()} disabled={weixinPolling}>
+        <PlatformButton onClick={() => void startWeixinQr()} disabled={weixinPolling}>
           {weixinEnv?.configured ? t("settings.weixinRescan") : t("settings.weixinStart")}
-        </button>
+        </PlatformButton>
         {weixinEnv?.configured ? (
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.removePlatformConfig")}
-          </button>
+          </PlatformButton>
         ) : null}
-        <button type="button" className={btnClass} onClick={() => void cancelWeixinQr()} disabled={!weixinPolling}>
+        <PlatformButton onClick={() => void cancelWeixinQr()} disabled={!weixinPolling}>
           {t("settings.weixinCancel")}
-        </button>
+        </PlatformButton>
       </div>
       {weixinInlineErr ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{weixinInlineErr}</p>
+        <StatusBanner variant="error" title={weixinInlineErr} />
       ) : null}
       {weixinView?.progress?.phase ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-300">{weixinPhaseLabel(weixinView.progress.phase)}</p>
@@ -294,14 +285,12 @@ export function WeixinQrRouteCBlock({ className, onSuccess, onHermesRunningChang
             <p className="font-mono text-xs text-zinc-500">account_id: {weixinView.result.account_id}</p>
           ) : null}
           {!weixinRestarted ? (
-            <button
-              type="button"
-              className={btnClass}
+            <PlatformButton
               disabled={restartBusy}
               onClick={() => void manualRestartAssistant()}
             >
               {restartBusy ? t("settings.weixinRestartBusy") : t("settings.weixinRestart")}
-            </button>
+            </PlatformButton>
           ) : null}
           {restartErr ? <p className="text-sm text-red-600 dark:text-red-400">{restartErr}</p> : null}
         </div>

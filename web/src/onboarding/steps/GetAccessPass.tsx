@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { findProvider, type ProviderId } from "../../lib/providers";
+import { findProvider, type Provider, type ProviderId } from "../../lib/providers";
 import { useI18n } from "../../lib/i18n";
 import { validateKey, validateCustomEndpoint, normalizeOpenAiBaseUrl } from "../../lib/validate";
 import { updateDraft, useDraft } from "../../lib/store";
@@ -20,12 +20,29 @@ type LlmConfigPreview = {
   model: string | null; apiBaseUrl: string | null;
 };
 
-function providerDisplayLabel(id: string | null | undefined): string {
-  if (!id) return "";
-  try { return findProvider(id as ProviderId).label; } catch { return id; }
-}
-
-const DROPDOWN_PROVIDERS: (ProviderId | "custom")[] = ["deepseek", "openai", "anthropic", "groq", "mistral", "openrouter", "custom"];
+const DROPDOWN_PROVIDERS: (ProviderId | "custom")[] = [
+  "deepseek",
+  "openai",
+  "anthropic",
+  "groq",
+  "mistral",
+  "openrouter",
+  "gemini",
+  "zai",
+  "kimi-coding",
+  "kimi-coding-cn",
+  "stepfun",
+  "minimax",
+  "minimax-cn",
+  "alibaba",
+  "xai",
+  "nvidia",
+  "huggingface",
+  "arcee",
+  "gmi",
+  "ollama-cloud",
+  "custom",
+];
 
 const PROVIDER_PRESETS: Record<string, { host: string; model: string }> = {
   deepseek: { host: "https://api.deepseek.com", model: "deepseek-v4-flash" },
@@ -34,7 +51,50 @@ const PROVIDER_PRESETS: Record<string, { host: string; model: string }> = {
   groq: { host: "https://api.groq.com/openai/v1", model: "qwen-2.5-32b" },
   mistral: { host: "https://api.mistral.ai/v1", model: "mistral-medium" },
   openrouter: { host: "https://openrouter.ai/api/v1", model: "deepseek/deepseek-v4-flash" },
+  gemini: { host: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-3.1-pro-preview" },
+  zai: { host: "https://api.z.ai/api/paas/v4", model: "glm-5.1" },
+  "kimi-coding": { host: "https://api.kimi.com/coding", model: "kimi-k2.6" },
+  "kimi-coding-cn": { host: "https://api.kimi.com/coding/v1", model: "kimi-k2.6" },
+  stepfun: { host: "https://api.stepfun.ai/step_plan/v1", model: "step-3.5-flash" },
+  minimax: { host: "https://api.minimax.io/anthropic", model: "MiniMax-M2.7" },
+  "minimax-cn": { host: "https://api.minimaxi.com/v1", model: "MiniMax-M2.7" },
+  alibaba: { host: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", model: "qwen3.6-plus" },
+  xai: { host: "https://api.x.ai/v1", model: "grok-4.20" },
+  nvidia: { host: "https://integrate.api.nvidia.com/v1", model: "nvidia/nemotron-3-super-120b-a12b" },
+  huggingface: { host: "https://router.huggingface.co/v1", model: "moonshotai/Kimi-K2.5" },
+  arcee: { host: "https://api.arcee.ai/api/v1", model: "auto" },
+  gmi: { host: "https://api.gmi-serving.com/v1", model: "auto" },
+  "ollama-cloud": { host: "https://ollama.com/v1", model: "gpt-oss:120b" },
 };
+
+function hostFromBaseUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      .trim();
+  }
+}
+
+async function validateEndpointForProvider(
+  selectedProvider: Provider | null,
+  baseUrl: string,
+  apiKey: string,
+) {
+  if (selectedProvider?.skipEndpointValidation) {
+    return { ok: true as const };
+  }
+  return validateCustomEndpoint(baseUrl, apiKey);
+}
+
+function initialDropdownProvider(customProviderId: string | undefined): ProviderId | "custom" | "" {
+  const id = customProviderId?.trim();
+  if (!id) return "";
+  if (DROPDOWN_PROVIDERS.includes(id as ProviderId)) return id as ProviderId;
+  return "custom";
+}
 
 export function GetAccessPass() {
   const { t } = useI18n();
@@ -43,12 +103,23 @@ export function GetAccessPass() {
   const [key, setKey] = useState(draft.apiKey);
   const [baseUrl, setBaseUrl] = useState(draft.customBaseUrl ?? "");
   const [modelId, setModelId] = useState(draft.customModel ?? "");
+  const [customProviderId, setCustomProviderId] = useState(draft.customProviderId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<LlmConfigPreview | null>(null);
-  const [dropdownProvider, setDropdownProvider] = useState<ProviderId | "">("");
+  const [dropdownProvider, setDropdownProvider] = useState<ProviderId | "custom" | "">(
+    initialDropdownProvider(draft.customProviderId),
+  );
   const [validationStatus, setValidationStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const provider = draft.providerId ? findProvider(draft.providerId) : null;
+  const isCustom = provider?.id === "custom";
+  const effectiveProvider = useMemo(() => {
+    if (!provider) return null;
+    if (!isCustom) return provider;
+    if (dropdownProvider && dropdownProvider !== "custom") return findProvider(dropdownProvider);
+    return null;
+  }, [isCustom, provider, dropdownProvider]);
 
   useEffect(() => {
     invoke<LlmConfigPreview>("cmd_llm_config_preview").then(setPreview)
@@ -73,7 +144,7 @@ export function GetAccessPass() {
       setValidationStatus("validating");
       try {
         const result = pid === "custom"
-          ? await validateCustomEndpoint(baseUrl, key)
+          ? await validateEndpointForProvider(effectiveProvider, baseUrl, key)
           : await validateKey(pid, key);
         setValidationStatus(result.ok ? "valid" : "invalid");
         setValidationMessage(result.message ?? null);
@@ -83,7 +154,7 @@ export function GetAccessPass() {
       }
     }, 800);
     return () => clearTimeout(timer);
-  }, [key, baseUrl, draft.providerId, preview?.hasSecret, t]);
+  }, [key, baseUrl, draft.providerId, effectiveProvider, preview?.hasSecret, t]);
 
   useEffect(() => {
     if (!draft.setupMode) nav("/onboarding/mode", { replace: true });
@@ -93,22 +164,12 @@ export function GetAccessPass() {
     if (draft.setupMode && !draft.providerId) nav("/onboarding/brain", { replace: true });
   }, [draft.providerId, draft.setupMode, nav]);
 
-  const provider = draft.providerId ? findProvider(draft.providerId) : null;
-  const isCustom = provider?.id === "custom";
-
   // Pre-fill from saved preview
   useEffect(() => {
     if (!preview?.hasSecret || !isCustom) return;
     setBaseUrl((u) => (u.trim() ? u : preview.apiBaseUrl?.trim() ?? ""));
     setModelId((m) => (m.trim() ? m : preview.model?.trim() ?? ""));
   }, [preview, isCustom]);
-
-  const effectiveProvider = useMemo(() => {
-    if (!provider) return null;
-    if (!isCustom) return provider;
-    if (dropdownProvider && dropdownProvider !== "custom") return findProvider(dropdownProvider);
-    return null;
-  }, [isCustom, provider, dropdownProvider]);
 
   if (!draft.setupMode || !provider) return null;
 
@@ -129,16 +190,17 @@ export function GetAccessPass() {
       }
       if (isCustom) {
         const dp = dropdownProvider && dropdownProvider !== "custom" ? dropdownProvider : "custom";
+        const providerForSave = dp !== "custom" ? dp : customProviderId.trim() || "custom";
         const mid = dp !== "custom" ? (PROVIDER_PRESETS[dp]?.model ?? modelId.trim()) : modelId.trim();
         if (!mid) { setError(t("pass.errModel")); return; }
         const url = baseUrl.trim();
-        const r = await validateCustomEndpoint(url, key);
+        const r = await validateEndpointForProvider(effectiveProvider, url, key);
         if (!r.ok) { setError(r.message ?? t("pass.errGeneric")); return; }
         await invoke("cmd_save_secret", {
-          cfg: { provider: dp, host: effectiveProvider?.host ?? "", model: mid, api_base_url: normalizeOpenAiBaseUrl(url) },
+          cfg: { provider: providerForSave, host: effectiveProvider?.host || hostFromBaseUrl(url), model: mid, api_base_url: normalizeOpenAiBaseUrl(url) },
           secret: key.trim(),
         });
-        updateDraft({ apiKey: "", customBaseUrl: url, customModel: mid });
+        updateDraft({ apiKey: "", customBaseUrl: url, customModel: mid, customProviderId: providerForSave });
       } else {
         const r = await validateKey(provider.id, key);
         if (!r.ok) { setError(r.message ?? t("pass.errGeneric")); return; }
@@ -172,19 +234,8 @@ export function GetAccessPass() {
 
   return (<div className="space-y-8">
     <div className="space-y-3">
-      <h1 className="hd-page-title">{t("pass.title")}</h1>
-      <p className="hd-lead max-w-prose">{isCustom ? t("pass.customLead1") : t("pass.providerLead", { label: provider.label })}</p>
+      <h1 className="hd-page-title">{provider?.id === "deepseek" ? "Deepseek API Key" : provider?.id === "custom" ? "自定义AI模型" : t("pass.title")}</h1>
     </div>
-
-    {preview?.hasSecret && (<div className="hd-glass-subtle space-y-2 rounded-[var(--radius-shell)] border border-emerald-200/90 bg-emerald-50/70 px-4 py-3 text-sm leading-relaxed text-emerald-950 dark:border-emerald-800/80 dark:bg-emerald-950/35 dark:text-emerald-100">
-      <p className="font-medium">{t("pass.savedBanner")}</p>
-      <ul className="list-inside list-disc space-y-1 pl-0.5 text-xs opacity-95">
-        {preview.provider ? <li>{t("pass.savedProviderLine", { label: providerDisplayLabel(preview.provider), id: preview.provider })}</li> : null}
-        {preview.host ? <li>{t("pass.savedHostLine", { host: preview.host })}</li> : null}
-        {preview.model ? <li>{t("pass.savedModelLine", { model: preview.model })}</li> : null}
-        {preview.apiBaseUrl ? <li className="break-all">{t("pass.savedBaseUrlLine", { url: preview.apiBaseUrl })}</li> : null}
-      </ul>
-    </div>)}
 
     {!isCustom && (<ol className="hd-glass-subtle list-decimal space-y-2.5 pl-6 pr-4 py-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
       <li>{t("pass.steps.s1", { label: provider.label })}</li>
@@ -200,11 +251,13 @@ export function GetAccessPass() {
         if (v && v !== "custom" && PROVIDER_PRESETS[v]) {
           setBaseUrl(PROVIDER_PRESETS[v].host);
           setModelId(PROVIDER_PRESETS[v].model);
-          updateDraft({ customBaseUrl: PROVIDER_PRESETS[v].host, customModel: PROVIDER_PRESETS[v].model });
+          setCustomProviderId("");
+          updateDraft({ customBaseUrl: PROVIDER_PRESETS[v].host, customModel: PROVIDER_PRESETS[v].model, customProviderId: "" });
         } else if (v === "custom") {
           setBaseUrl("");
           setModelId("");
-          updateDraft({ customBaseUrl: "", customModel: "" });
+          setCustomProviderId("");
+          updateDraft({ customBaseUrl: "", customModel: "", customProviderId: "" });
         }
       }} className="w-full rounded-[var(--radius-shell)] border border-zinc-300/90 bg-white/90 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/90">
         <option value="">{t("pass.selectProvider")}</option>
@@ -212,6 +265,14 @@ export function GetAccessPass() {
         <option disabled>──</option>
         <option value="custom">{t("pass.providerCustomLabel")}</option>
       </select>
+    </div>)}
+
+    {isCustom && dropdownProvider === "custom" && (<div className="space-y-2">
+      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelCustomProviderId")}</label>
+      <input type="text" autoComplete="off" spellCheck={false} value={customProviderId}
+        onChange={(e) => { setCustomProviderId(e.target.value); updateDraft({ customProviderId: e.target.value }); }}
+        placeholder={t("pass.phCustomProviderId")} className={f} />
+      <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t("pass.customProviderHint")}</p>
     </div>)}
 
     {isCustom && (<div className="space-y-2">

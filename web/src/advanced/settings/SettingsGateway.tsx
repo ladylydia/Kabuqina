@@ -164,11 +164,11 @@ export function SettingsGateway({
               key={key}
               type="button"
               onClick={() => nav(path)}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60"
+              className="gateway-platform-nav flex w-full items-center gap-3 rounded-lg border border-sky-200/80 bg-white px-3 py-2.5 text-left text-sky-700 shadow-sm shadow-sky-900/5 transition hover:border-sky-300 hover:bg-sky-50 active:scale-[0.99] dark:border-sky-800/70 dark:bg-sky-950/25 dark:text-sky-100 dark:hover:border-sky-700 dark:hover:bg-sky-900/35"
             >
-              <Icon className="size-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
-              <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-200">{label}</span>
-              <ChevronRight className="size-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
+              <Icon className="size-4 shrink-0 text-sky-600 dark:text-sky-300" />
+              <span className="flex-1 text-sm font-medium">{label}</span>
+              <ChevronRight className="size-4 shrink-0 text-sky-400 dark:text-sky-500" />
             </button>
           ))}
         </div>

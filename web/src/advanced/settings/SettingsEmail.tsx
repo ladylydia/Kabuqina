@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
+import { StatusBanner } from "../../components/ui/StatusBanner";
+import { PlatformButton } from "../../components/ui/PlatformButton";
 
 export type EmailEnvSnapshot = {
   configured: boolean;
@@ -30,11 +32,8 @@ type EmailOAuthStatus = {
   hasDefaultClientId: boolean;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
-
 const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
 
 export function SettingsEmailBlock({ className }: { className?: string }) {
   const { t } = useI18n();
@@ -202,12 +201,10 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {!env?.configured && !showForm ? (
         <>
-          <div className="rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-2.5 text-sm dark:border-zinc-700/80 dark:bg-zinc-900/40">
-            <p className="text-zinc-600 dark:text-zinc-400">{t("settings.emailNotConfigured")}</p>
-          </div>
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <StatusBanner variant="neutral" title={t("settings.emailNotConfigured")} />
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.emailSetup")}
-          </button>
+          </PlatformButton>
         </>
       ) : null}
 
@@ -227,12 +224,12 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
 
       {env?.configured && !showForm ? (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.emailReconfigure")}
-          </button>
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          </PlatformButton>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.emailRemoveConfig")}
-          </button>
+          </PlatformButton>
         </div>
       ) : null}
 
@@ -290,7 +287,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
               />
               <button
                 type="button"
-                className="text-xs text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                className="text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
                 onClick={() => setShowOauthAdvanced((v) => !v)}
               >
                 {showOauthAdvanced
@@ -326,17 +323,14 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
               ) : null}
               <div className="rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={btnClass}
+                  <PlatformButton
                     disabled={oauthBusy || (!oauthHasDefaultClientId && !oauth2ClientId.trim())}
                     onClick={() => void startOutlookOAuth()}
                   >
                     {oauthBusy ? "…" : t("settings.emailOauth2Start")}
-                  </button>
-                  <button
-                    type="button"
-                    className={btnClass}
+                  </PlatformButton>
+                  <PlatformButton
+                    variant="primary"
                     disabled={
                       oauthBusy ||
                       !oauthFlow ||
@@ -348,7 +342,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
                     onClick={() => void finishOutlookOAuth()}
                   >
                     {oauthBusy ? "…" : t("settings.emailOauth2Finish")}
-                  </button>
+                  </PlatformButton>
                 </div>
                 {oauthFlow ? (
                   <div className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-300">
@@ -381,9 +375,8 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
             onChange={(e) => setSmtpHost(e.target.value)}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={btnClass}
+            <PlatformButton
+              variant="primary"
               onClick={() => void saveConfig()}
               disabled={
                 saving ||
@@ -396,13 +389,13 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
               }
             >
               {saving ? "…" : t("settings.emailFormSave")}
-            </button>
-            <button type="button" className={btnClass} onClick={() => { setShowForm(false); setError(null); setAddress(""); setPassword(""); setAuthMode("password"); setOauth2AccessToken(""); setOauth2RefreshToken(""); setOauth2ClientId(""); setOauth2Tenant("common"); setOauthFlow(null); setShowOauthAdvanced(false); setImapHost(""); setSmtpHost(""); }}>
+            </PlatformButton>
+            <PlatformButton onClick={() => { setShowForm(false); setError(null); setAddress(""); setPassword(""); setAuthMode("password"); setOauth2AccessToken(""); setOauth2RefreshToken(""); setOauth2ClientId(""); setOauth2Tenant("common"); setOauthFlow(null); setShowOauthAdvanced(false); setImapHost(""); setSmtpHost(""); }}>
               {t("settings.emailFormCancel")}
-            </button>
+            </PlatformButton>
           </div>
           {error ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{t("settings.emailFormError", { msg: error })}</p>
+            <StatusBanner variant="error" title={t("settings.emailFormError", { msg: error })} />
           ) : null}
         </div>
       ) : null}

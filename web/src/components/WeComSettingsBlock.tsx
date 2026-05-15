@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type WeComEnvSnapshot = {
   configured: boolean;
@@ -22,11 +24,8 @@ export type WeComQrStatusPayload = {
   result: { ok?: boolean; bot_id?: string; error?: string } | null;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
-
 const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
 
 const ipcErr = (e: unknown): string =>
   e instanceof Error ? e.message : String(e);
@@ -203,21 +202,18 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
       {/* ── Configured ── */}
       {viewMode === "configured" ? (
         <>
-          <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-            <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.wecomAlreadyTitle")}</p>
+          <StatusBanner variant="success" title={t("settings.wecomAlreadyTitle")}>
             {env?.botIdHint ? (
-              <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-                {t("settings.wecomBotIdHint", { hint: env.botIdHint })}
-              </p>
+              <p className="font-mono">{t("settings.wecomBotIdHint", { hint: env.botIdHint })}</p>
             ) : null}
-          </div>
+          </StatusBanner>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={btnClass} onClick={handleReconfigure}>
+            <PlatformButton onClick={handleReconfigure}>
               {t("settings.wecomReconfigure")}
-            </button>
-            <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+            </PlatformButton>
+            <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
               {removing ? "…" : t("settings.telegramRemoveConfig")}
-            </button>
+            </PlatformButton>
           </div>
         </>
       ) : null}
@@ -239,9 +235,9 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
             </label>
           </div>
           {selectedMethod === "qr" && !qrPolling && !qrView?.progress ? (
-            <button type="button" className={btnClass} onClick={() => void startQr()}>
+            <PlatformButton onClick={() => void startQr()}>
               {t("settings.wecomQrStart")}
-            </button>
+            </PlatformButton>
           ) : null}
           {selectedMethod === "manual" ? (
             <div className="space-y-2 mt-2">
@@ -267,11 +263,11 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
                 {t("settings.wecomOpenAccess")}
               </label>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className={btnClass} onClick={() => void saveConfig()} disabled={saving || !botId.trim() || !secret.trim()}>
+                <PlatformButton variant="primary" onClick={() => void saveConfig()} disabled={saving || !botId.trim() || !secret.trim()}>
                   {saving ? "…" : t("settings.wecomFormSave")}
-                </button>
+                </PlatformButton>
               </div>
-              {error ? <p className="text-xs text-red-600 dark:text-red-400">{t("settings.wecomFormError", { msg: error })}</p> : null}
+              {error ? <StatusBanner variant="error" title={t("settings.wecomFormError", { msg: error })} /> : null}
             </div>
           ) : null}
         </div>
@@ -294,9 +290,9 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
       ) : null}
       {qrInlineErr ? <p className="text-sm text-red-600 dark:text-red-400">{qrInlineErr}</p> : null}
       {qrPolling ? (
-        <button type="button" className={btnClass} onClick={() => void cancelQr()}>
+        <PlatformButton onClick={() => void cancelQr()}>
           {t("settings.wecomQrCancel")}
-        </button>
+        </PlatformButton>
       ) : null}
     </div>
   );

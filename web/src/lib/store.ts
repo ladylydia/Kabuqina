@@ -38,6 +38,8 @@ export interface OnboardingDraft {
   customBaseUrl?: string;
   /** Model id as required by that endpoint (custom provider only). */
   customModel?: string;
+  /** Optional provider id passed through to Hermes for a manually configured endpoint. */
+  customProviderId?: string;
   /** Per-section, per-option form values from the setup option tables (can be all empty = use defaults / skip). */
   wizardConfig?: WizardOptionConfig;
   /** Single/multi/skip choice per section roster (for `next` gating + sync intent). */

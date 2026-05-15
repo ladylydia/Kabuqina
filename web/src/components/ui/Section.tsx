@@ -16,7 +16,7 @@ export function Section({ icon: Icon, title, desc, children, className, action }
     >
       <div className="flex items-start gap-3.5">
         {Icon && (
-          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-sky-100/60 text-sky-600 shadow-sm dark:from-sky-950/40 dark:to-sky-900/30 dark:text-sky-400">
             <Icon className="size-[1.125rem]" strokeWidth={2} />
           </div>
         )}

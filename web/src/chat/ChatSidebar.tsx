@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
@@ -110,10 +111,14 @@ export function ChatSidebar({
                 <div
                   key={s.id}
                   className={cn(
-                    "group flex items-stretch overflow-hidden rounded-lg",
+                    "group relative flex items-stretch overflow-hidden rounded-lg",
                     active && "bg-zinc-200/60 dark:bg-zinc-800/60",
                   )}
                 >
+                  {/* Active indicator bar */}
+                  {active && (
+                    <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-sky-500 dark:bg-sky-400" />
+                  )}
                   <button
                     type="button"
                     onClick={() => onSelectSession(s.id)}
@@ -122,6 +127,7 @@ export function ChatSidebar({
                     className={cn(
                       "flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left",
                       collapsed ? "justify-center px-0" : "px-2.5",
+                      active && "pl-3",
                     )}
                   >
                     <Icon
@@ -152,7 +158,7 @@ export function ChatSidebar({
                       onClick={(e) => onDeleteSession(s.id, e)}
                       className="shrink-0 px-1.5 text-zinc-300 opacity-0 transition hover:text-red-500 group-hover:opacity-100 dark:text-zinc-600 dark:hover:text-red-400"
                     >
-                      x
+                      <Trash2 className="h-3 w-3" strokeWidth={2.5} />
                     </button>
                   )}
                 </div>

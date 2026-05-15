@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type TelegramEnvSnapshot = {
   configured: boolean;
@@ -11,11 +13,8 @@ export type TelegramEnvSnapshot = {
   tokenHint?: string | null;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
-
 const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
 
 export function TelegramSettingsBlock({ className }: { className?: string }) {
   const { t } = useI18n();
@@ -83,43 +82,35 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {!env?.configured && !showForm ? (
         <>
-          <div className="rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-2.5 text-sm dark:border-zinc-700/80 dark:bg-zinc-900/40">
-            <p className="text-zinc-600 dark:text-zinc-400">{t("settings.telegramNotConfigured")}</p>
-          </div>
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <StatusBanner variant="neutral" title={t("settings.telegramNotConfigured")} />
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.telegramSetup")}
-          </button>
+          </PlatformButton>
         </>
       ) : null}
 
       {partial && !showForm ? (
-        <div className="rounded-lg border border-amber-200/90 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-900/55 dark:bg-amber-950/30">
-          <p className="font-medium text-amber-950 dark:text-amber-100">{t("settings.telegramPartialTitle")}</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-950/90 dark:text-amber-100/85">
-            {t("settings.telegramPartialLead")}
-          </p>
-        </div>
+        <StatusBanner variant="warning" title={t("settings.telegramPartialTitle")}>
+          {t("settings.telegramPartialLead")}
+        </StatusBanner>
       ) : null}
 
       {env?.configured && !showForm ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-          <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.telegramAlreadyTitle")}</p>
+        <StatusBanner variant="success" title={t("settings.telegramAlreadyTitle")}>
           {env.tokenHint ? (
-            <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-              {t("settings.telegramTokenHint", { hint: env.tokenHint })}
-            </p>
+            <p className="font-mono">{t("settings.telegramTokenHint", { hint: env.tokenHint })}</p>
           ) : null}
-        </div>
+        </StatusBanner>
       ) : null}
 
       {env?.configured && !showForm ? (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.telegramReconfigure")}
-          </button>
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          </PlatformButton>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.telegramRemoveConfig")}
-          </button>
+          </PlatformButton>
         </div>
       ) : null}
 
@@ -141,15 +132,15 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={btnClass} onClick={() => void saveToken()} disabled={saving || !token.trim()}>
+            <PlatformButton variant="primary" onClick={() => void saveToken()} disabled={saving || !token.trim()}>
               {saving ? t("settings.telegramFormSaving") : t("settings.telegramFormSave")}
-            </button>
-            <button type="button" className={btnClass} onClick={() => { setShowForm(false); setError(null); setToken(""); }}>
+            </PlatformButton>
+            <PlatformButton onClick={() => { setShowForm(false); setError(null); setToken(""); }}>
               {t("settings.telegramFormCancel")}
-            </button>
+            </PlatformButton>
           </div>
           {error ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{t("settings.telegramFormError", { msg: error })}</p>
+            <StatusBanner variant="error" title={t("settings.telegramFormError", { msg: error })} />
           ) : null}
         </div>
       ) : null}

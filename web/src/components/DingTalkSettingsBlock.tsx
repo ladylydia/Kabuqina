@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { StatusBanner } from "./ui/StatusBanner";
+import { PlatformButton } from "./ui/PlatformButton";
 
 export type DingTalkEnvSnapshot = {
   configured: boolean;
@@ -11,11 +13,8 @@ export type DingTalkEnvSnapshot = {
   clientIdHint?: string | null;
 };
 
-const btnClass =
-  "rounded-lg border border-zinc-300/90 bg-white px-3.5 py-1.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 active:scale-[0.98] active:bg-zinc-100/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200 dark:hover:bg-zinc-800/90";
-
 const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
 
 export function DingTalkSettingsBlock({ className }: { className?: string }) {
   const { t } = useI18n();
@@ -83,34 +82,29 @@ export function DingTalkSettingsBlock({ className }: { className?: string }) {
     <div className={cn("w-full min-w-0 space-y-3", className)}>
       {!env?.configured && !showForm ? (
         <>
-          <div className="rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-2.5 text-sm dark:border-zinc-700/80 dark:bg-zinc-900/40">
-            <p className="text-zinc-600 dark:text-zinc-400">{t("settings.dingtalkNotConfigured")}</p>
-          </div>
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <StatusBanner variant="neutral" title={t("settings.dingtalkNotConfigured")} />
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.dingtalkSetup")}
-          </button>
+          </PlatformButton>
         </>
       ) : null}
 
       {env?.configured && !showForm ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
-          <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.dingtalkAlreadyTitle")}</p>
+        <StatusBanner variant="success" title={t("settings.dingtalkAlreadyTitle")}>
           {env.clientIdHint ? (
-            <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
-              {t("settings.dingtalkClientIdHint", { hint: env.clientIdHint })}
-            </p>
+            <p className="font-mono">{t("settings.dingtalkClientIdHint", { hint: env.clientIdHint })}</p>
           ) : null}
-        </div>
+        </StatusBanner>
       ) : null}
 
       {env?.configured && !showForm ? (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={btnClass} onClick={() => setShowForm(true)}>
+          <PlatformButton onClick={() => setShowForm(true)}>
             {t("settings.dingtalkReconfigure")}
-          </button>
-          <button type="button" className={btnClass} onClick={() => void handleRemove()} disabled={removing}>
+          </PlatformButton>
+          <PlatformButton variant="danger" onClick={() => void handleRemove()} disabled={removing}>
             {removing ? "…" : t("settings.telegramRemoveConfig")}
-          </button>
+          </PlatformButton>
         </div>
       ) : null}
 
@@ -141,15 +135,15 @@ export function DingTalkSettingsBlock({ className }: { className?: string }) {
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={btnClass} onClick={() => void saveConfig()} disabled={saving || !clientId.trim() || !clientSecret.trim()}>
+            <PlatformButton variant="primary" onClick={() => void saveConfig()} disabled={saving || !clientId.trim() || !clientSecret.trim()}>
               {saving ? "…" : t("settings.dingtalkFormSave")}
-            </button>
-            <button type="button" className={btnClass} onClick={() => { setShowForm(false); setError(null); setClientId(""); setClientSecret(""); }}>
+            </PlatformButton>
+            <PlatformButton onClick={() => { setShowForm(false); setError(null); setClientId(""); setClientSecret(""); }}>
               {t("settings.dingtalkFormCancel")}
-            </button>
+            </PlatformButton>
           </div>
           {error ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{t("settings.dingtalkFormError", { msg: error })}</p>
+            <StatusBanner variant="error" title={t("settings.dingtalkFormError", { msg: error })} />
           ) : null}
         </div>
       ) : null}

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const companionSource = fs.readFileSync(new URL("./CompanionWindow.tsx", import.meta.url), "utf8");
+const compactBranch = companionSource.match(
+  /if \(mode === "compact"\) \{([\s\S]*?)\n {2}\}\n\n {2}return \(/,
+)?.[1] || "";
 
 assert.match(
   companionSource,
@@ -26,6 +29,30 @@ assert.match(
   companionSource,
   /setMode\("expanded"\)/,
   "The compact pill should be able to expand back.",
+);
+
+assert.match(
+  companionSource,
+  /onDoubleClick=\{\(\) => void setCompanionMode\("expanded"\)\}/,
+  "The compact pill should expand to the full companion window on double-click.",
+);
+
+assert.doesNotMatch(
+  compactBranch,
+  /onMouseDown=\{startDrag\}|data-tauri-drag-region/,
+  "The compact pill must not start window dragging before click and double-click handlers can fire.",
+);
+
+assert.match(
+  companionSource,
+  /document\.documentElement\.style\.overflow = "hidden"[\s\S]*document\.body\.style\.overflow = "hidden"/,
+  "The companion window should suppress page scrollbars.",
+);
+
+assert.match(
+  companionSource,
+  /new LogicalSize\(320, 160\)/,
+  "The expanded fallback size should match the full companion window size.",
 );
 
 assert.doesNotMatch(
