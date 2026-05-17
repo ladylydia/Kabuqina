@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { usePowerUser, setPowerUser } from "../lib/powerUser";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Maximize2, PanelLeftOpen, PanelRightOpen } from "lucide-react";
@@ -10,7 +10,7 @@ import { useI18n } from "../lib/i18n";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSidebar } from "./ChatSidebar";
-import { WorkspacePanel } from "./WorkspacePanel";
+import { WorkspacePanel, type WorkspaceActivity, type WorkspaceItem } from "./WorkspacePanel";
 import { runDesktopOrganize } from "./desktop-organizer-api";
 import {
   armPendingChatSecretGateBypass,
@@ -27,6 +27,126 @@ import { useChatState } from "./hooks/useChatState";
 import { useSendMessage } from "./hooks/useSendMessage";
 import { useWorkbenchLayout } from "./hooks/useWorkbenchLayout";
 import { type CaptureDonePayload } from "../capture/capture-api";
+import type { AgentProgressState } from "./hooks/useAgentProgress";
+import type { DeskAttachmentPayload, UiMsg } from "./chat-api";
+
+type WorkspaceState = {
+  goal: string | null;
+  materials: WorkspaceItem[];
+  outputs: WorkspaceItem[];
+  activeTool: string | null;
+  activity: WorkspaceActivity[];
+};
+
+const FILE_PATH_RE = /[A-Za-z]:\\[^\r\n`"'<>|]*?\.(?:docx?|xlsx?|pptx?|pdf|md|txt|csv|png|jpe?g|gif|webp|zip|json|html?|py|ts|tsx|js|jsx)\b/gi;
+const ATTACHMENT_LINE_RE = /^📎\s*(.+)$/gm;
+
+function compactText(text: string, max = 120): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max - 3)}...` : oneLine;
+}
+
+function fileLabel(pathOrName: string): string {
+  return pathOrName.split(/[\\/]/).pop()?.trim() || pathOrName.trim();
+}
+
+function pushUnique(items: WorkspaceItem[], seen: Set<string>, item: WorkspaceItem) {
+  const key = `${item.label}\n${item.detail ?? ""}`.toLocaleLowerCase();
+  if (seen.has(key)) return;
+  seen.add(key);
+  items.push(item);
+}
+
+function extractPaths(text: string): string[] {
+  return Array.from(text.matchAll(FILE_PATH_RE), (m) => m[0].trim());
+}
+
+function extractAttachmentNames(text: string): string[] {
+  return Array.from(text.matchAll(ATTACHMENT_LINE_RE), (m) => m[1]?.trim()).filter(
+    (name): name is string => Boolean(name),
+  );
+}
+
+function buildWorkspaceState(
+  messages: UiMsg[],
+  pendingAttachments: DeskAttachmentPayload[],
+  progress: AgentProgressState | null,
+): WorkspaceState {
+  const materialSeen = new Set<string>();
+  const outputSeen = new Set<string>();
+  const materials: WorkspaceItem[] = [];
+  const outputs: WorkspaceItem[] = [];
+
+  for (const att of pendingAttachments) {
+    pushUnique(materials, materialSeen, {
+      id: `pending-${att.name}`,
+      label: att.name,
+      detail: att.mime || "pending",
+    });
+  }
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      for (const name of extractAttachmentNames(message.text)) {
+        pushUnique(materials, materialSeen, {
+          id: `sent-attachment-${name}`,
+          label: name,
+          detail: "attached",
+        });
+      }
+      for (const path of extractPaths(message.text)) {
+        pushUnique(materials, materialSeen, {
+          id: `material-${path}`,
+          label: fileLabel(path),
+          detail: path,
+        });
+      }
+    } else {
+      for (const path of extractPaths(message.text)) {
+        pushUnique(outputs, outputSeen, {
+          id: `output-${path}`,
+          label: fileLabel(path),
+          detail: path,
+        });
+      }
+    }
+  }
+
+  for (const step of progress?.steps ?? []) {
+    if (!step.preview) continue;
+    for (const path of extractPaths(step.preview)) {
+      pushUnique(outputs, outputSeen, {
+        id: `progress-output-${step.seq}-${path}`,
+        label: fileLabel(path),
+        detail: path,
+      });
+    }
+  }
+
+  const latestUser = [...messages].reverse().find((m) => m.role === "user");
+  const goal = latestUser
+    ? compactText(
+        latestUser.text
+          .split(/\r?\n/)
+          .find((line) => {
+            const trimmed = line.trim();
+            return trimmed && !trimmed.startsWith("📎");
+          }) || latestUser.text,
+      )
+    : null;
+
+  const runningStep = progress ? [...progress.steps].reverse().find((step) => step.running) : undefined;
+  const activeTool = progress?.current_tool ?? runningStep?.tool ?? null;
+  const activity =
+    progress?.steps.slice(-4).map((step) => ({
+      id: `activity-${step.seq}`,
+      label: step.tool,
+      detail: step.preview ? compactText(step.preview, 56) : undefined,
+      running: step.running,
+    })) ?? [];
+
+  return { goal, materials: materials.slice(0, 8), outputs: outputs.slice(-8), activeTool, activity };
+}
 
 export function ChatPage() {
   const { t, locale } = useI18n();
@@ -74,6 +194,10 @@ export function ChatPage() {
     setSendErr,
     locale,
   });
+  const workspace = useMemo(
+    () => buildWorkspaceState(messages, pendingAttachments, progress),
+    [messages, pendingAttachments, progress],
+  );
 
   useEffect(() => {
     if (isFromOnboarding(location.state)) {
@@ -394,6 +518,11 @@ export function ChatPage() {
           <WorkspacePanel
             onCollapse={workbench.toggleRight}
             onOrganizeDesktop={handleOrganizeDesktop}
+            goal={workspace.goal}
+            materials={workspace.materials}
+            outputs={workspace.outputs}
+            activeTool={workspace.activeTool}
+            activity={workspace.activity}
           />
         )}
       </div>

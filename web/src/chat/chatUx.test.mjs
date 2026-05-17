@@ -199,6 +199,18 @@ assert.match(
 
 assert.match(
   chatPageSource,
+  /buildWorkspaceState[\s\S]*messages[\s\S]*pendingAttachments[\s\S]*progress/,
+  "ChatPage should derive workspace state from messages, attachments, and agent progress.",
+);
+
+assert.match(
+  chatPageSource,
+  /materials=\{workspace\.materials\}[\s\S]*outputs=\{workspace\.outputs\}[\s\S]*activeTool=\{workspace\.activeTool\}/,
+  "ChatPage should pass live workspace materials, outputs, and active work into WorkspacePanel.",
+);
+
+assert.match(
+  chatPageSource,
   /toggleFocusMode/,
   "ChatPage should expose focus mode controls.",
 );
@@ -255,6 +267,24 @@ assert.match(
   workspacePanelSource,
   /workspace\.outputs/,
   "Workspace panel should render an Outputs section.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /materials\.length[\s\S]*items=\{materials\}/,
+  "Workspace panel should render dynamic materials.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /outputs\.length[\s\S]*items=\{outputs\}/,
+  "Workspace panel should render dynamic outputs.",
+);
+
+assert.match(
+  workspacePanelSource,
+  /activeTool[\s\S]*activity\.map/,
+  "Workspace panel should render current work and recent activity.",
 );
 
 assert.match(

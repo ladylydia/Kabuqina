@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
     App,
@@ -33,7 +34,11 @@ pub fn install(app: &mut App) -> Result<()> {
         &[&show, &companion, &workspace, &updates, &sep, &quit],
     )?;
 
+    let icon = Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+
     let _ = TrayIconBuilder::with_id("kabuqina-tray")
+        .icon(icon)
+        .tooltip("Kabuqina")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
