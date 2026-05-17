@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cmdGetHermesPort } from "../chat-api";
+import { cmdGetHermesBootstrapError, cmdGetHermesPort } from "../chat-api";
 import { useI18n } from "../../lib/i18n";
 
 export function useHermesReadiness() {
@@ -15,6 +15,13 @@ export function useHermesReadiness() {
           return;
         }
         try {
+          const bootFail = await cmdGetHermesBootstrapError();
+          if (bootFail) {
+            if (!cancel) {
+              setBootErr(formatBootError(bootFail, t));
+            }
+            return;
+          }
           const p = await cmdGetHermesPort();
           if (p != null) {
             if (!cancel) {
@@ -29,7 +36,10 @@ export function useHermesReadiness() {
         await new Promise((r) => setTimeout(r, 500));
       }
       if (!cancel) {
-        setBootErr(t("chat.errHermesTimeout"));
+        const bootFail = await cmdGetHermesBootstrapError().catch(() => null);
+        setBootErr(
+          bootFail ? formatBootError(bootFail, t) : t("chat.errHermesTimeout"),
+        );
       }
     };
     void tick();
@@ -39,4 +49,17 @@ export function useHermesReadiness() {
   }, [t]);
 
   return { hermesReady, bootErr } as const;
+}
+
+function formatBootError(detail: string, t: (key: string) => string): string {
+  const lower = detail.toLowerCase();
+  const proxyish =
+    lower.includes("timeout") ||
+    lower.includes("timed out") ||
+    lower.includes("proxy") ||
+    lower.includes("30s");
+  if (proxyish) {
+    return `${t("chat.errHermesBootFailed")}\n\n${detail}\n\n${t("chat.errHermesProxyHint")}`;
+  }
+  return `${t("chat.errHermesBootFailed")}\n\n${detail}`;
 }

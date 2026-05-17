@@ -14,9 +14,13 @@
 #
 # Usage:
 #   .\python\build_bundle.ps1                # build
-#   .\python\build_bundle.ps1 -Verify        # build + smoke-test
+#   .\python\build_bundle.ps1 -Verify        # build + smoke-test (+ STT binary checks)
 #   .\python\build_bundle.ps1 -Clean         # wipe and rebuild
 #   .\python\build_bundle.ps1 -SkipWebBuild  # faster: reuse existing hermes_cli/web_dist (risk: stale UI)
+#
+# NOTE (PowerShell): named parameters conventionally use ONE dash (`-Verify`), unlike many
+# POSIX/GNU CLIs (`--verify`). Passing `--Verify` unquoted can accidentally bind as -PythonVersion
+# and corrupt the download URL — we remap common `--flags` below for muscle memory.
 
 [CmdletBinding()]
 param(
@@ -26,6 +30,50 @@ param(
     [switch]$Verify,
     [switch]$SkipWebBuild
 )
+
+# Recover GNU-style `--Flag` mistakenly bound to positional -PythonVersion (PowerShell habit vs
+# Rust/npm/git habit).
+if ($PythonVersion -match '^-{2,}(.+)$') {
+    $gnu = $matches[1].ToLowerInvariant()
+    $defaultPy = '3.11.15'
+    switch ($gnu) {
+        'verify' {
+            Write-Warning "Interpreting '$PythonVersion' as -Verify (PowerShell prefers -Verify over --Verify)."
+            $PythonVersion = $defaultPy
+            $Verify = $true
+            break
+        }
+        'clean' {
+            Write-Warning "Interpreting '$PythonVersion' as -Clean."
+            $PythonVersion = $defaultPy
+            $Clean = $true
+            break
+        }
+        'skipwebbuild' {
+            Write-Warning "Interpreting '$PythonVersion' as -SkipWebBuild."
+            $PythonVersion = $defaultPy
+            $SkipWebBuild = $true
+            break
+        }
+        default {
+            Write-Error @"
+Unknown option '$PythonVersion'. If you meant a switch, PowerShell expects one hyphen (-Verify).
+
+If you intended a Python version string, expected form is like 3.11.15.
+"@
+            exit 99
+        }
+    }
+}
+
+if ($PythonVersion -notmatch '^\d+\.\d+(\.\d+)?') {
+    Write-Error @"
+Invalid -PythonVersion '$PythonVersion'. Expected something like 3.11.15.
+
+Common mistake: use -Verify not --Verify unless this script rewrote GNU-style arguments (see header).
+"@
+    exit 99
+}
 
 $ErrorActionPreference = "Stop"
 $Root      = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -429,18 +477,42 @@ print('OK: hermes_cli.web_server importable')
     $whisperCli = Join-Path $SttBinDir "whisper-cli.exe"
     $ffmpegCli  = Join-Path $SttBinDir "ffmpeg.exe"
     Write-Host "Verifying STT binaries..." -ForegroundColor DarkGray
-    & $whisperCli "--help" *> $null
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
-        # whisper-cli prints usage on stderr and may exit 0 or 1 depending
-        # on version. Anything else (e.g. 0xC0000135 missing DLL → -1073741515)
-        # means the bundle is broken.
-        Write-Error "whisper-cli.exe failed to start (exit $LASTEXITCODE). DLLs missing?"
-        exit 12
+
+    # whisper/ffmpeg print version/help on stderr; many builds exit non-zero on `--help`.
+    # With `$ErrorActionPreference='Stop'` and pwsh native error bridging, stderr / non-zero
+    # exits become terminating errors unless we temporarily relax that here.
+    $prevEAP = $ErrorActionPreference
+    [bool]$hadNativePrefer = $false
+    $prevNativePrefer = $null
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($null -ne (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)) {
+            $hadNativePrefer = $true
+            $prevNativePrefer = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        & $whisperCli "--help" *> $null
+        $wExit = $LASTEXITCODE
+
+        # Treat 0/1 as typical "usage/help" exits; negatives are often Windows NTSTATUS
+        # wrappers for missing MSVC runtime DLLs etc.
+        if ($wExit -ne 0 -and $wExit -ne 1) {
+            Write-Error "whisper-cli.exe failed to start (exit $wExit). DLLs missing?"
+            exit 12
+        }
+
+        & $ffmpegCli "-version" *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "ffmpeg.exe failed to start (exit $LASTEXITCODE)."
+            exit 13
+        }
     }
-    & $ffmpegCli "-version" *> $null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "ffmpeg.exe failed to start (exit $LASTEXITCODE)."
-        exit 13
+    finally {
+        $ErrorActionPreference = $prevEAP
+        if ($hadNativePrefer -and ($null -ne $prevNativePrefer)) {
+            $PSNativeCommandUseErrorActionPreference = $prevNativePrefer
+        }
     }
     Write-Host "STT binaries OK" -ForegroundColor Green
 }

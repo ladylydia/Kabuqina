@@ -17,7 +17,8 @@
 - [ ] [tauri/tauri.conf.json](../tauri/tauri.conf.json)：根级 `version`
 - [ ] [tauri/Cargo.toml](../tauri/Cargo.toml)：`package.version`（与上面对齐）
 - [ ] `identifier`：**`com.kabuqina.app`** — 不要随意修改；与用户数据 `%LOCALAPPDATA%\com.kabuqina.app\` 绑定
-- [ ] **`productName`**：开始菜单 / 桌面快捷方式 /「应用和功能」显示名（如 **卡布奇娜**）
+- [ ] **`productName`**：保持 **ASCII**（如 `Kabuqina`），否则 WiX `light.exe` 可能无法生成 `.msi`（中文输出路径会失败）
+- [ ] **快捷方式 /「应用和功能」中文名**：由 [tauri/wix/main.wxs](../tauri/wix/main.wxs) 自定义模板设置（如 **卡布奇娜**）；改显示名时改该模板，不要改 `productName` 为中文
 - [ ] **`app.windows[].title`**：主窗口标题，与对产品名的期望一致
 - [ ] 若需固定的 **英文字符 exe 文件名**：使用「顶层」的 **`mainBinaryName`**（见 [Tauri — Config `mainBinaryName`](https://v2.tauri.app/reference/config/)）；不要单靠改 Cargo 程序名凑合
 

@@ -157,7 +157,10 @@ impl Supervisor {
     }
 
     pub async fn wait_for_port(&self) -> Result<u16> {
-        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        // Cold start imports `hermes_cli.web_server` before writing port.txt — on first
+        // launch Windows Defender indexing this tree can exceed 30s; portable users then
+        // see "connecting forever" because Rust abandoned the waiter while Python is still waking.
+        let deadline = std::time::Instant::now() + Duration::from_secs(180);
         loop {
             // Use async fs so we don't starve other tasks (e.g. the bridge
             // serve loop) on Tauri's single-threaded runtime.

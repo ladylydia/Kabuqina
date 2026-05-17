@@ -81,6 +81,8 @@ pub struct AppState {
     pub desktop_messages: Arc<tokio::sync::Mutex<Vec<bridge::DesktopMessage>>>,
     /// Loopback port for Hermes `web_server` (set after Python writes `port.txt`).
     pub hermes_port: Arc<Mutex<Option<u16>>>,
+    /// Set when embedded Python fails to start (shown in shell /chat instead of spinning forever).
+    pub hermes_bootstrap_error: Arc<Mutex<Option<String>>>,
     /// Same value as Python `HERMESDESK_BRIDGE_SECRET` for `X-HermesDesk-Auth`.
     pub desk_auth_token: Arc<Mutex<Option<String>>>,
     /// Last known PID of the Python child for emergency kill.
@@ -109,6 +111,7 @@ pub fn run() {
         bridge_desktop_delivery_url: Arc::new(Mutex::new(None)),
         desktop_messages: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         hermes_port: Arc::new(Mutex::new(None)),
+        hermes_bootstrap_error: Arc::new(Mutex::new(None)),
         desk_auth_token: Arc::new(Mutex::new(None)),
         python_child_pid: Arc::new(std::sync::Mutex::new(None)),
     };
@@ -149,6 +152,7 @@ pub fn run() {
             cmd_gateway_start,
             cmd_gateway_stop,
             cmd_get_hermes_port,
+            cmd_get_hermes_bootstrap_error,
             cmd_open_hermes_dashboard,
             companion::cmd_show_companion,
             companion::cmd_hide_companion,
@@ -224,6 +228,7 @@ pub fn run() {
             capture::cmd_hide_capture_overlay,
         ])
         .setup(|app| {
+            tray::install_main_close_hides_to_tray(app)?;
             tray::install(app)?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -600,11 +605,28 @@ async fn cmd_gateway_stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
+    let reveal_main = || {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    };
+
     // 1. Workspace + data dirs (spawn config resolves paths again).
-    paths::ensure_workspace(&app)?;
-    paths::ensure_data_dir(&app)?;
-    paths::resolve_runtime_dir(&app)?;
-    paths::sync_show_recipe_market_flag(&app)?;
+    if let Err(e) = (|| -> anyhow::Result<()> {
+        paths::ensure_workspace(&app)?;
+        paths::ensure_data_dir(&app)?;
+        paths::resolve_runtime_dir(&app)?;
+        paths::sync_show_recipe_market_flag(&app)?;
+        Ok(())
+    })() {
+        let msg = format!("{e:#}");
+        log::error!("bootstrap setup failed (before Python): {msg}");
+        *app.state::<AppState>().hermes_bootstrap_error.lock().await = Some(msg);
+        reveal_main();
+        capture::register_global_shortcut(&app);
+        return Ok(());
+    }
 
     // 2a. Start Edge CDP browser instance (Windows only) for browser tool.
     //     Edge is pre-installed on Windows; this replaces the need for Node.js
@@ -622,7 +644,16 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         let state: tauri::State<AppState> = app.state();
         state.desktop_messages.clone()
     };
-    let bridge = bridge::spawn(app.clone(), desktop_q).await?;
+    let bridge_ok = bridge::spawn(app.clone(), desktop_q).await;
+    if let Err(e) = bridge_ok {
+        let msg = format!("{e:#}");
+        log::error!("loopback bridge failed: {msg}");
+        *app.state::<AppState>().hermes_bootstrap_error.lock().await = Some(msg);
+        reveal_main();
+        capture::register_global_shortcut(&app);
+        return Ok(());
+    }
+    let bridge = bridge_ok.unwrap();
     {
         let state: tauri::State<AppState> = app.state();
         *state.bridge_addr.lock().await = Some(bridge.addr);
@@ -659,16 +690,20 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
     .await;
 
     match hermes_ok {
-        Ok(()) => log::info!("Hermes Python bootstrap complete"),
-        Err(e) => log::error!("Hermes Python bootstrap failed: {e}"),
+        Ok(()) => {
+            log::info!("Hermes Python bootstrap complete");
+            *app.state::<AppState>().hermes_bootstrap_error.lock().await = None;
+        }
+        Err(e) => {
+            let msg = format!("{e:#}");
+            log::error!("Hermes Python bootstrap failed: {msg}");
+            *app.state::<AppState>().hermes_bootstrap_error.lock().await = Some(msg);
+        }
     }
 
     // 4. Reveal the window regardless of Hermes state.
     //    The frontend will show a "waiting for Hermes" or error state if needed.
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    reveal_main();
 
     // 5. Register global screenshot shortcut (Ctrl+Alt+A).
     capture::register_global_shortcut(&app);
@@ -705,6 +740,7 @@ pub(crate) async fn respawn_embedded_hermes_python(app: tauri::AppHandle) -> Res
     }
     *state.supervisor.lock().await = Some(supervisor);
     *state.hermes_port.lock().await = Some(port);
+    *state.hermes_bootstrap_error.lock().await = None;
     log::info!("embedded Python respawned: port {port} power_user={power_user}");
     ensure_gateway_after_hermes_respawn(&app, &spawn_cfg).await;
     Ok(port)
@@ -772,6 +808,14 @@ async fn cmd_get_hermes_port(app: tauri::AppHandle) -> Result<Option<u16>, Strin
     let state: tauri::State<AppState> = app.state();
     let port = *state.hermes_port.lock().await;
     Ok(port)
+}
+
+/// Why embedded Python did not become ready (proxy, missing runtime, overlay crash, …).
+#[tauri::command]
+async fn cmd_get_hermes_bootstrap_error(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let state: tauri::State<AppState> = app.state();
+    let err = state.hermes_bootstrap_error.lock().await.clone();
+    Ok(err)
 }
 
 /// Open the Hermes dashboard in the **default browser** (shell webview is unchanged).

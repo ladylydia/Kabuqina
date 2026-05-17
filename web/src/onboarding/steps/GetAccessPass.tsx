@@ -6,7 +6,7 @@ import { findProvider, type Provider, type ProviderId } from "../../lib/provider
 import { useI18n } from "../../lib/i18n";
 import { validateKey, validateCustomEndpoint, normalizeOpenAiBaseUrl } from "../../lib/validate";
 import { updateDraft, useDraft } from "../../lib/store";
-import { clearAllowChatWithoutApi } from "../../lib/apiKeyGate";
+import { clearAllowChatWithoutApi, setAllowChatWithoutApi } from "../../lib/apiKeyGate";
 import { getBackPath, getNextPathAfterPass } from "../flowConfig";
 import { cn } from "../../lib/cn";
 import { Check, Loader2 } from "lucide-react";
@@ -327,6 +327,16 @@ export function GetAccessPass() {
           {t("onboarding.back")}
         </WizardPrimaryButton>
         <WizardFooterActions>
+          <button
+            type="button"
+            className="rounded-[var(--radius-shell-lg)] px-4 py-2.5 text-sm text-zinc-600 underline-offset-2 hover:underline dark:text-zinc-400"
+            onClick={() => {
+              setAllowChatWithoutApi();
+              nav("/chat", { replace: true });
+            }}
+          >
+            {t("pass.skipCta")}
+          </button>
           <WizardPrimaryButton onClick={() => void onSave()} disabled={busy || !canSubmit}>
             {busy ? t("pass.checkWait") : preview?.hasSecret && !key.trim() ? t("pass.continueCta") : t("pass.cta")}
           </WizardPrimaryButton>

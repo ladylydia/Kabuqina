@@ -3,19 +3,52 @@ import { invoke } from "@tauri-apps/api/core";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bell, Maximize2, MessageCircle, Minus, X } from "lucide-react";
+import { Bell, MessageCircle, Minus, X } from "lucide-react";
 import { createDesktopDeliveryNotice, type DesktopDeliveryMessage, type DesktopDeliveryNotice } from "../lib/desktopDelivery";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 
 const EVENT_NAME = "desktop-delivery";
+/** Pixels²: move more than sqrt(this) before we call `startDragging`, so plain double‑clicks expand. */
+const COMPACT_DRAG_SQ_THRESHOLD = 7 * 7;
+/** Compact mascot; PNG keeps alpha; window logical size tracks intrinsic dims ÷ OS scale factor. */
+const COMPACT_ASSET_URL = "/companion_compact.png";
+/** Fallback logical size when intrinsic metadata cannot be read (matches legacy pill). */
+const COMPACT_FALLBACK_LOGICAL_W = 120;
+const COMPACT_FALLBACK_LOGICAL_H = 48;
 type CompanionMode = "expanded" | "compact";
+
+function intrinsicLogicalDimsForAsset(src: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = async () => {
+      try {
+        const sf = await getCurrentWindow().scaleFactor();
+        resolve({
+          w: img.naturalWidth / sf,
+          h: img.naturalHeight / sf,
+        });
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.decoding = "async";
+    img.src = src;
+  });
+}
 
 export function CompanionWindow() {
   const { t, locale } = useI18n();
   const [notice, setNotice] = useState<DesktopDeliveryNotice | null>(null);
   const [mode, setMode] = useState<CompanionMode>("expanded");
   const sequenceRef = useRef(0);
+  const compactDragRef = useRef<{
+    down: boolean;
+    startX: number;
+    startY: number;
+    started: boolean;
+  }>({ down: false, startX: 0, startY: 0, started: false });
 
   useEffect(() => {
     const unlisten = listen<DesktopDeliveryMessage>(EVENT_NAME, ({ payload }) => {
@@ -67,16 +100,34 @@ export function CompanionWindow() {
   };
 
   const setCompanionMode = async (next: CompanionMode) => {
+    let compactWidth: number | undefined;
+    let compactHeight: number | undefined;
+    if (next === "compact") {
+      try {
+        const dims = await intrinsicLogicalDimsForAsset(COMPACT_ASSET_URL);
+        compactWidth = dims.w;
+        compactHeight = dims.h;
+      } catch (error) {
+        console.error("companion compact intrinsic size failed:", error);
+      }
+    }
     try {
-      await invoke("cmd_set_companion_mode", { mode: next });
+      await invoke("cmd_set_companion_mode", {
+        mode: next,
+        compactWidth,
+        compactHeight,
+      });
     } catch (error) {
       console.error("cmd_set_companion_mode failed:", error);
       try {
-        await getCurrentWindow().setSize(
-          next === "compact"
-            ? new LogicalSize(120, 48)
-            : new LogicalSize(320, 160),
-        );
+        const win = getCurrentWindow();
+        if (next === "compact") {
+          const lw = compactWidth ?? COMPACT_FALLBACK_LOGICAL_W;
+          const lh = compactHeight ?? COMPACT_FALLBACK_LOGICAL_H;
+          await win.setSize(new LogicalSize(lw, lh));
+        } else {
+          await win.setSize(new LogicalSize(320, 160));
+        }
       } catch (fallbackError) {
         console.error("companion setSize fallback failed:", fallbackError);
       }
@@ -97,29 +148,108 @@ export function CompanionWindow() {
     });
   };
 
+  const onCompactPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    compactDragRef.current = {
+      down: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      started: false,
+    };
+  };
+
+  const onCompactPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const s = compactDragRef.current;
+    if (!s.down || s.started) {
+      return;
+    }
+    const dx = event.clientX - s.startX;
+    const dy = event.clientY - s.startY;
+    if (dx * dx + dy * dy >= COMPACT_DRAG_SQ_THRESHOLD) {
+      s.started = true;
+      void getCurrentWindow().startDragging().catch((error) => {
+        console.error("companion compact startDragging failed:", error);
+      });
+    }
+  };
+
+  const resetCompactDrag = (
+    target: HTMLDivElement,
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (compactDragRef.current.down) {
+      try {
+        target.releasePointerCapture(event.pointerId);
+      } catch {
+        /* capture already released after OS drag */
+      }
+    }
+    compactDragRef.current = {
+      down: false,
+      startX: 0,
+      startY: 0,
+      started: false,
+    };
+  };
+
+  const onCompactPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    resetCompactDrag(event.currentTarget, event);
+  };
+
+  const onCompactPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    resetCompactDrag(event.currentTarget, event);
+  };
+
   if (mode === "compact") {
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          "group flex h-screen w-screen cursor-pointer select-none items-center gap-2 overflow-hidden rounded-full border border-white/60 bg-white/90 px-2 pr-3 text-left text-zinc-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-200",
-          "max-h-[100dvh] max-w-[100dvw] overscroll-none hover:bg-white hover:shadow-[0_6px_28px_rgba(0,0,0,0.12)]",
-          "dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:text-zinc-100",
-          "dark:hover:bg-zinc-900 dark:hover:shadow-[0_6px_28px_rgba(0,0,0,0.25)]",
+          "hermes-titlebar-nodrag h-screen w-screen cursor-pointer touch-manipulation select-none overflow-visible",
+          "rounded-none border-0 bg-transparent shadow-none",
+          "outline-none ring-0 focus-visible:ring-2 focus-visible:ring-sky-400/80",
         )}
-        onClick={() => void setCompanionMode("expanded")}
+        aria-label={
+          locale === "zh"
+            ? "卡布奇娜伙伴：双击展开，拖拽可移动窗口"
+            : "Kabuqina companion: double-click to expand, drag to move"
+        }
+        title={
+          locale === "zh"
+            ? "拖拽移动窗口 · 双击展开"
+            : "Drag to move · Double-click to expand"
+        }
+        onPointerDown={onCompactPointerDown}
+        onPointerMove={onCompactPointerMove}
+        onPointerUp={onCompactPointerUp}
+        onPointerCancel={onCompactPointerCancel}
+        onLostPointerCapture={() => {
+          compactDragRef.current = {
+            down: false,
+            startX: 0,
+            startY: 0,
+            started: false,
+          };
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            void setCompanionMode("expanded");
+          }
+        }}
         onDoubleClick={() => void setCompanionMode("expanded")}
-        aria-label={t("companion.expand")}
-        title={t("companion.expand")}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-50 to-sky-100 shadow-sm dark:from-sky-950/60 dark:to-sky-900/40">
-          <img src="/kabuqina_na_blue_48.png" alt="" className="h-5 w-5" />
-        </span>
-        <span className="min-w-0 truncate text-xs font-semibold tracking-tight">
-          {locale === "zh" ? t("companion.idleShort") : "Nana"}
-        </span>
-        <Maximize2 className="ml-0.5 h-3 w-3 shrink-0 text-zinc-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-600" strokeWidth={2.5} />
-      </button>
+        <img
+          src={COMPACT_ASSET_URL}
+          alt=""
+          className="pointer-events-none block h-full w-full object-contain drop-shadow-md dark:drop-shadow-lg"
+          draggable={false}
+        />
+      </div>
     );
   }
 

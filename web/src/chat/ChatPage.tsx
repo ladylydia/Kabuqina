@@ -385,7 +385,9 @@ export function ChatPage() {
   if (bootErr) {
     return (
       <AppScaffold surface="chat" className="flex h-full flex-col items-center justify-center px-6 text-center">
-        <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">{bootErr}</p>
+        <p className="max-w-md whitespace-pre-wrap text-left text-sm text-zinc-600 dark:text-zinc-400">
+          {bootErr}
+        </p>
         <button
           type="button"
           onClick={() => window.location.reload()}

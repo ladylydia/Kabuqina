@@ -1,10 +1,17 @@
-# 卡布奇娜 / Kabuqina
+<div align="center">
 
-[License: MIT](LICENSE)
-[Platform](https://github.com/ladylydia/Kabuqina)
-[Status](https://github.com/ladylydia/Kabuqina)
+# 卡布奇娜 · Kabuqina
 
-[简体中文](#简体中文) · [English](#english)
+**Windows 上好安装的桌面 AI 助手** · 向导配置 · BYO API Key · 基于 [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-%230078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/ladylydia/Kabuqina)
+[![Tauri](https://img.shields.io/badge/Tauri-2-ffc131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
+[![App](https://img.shields.io/badge/app-0.1.0-6c757d?style=flat-square)](./tauri/tauri.conf.json)
+
+[**简体中文**](#简体中文) · [**English**](#english) · [文档索引](./docs/README.md) · [排障](./docs/troubleshooting.md)
+
+</div>
 
 ---
 
@@ -14,265 +21,278 @@
 
 **卡布奇娜**是在 **Windows** 上用的 **桌面版 AI 助手**：像普通软件一样安装打开，自带引导配置 **自己的大模型 API Key**，底层跑开源的 **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**。
 
-### 适合谁
+### 适合你吗
 
-|          |                                                                                                                                                                                         |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **目标用户** | 想要 **本机窗口 +托盘**，不想折腾终端、也不想长期挂在浏览器标签里                                                                                                                                                    |
-| **费用模型** | **自备 Key（BYO）** — 向导里可配 OpenRouter、OpenAI、Anthropic 或自定义 **Base URL**                                                                                                                   |
-| **文件边界** | 默认围绕 **一个工作区文件夹** 做事，降低误操作面                                                                                                                                                             |
-| **技术形态** | **Tauri 2 外壳**（引导、壳内 `/chat`、设置、**消息网关控制**）+ **内嵌 Python**：一路跑 **Hermes Web**（`desktop_entrypoint`），另一路 **`gateway.run`** 承载消息适配器；**WebView2** 中可开 **Hermes React**（`hermes/web`）为完整控制台 |
+|          |                                                                                                                               |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **目标用户** | 想要 **本机窗口 + 托盘**，不想折腾终端、也不想长期挂在浏览器标签里                                                                                         |
+| **费用**   | **自备 Key（BYO）** — 向导里可配 OpenRouter、OpenAI、Anthropic 或自定义 Base URL                                                             |
+| **文件**   | 默认围绕 **一个工作区文件夹**，降低误操作面                                                                                                      |
+| **技术形态** | **Tauri 2**（引导、`/chat`、设置、消息网关控制）+ **内嵌 Python**：`desktop_entrypoint` 与 **`gateway.run`**；**WebView2** 中可开完整 Hermes React 控制台 |
 
-> **阶段：内测 / 0.1+** — **端到端桌面**已通：引导 → 保存 key → **壳内对话** 与/或 **全功能 Hermes 界面**，可选 **多通道消息网关**，工作区与 **超级用户** 分权。安装包能跑，功能会持续打磨。架构见 **[docs/architecture.md](docs/architecture.md)**；**路线图**见 **[docs/ROADMAP.md](docs/ROADMAP.md)**。
+> **阶段：内测 / 0.1+** — 引导 → 保存 key → 壳内对话 与/或 Hermes 全界面 · 可选多通道网关 · 工作区与 **超级用户** 分权。安装包可用，体验会持续迭代。详见 [架构](./docs/architecture.md) · [路线图](./docs/ROADMAP.md)。
 
-**消息网关（已落地）：** Kabuqina 在本地 **同时托管** Hermes 的 **`python -m gateway.run`** 子进程（与桌面 Web 助手分离）。当前在引导/设置里走通 Desk 测试的 **五条** 渠道：
+### 界面截图
 
-- **Telegram** — 在应用中粘贴 **@BotFather** 的 bot token；写入 `TELEGRAM_BOT_TOKEN`（可选白名单等在 Hermes Keys 中维护）。
-- **邮件（IMAP/SMTP）** — 在应用中配置邮箱与服务端字段；写入 `EMAIL_ADDRESS`、`EMAIL_PASSWORD`、`EMAIL_IMAP_HOST`、`EMAIL_SMTP_HOST` 至 `hermes-home/.env`（向导中若暴露端口、收件策略等按需填写）。
-- **微信（个微）** — 扫码登录（iLink）；写入 `WEIXIN_ACCOUNT_ID`、`WEIXIN_TOKEN` 至 `hermes-home/.env`。是否需首次配对取决于 Hermes 环境变量（如 `WEIXIN_DM_POLICY`），以应用内排障文案为准。
-- **QQ 机器人** — 扫码绑定；写入 `QQ_APP_ID`、`QQ_CLIENT_SECRET`。
-- **飞书 / Lark** — 扫码创建并绑定自建应用；写入 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`（以及与开放平台一致的加密/校验项，若启用事件订阅）。
+<p align="center">
+  <img src="Na_logo/chat_Chiness.png" alt="壳内对话界面（中文）" width="520" /><br/>
+  <sub>壳内对话（<code>/chat</code>）</sub>
+</p>
 
-网关进程通过 `secret_loader` 与 **同一套 Windows Credential Manager** 读取 LLM API key，与各平台机器人共用已配置供应商。控制入口：**设置 → 消息网关**（启动/停止、凭据存在时自动启动、磁盘侧诊断）。
+<p align="center">
+  <img src="Na_logo/API_Chinese.png" alt="API Key 配置向导（中文）" width="520" /><br/>
+  <sub>LLM / API Key 引导</sub>
+</p>
 
-**设计说明（历史方案与路线 C）：** [docs/gateway-desk-weixin-strategy.md](docs/gateway-desk-weixin-strategy.md) · [docs/gateway-route-c-weixin-validation.md](docs/gateway-route-c-weixin-validation.md)。
+### 安装（最终用户）
 
-**本大版本（0.1.x）能力摘要：**
-
-- **壳内 /chat**：会话、**助手消息复制**、壳 UI 中/英。
-- **设置**：普通/超级用户 **工作区文案** 不同；**超级用户** 会 **重启** 内嵌 Python 子进程，让 `terminal` / `code_execution` / `moa` 等工具有无与开关一致。
-- **智能体策略**：关超级用户时，**系统提示**（`python/overlays/desk_system_prompt.py`）引导用户去**设置**开启，避免假装有 shell。
-- **品牌与图标**：壳静态资源在 `web/public/`（`kabuqina_na_blue.ico` 与 `kabuqina_na_blue_*.png`）；在 `tauri` 目录下可执行 `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` 更新 `tauri\icons\`；文件被占用时用临时 `-o` 再合并（[docs/troubleshooting.md](docs/troubleshooting.md)）。
-- **控制台 Desk 对话**（`hermes/web`）助手区带 **复制**。
-- **消息网关**：Telegram（Token）、邮件（IMAP/SMTP）、微信、QQ、飞书/Lark（扫码绑定）；独立子进程；LLM key 走系统凭据。
-
-**打包版本（建议与仓库维护一致）：** `0.1.0`（见 `tauri/tauri.conf.json`、`web/package.json`）。
-
-### 安装
-
-普通用户请从 **GitHub Releases** 下载最新 Windows 安装包：
+从 **GitHub Releases** 获取最新 Windows 安装包（名称以发布页为准），例如：
 
 - `Kabuqina_0.1.0_x64_en-US.msi`
 
-安装包会包含 Tauri 桌面壳、前端资源，以及内嵌 Python/Hermes 运行时。若当前构建尚未代码签名，Windows SmartScreen 可能提示未知发布者；正式签名流程见 [docs/code-signing.md](docs/code-signing.md)。
+内含 Tauri 壳、前端资源、内嵌 Python / Hermes 运行时。尚未代码签名时，SmartScreen 可能提示未知发布者 → [代码签名](./docs/code-signing.md)。
 
-### 能做什么 · 不做什么
+### 能力与边界
 
-**能做什么**
+<details>
+<summary><strong>能做什么 · 网关与 0.1.x 摘要</strong>（点击展开）</summary>
 
-- Windows **`.msi` 安装包**，适合普通桌面分发
-- **原生感**：托盘、窗口、系统凭据（DPAPI）保存密钥相关逻辑
-- **短引导** + 之后可在 **壳内 /chat 对话** 或 **在 WebView2 打开** Hermes 全功能页
-- 可选 **消息网关**（**Telegram / 邮件（IMAP/SMTP） / 微信 / QQ / 飞书·Lark**）— 在 **设置** 中完成凭据与网关启停
-- 默认支持提醒与定时交付：`cronjob` 和 `messaging` 默认启用，敏感发送由审批弹窗保护。
-- **默认更安全**：工作区隔离；高风险能力在子进程里与 **超级用户** 一致，不仅是 UI
-- **L1 快捷指令（Recipes）**：内置、白名单的本地小任务（不走任意代码执行那条路）
+**消息网关（已落地）：** 本地 **`python -m gateway.run`** 独立子进程。引导/设置中已走通五条渠道：
 
-**不做什么**
+- **Telegram** — `@BotFather` token → `TELEGRAM_BOT_TOKEN`
+- **邮件（IMAP/SMTP）** — 写入 `EMAIL_*` 至 `hermes-home/.env`
+- **微信（个微）** — 扫码；`WEIXIN_*` · 配对策略见应用内文案
+- **QQ 机器人** — 扫码绑定；`QQ_*`
+- **飞书 / Lark** — 扫码自建应用；`FEISHU_*`
 
-- **不是**上游 Hermes **每一种**能力与适配器的 1:1 镜像——例如强化学习整条链路、定时/调度纵深、完整 MCP 生态，以及本文未列作「已打包 Desk 测试」的其它适配器；要啃全量面请直接用上游 **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**。
-- **不是**我们托管的云服务 — **推理账单在你选的供应商**，本项目只帮你把桌面与运行时拼好。
+控制入口：**设置 → 消息网关**。LLM Key 与各机器人共用 Windows 凭据。设计沿革：[gateway-desk-weixin-strategy](./docs/gateway-desk-weixin-strategy.md) · [route-c-validation](./docs/gateway-route-c-weixin-validation.md)。
 
-### 架构一图
+**0.1.x 能力摘要：** 壳内 `/chat`、设置（含超级用户 **重启 Python 子进程**）、`desk_system_prompt` 约束、托盘与品牌资源、`hermes/web` 控制台复制；网关同上。
 
-与 English 中 ASCII 图一致：**Tauri 壳**（监管两条 Python 子进程）→ **`desktop_entrypoint` + `gateway.run`**（Hermes + overlays，本地随机 HTTP/WS）→ **壳内 Vite + `/chat`** 或 **Hermes React（`hermes/web`）** 在 **WebView2** 中加载。
+详细对比仍见下文「不做」条目。
 
-**展开：目录结构**
+</details>
+
+| ✓ 能做的                                    | ✗ 不承诺的                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **`.msi`** 桌面分发 · 托盘、窗口 · **DPAPI** 密钥逻辑 | **不是** 上游 Hermes **每一个**能力与适配器的 1:1 镜像（深度 RL、完整 MCP 等请用 [上游 Hermes](https://github.com/NousResearch/hermes-agent)） |
+| 短引导 · 壳内 **/chat** 或 **Hermes** 控制台      | **不是** 我们托管的云服务 — **推理账单在你选的供应商**                                                                                  |
+| 可选 **网关** · 默认安全工作区与高敏工具 **`超级用户`** 开关   | 「未在 Desk 测试中列明的适配器」不保证开箱即用                                                                                         |
+
+---
+
+### 架构一览
+
+```mermaid
+flowchart TB
+    subgraph Tauri["Tauri 2 · WebView2"]
+        A["托盘 · 窗口 · DPAPI"]
+        B["网关监管 · loopback"]
+    end
+    subgraph Py["内嵌 Python ×2"]
+        C["Hermes · desktop_entrypoint"]
+        D["gateway.run"]
+    end
+    subgraph UI["界面"]
+        E["Shell：Vite + /chat"]
+        F["Hermes React 控制台"]
+    end
+    Tauri --> Py
+    Py --> UI
+```
+
+与 English 小节中的图为同一结构。
+
+<details>
+<summary><strong>目录结构</strong></summary>
 
 ```
 Kabuqina/
-  tauri/        桌面壳（Rust + Tauri 2）
-  python/     打包脚本、运行时 overlay、policy 层、测试
-  web/        壳侧引导与设置（Hermes 仪表盘在 hermes_core/web）
-  hermes_core/  上游 Hermes Agent 冻结快照
-  docs/       架构、安全、Skills、排障等
+├── tauri/        桌面壳（Rust + Tauri 2）
+├── python/       打包、overlay、policy、测试
+├── web/          壳引导与设置（Hermes SPA 源码在 hermes_core/web）
+├── hermes_core/  冻结的上游 Hermes 快照
+└── docs/         架构、安全、Skills、排障
 ```
+
+</details>
 
 ### 从源码构建（Windows）
 
-**准备：** Rust **1.80+**、Node **20+**、PowerShell **7+**。
+**环境：** Rust **1.80+**、Node **20+**、PowerShell **7+**。Release 建议使用 **Developer PowerShell**（MSVC）；说明见 [embedded-python-bundled](./docs/embedded-python-bundled.md)。
 
 ```powershell
 git clone https://github.com/ladylydia/Kabuqina.git
 cd Kabuqina
 
-# 打 Python 运行时包（首次会下载独立 CPython）
+# Python 运行时（首次会下载独立 CPython）；可选：验证加 -Verify
 .\python\build_bundle.ps1
 
-# 可选：L1 内置助手相关单元测试
+# 可选：刷新托盘/应用图标 → `cd tauri` 后
+# cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
+
+# 可选单元测试（L1）
 Set-Location python; python -m unittest discover -s tests -p "test_*.py" -v; Set-Location ..
 
-# 壳上 Web（引导、壳内 /chat、设置）。`npm run build` 使用 `tsc --noEmit`（非 `tsc -b`），
-# 避免 Windows 上 `tsconfig.tsbuildinfo` 锁导致构建失败，见 [docs/troubleshooting.md](docs/troubleshooting.md)。
-cd web; npm ci; npm run build; cd ..
+# Shell 前端（`npm run build` 使用 tsc --noEmit，避免 Windows 锁 tsbuildinfo）
+Set-Location web; npm ci; npm run build; Set-Location ..
 
-# 开发：启动桌面壳
-cd tauri; cargo tauri dev
+# 二选一：
+# （A）开发预览 —— 会持续占用终端，CTRL+C 结束后再执行其它命令
+Set-Location tauri; cargo tauri dev
 
-# 发布 / 打 `.msi`。Windows 上建议在 **cmd** 或 **Developer PowerShell** 中构建，
-# 以便 MSVC / SDK 环境供原生依赖使用；详见 [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md)。
-# 可选：`cd tauri` 后 `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` 更新 `tauri\icons\`；若报文件占用，可 `-o` 到临时目录再拷贝。
-cd tauri; cargo tauri build; cd ..
-# 产物：`tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`
-# 旁边的 `.exe` 是应用本体；对外分发请使用 `.msi`。
+# （B）打安装包 MSI
+# Set-Location tauri; cargo tauri build; Set-Location ..
 ```
 
-- **代码签名 / 安装包：** [docs/code-signing.md](docs/code-signing.md)
-- **常见问题（白屏、卡住、代理抢 loopback、消息网关 exit 1 / 未重建 runtime §12 等）：** [docs/troubleshooting.md](docs/troubleshooting.md)
-- **文档索引：** [docs/README.md](docs/README.md)
+| 产出     | 路径                                                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 安装包    | `tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`                                                             |
+| 本体 exe | `tauri\target\release\kabuqina.exe`（对外分发优先 **MSI**）                                                                        |
+| 便携 ZIP | **`.\scripts\package-portable-windows.ps1`** → `portable-dist\Kabuqina-<ver>-win64-portable.zip`（解压后运行 **`kabuqina.exe`**） |
 
-### 安全与 Skills 设计
+- **便携 ZIP 写在哪儿：** 默认在仓库根下的 **`portable-dist\`**；打包前的展开草稿在 **`_staging_portable\`**（可用 **`.\scripts\package-portable-windows.ps1 -OutDir <路径>`** 改 ZIP 目录）。
 
-- **[docs/skills-security.md](docs/skills-security.md)** — 对 Skills / 快捷指令 / 内置助手的信任说明
-- **[docs/skills-design-decision.md](docs/skills-design-decision.md)** — L1 / L2 / L3 分层与暴露策略（ADR）
+- **`portable-dist` 为什么会出现不了：** 这个目录只在 **打包脚本执行成功之后**才有；单靠 `cargo build` / MSI 不会产生。在仓库根执行 **`.\scripts\package-portable-windows.ps1`** 前请先具备 **`tauri\target\release\kabuqina.exe`**（release 已过链接）以及 **`python\dist\runtime`**（先跑 **`.\python\build_bundle.ps1`**）。
 
-### 开源协议
+- **常见问题**：[troubleshooting.md](./docs/troubleshooting.md)（代理与 loopback、WebView、网关 exit 1 等）
 
-**MIT**，见 [LICENSE](LICENSE)。
-Hermes Agent 亦为 **MIT**；其上游许可证保留在 [hermes_core/LICENSE](hermes_core/LICENSE)。核心 agent 与工具生态致谢 **[Nous Research](https://nousresearch.com)**。
+- **Skills**： [skills-security](./docs/skills-security.md) · [skills-design-decision](./docs/skills-design-decision.md)
+
+### 协议
+
+[**MIT**](LICENSE)。Hermes 亦为 MIT，见其 [hermes_core/LICENSE](./hermes_core/LICENSE)。致谢 [Nous Research](https://nousresearch.com)。
 
 ---
+
+<div align="center">
+
+**──────────────── English ────────────────**
+
+</div>
 
 ## English
 
 **A friendly Windows desktop AI assistant** — double-click install, guided setup, your own API key.
 Powered by the open-source **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**.
 
-**App version (packaged):** `0.1.0` (see `tauri/tauri.conf.json`, `web/package.json`).
+**Packaged version:** `0.1.0` (`tauri/tauri.conf.json`, `web/package.json`).
 
 ### Install
 
-For normal use, download the latest Windows installer from **GitHub Releases**:
+Grab the latest **`.msi`** from **GitHub Releases** (exact filename follows the release), e.g. `Kabuqina_0.1.0_x64_en-US.msi`.
+Unsigned builds may trigger SmartScreen — see [code-signing.md](./docs/code-signing.md).
 
-- `Kabuqina_0.1.0_x64_en-US.msi`
+### Screenshots
 
-The installer bundles the Tauri shell, WebView assets, and the embedded Python/Hermes runtime. If the installer is not code-signed yet, Windows SmartScreen may show an unknown-publisher warning; signed release builds should be produced after a certificate is configured. See [docs/code-signing.md](docs/code-signing.md).
+<p align="center">
+  <img src="Na_logo/chat_English.png" alt="In-shell chat (English)" width="520" /><br/>
+  <sub>In-shell chat (<code>/chat</code>)</sub>
+</p>
+
+<p align="center">
+  <img src="Na_logo/API_English.png" alt="API key onboarding (English)" width="520" /><br/>
+  <sub>LLM / API key onboarding</sub>
+</p>
 
 ### At a glance
 
-|                        |                                                                                                                                                                                                                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Who it’s for**       | People who want a **native Windows app**, not a terminal or a browser tab                                                                                                                                                                                                           |
-| **How you pay for AI** | **BYO key** — onboarding helps you connect OpenRouter, OpenAI, Anthropic, or a custom base URL                                                                                                                                                                                      |
-| **Where files live**   | A **single workspace folder** (safe-by-default mental model)                                                                                                                                                                                                                        |
-| **What’s inside**      | **Tauri 2** shell (onboarding, **in-shell chat**, settings, **messaging-gateway controls**) + **embedded Python** for **Hermes web** (`desktop_entrypoint`) **and** a **second child** for **`gateway.run`** + **Hermes React** dashboard in **WebView2** when you open the console |
+|           |                                                                                                                 |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| **Who**   | People who want a **native Windows app**, not a terminal or a browser tab                                       |
+| **Cost**  | **BYO key** — OpenRouter, OpenAI, Anthropic, or custom base URL                                                 |
+| **Files** | A **single workspace folder** (safe-by-default)                                                                 |
+| **Stack** | **Tauri 2** + **embedded Python** (`desktop_entrypoint` + **`gateway.run`**) + **Hermes React** in **WebView2** |
 
-> **Status: alpha (0.1+)** — the **end-to-end desktop path** is in place: onboarding → saved key → **shell chat** and/or full Hermes web UI, optional **multi-channel messaging gateway**, with workspace safety and **power user** gating. Expect ongoing polish. Architecture: **[docs/architecture.md](docs/architecture.md)**. Roadmap: **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+> **Alpha (0.1+)** — onboarding → key → shell chat and/or full Hermes UI, optional **messaging gateway**, workspace + **power user** gating. Polishing continues. [Architecture](./docs/architecture.md) · [Roadmap](./docs/ROADMAP.md).
 
-**Messaging gateway (shipping):** Kabuqina supervises Hermes’ **`python -m gateway.run`** alongside the web assistant. Five adapters are wired through onboarding / Settings with desk-tested flows:
+<details>
+<summary><strong>Messaging gateway & 0.1.x highlights</strong> (expand)</summary>
 
-- **Telegram** — paste **BotFather** token in-app; writes `TELEGRAM_BOT_TOKEN` (optional allowlists via Hermes Keys).
-- **Email (IMAP/SMTP)** — mailbox + server fields in-app; writes `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, `EMAIL_IMAP_HOST`, and `EMAIL_SMTP_HOST` to `hermes-home/.env` (optional ports / recipient policy when the wizard exposes them).
-- **Weixin (personal)** — QR login (iLink); writes `WEIXIN_ACCOUNT_ID` + `WEIXIN_TOKEN` to `hermes-home/.env`. Pairing policy follows Hermes env (DMs open vs pairing mode — see gateway troubleshooting strings in-app).
-- **QQ Bot** — scan-to-bind; writes `QQ_APP_ID` + `QQ_CLIENT_SECRET`.
-- **Feishu / Lark** — scan-to-bind custom app; writes `FEISHU_APP_ID` + `FEISHU_APP_SECRET` (plus optional encrypt/verification keys from the developer console).
+Five desk-tested adapters: **Telegram** (BotFather token), **Email** (IMAP/SMTP → `hermes-home/.env`), **Weixin** (QR / iLink), **QQ Bot**, **Feishu / Lark**. Second Python process; same Windows Credential Manager for LLM keys. Controls: **Settings → Messaging Gateway**. Design notes: [gateway-desk-weixin-strategy](./docs/gateway-desk-weixin-strategy.md), [gateway-route-c-weixin-validation](./docs/gateway-route-c-weixin-validation.md).
 
-The gateway process loads the LLM API key from the same Windows Credential Manager path as the desk assistant (`secret_loader`), so bots reuse your configured provider without a second key UI. Controls: **Settings → Messaging Gateway** (start/stop, auto-start when credentials exist, on-disk diagnostics).
+Highlights: in-shell **`/chat`**, settings (**power user** toggles restart the Python child), `desk_system_prompt` overlay for honest capability limits, branding under `web/public/`, Hermes desk chat copy affordance; gateway as above.
 
-**Design notes (history / Weixin Route C):** [docs/gateway-desk-weixin-strategy.md](docs/gateway-desk-weixin-strategy.md) · [docs/gateway-route-c-weixin-validation.md](docs/gateway-route-c-weixin-validation.md).
+</details>
 
-**Highlights in this line (0.1.x):**
+| ✓ Does                                                               | ✗ Does not claim to be                                                                                                                       |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`.msi`** distribution, tray/window **DPAPI** secrets               | Drop-in parity with **every** upstream Hermes feature on day one (see upstream [Hermes Agent](https://github.com/NousResearch/hermes-agent)) |
+| Onboarding, **shell chat**, Hermes console in-webview                | A hosted inference SaaS — **you** pay the provider                                                                                           |
+| Optional **gateway**; safe defaults + **power user** for risky tools | Every third-party adapter beyond the five bundled channels                                                                                   |
 
-- **In-shell chat** (`/chat`) in the Tauri host: sessions, copy on assistant messages, i18n (en/zh) for the shell UI.
-- **Settings**: workspace copy differs for **normal** vs **power** users; toggling **power user** **restarts** the embedded Python child so `terminal` / `code_execution` / `moa` tools match the switch.
-- **Agent policy**: when power tools are off, a **system-prompt** overlay tells the model to **point users at Settings** instead of hallucinating shell access (see `python/overlays/desk_system_prompt.py`).
-- **Branding**: static launcher icons under `web/public/` (`kabuqina_na_blue.ico` and `kabuqina_na_blue_*.png`); Tauri `cargo tauri icon` can use `web/public/kabuqina_na_blue_256.png` to refresh `tauri/icons/` (on Windows, if a file is locked, generate to a **temp** `-o` folder and copy — see [docs/troubleshooting.md](docs/troubleshooting.md) for loopback/AV issues).
-- **Control "Desk chat"** (in `hermes/web`) includes a **Copy** action on the assistant block for the embedded dashboard.
-- **Messaging gateway**: Telegram (token), Email (IMAP/SMTP), Weixin, QQ Bot, Feishu/Lark (QR binds); second Python process; LLM key from credential store.
+### Architecture
 
-### What this is
-
-- A Windows `.msi` installer for normal desktop distribution
-- **Tray + window** that feels like an app
-- Short **onboarding wizard** with minimal jargon, then **chat in the shell** or **open the Hermes console** in the same webview
-- Optional **messaging gateway** for **Telegram / Email / Weixin / QQ Bot / Feishu·Lark** — bind credentials and start/stop the adapter process from **Settings**
-- Built-in reminders and scheduled delivery: `cronjob` and `messaging` are default toolsets, with approval prompts for sensitive sends.
-- **Safe by default**: workspace jail, risky tools **off** until you enable **power user** mode (enforced in the child process, not just a UI flag)
-- **L1 “Recipes”** (built-in helpers) for quick local tasks — whitelisted, no arbitrary `code_execution` for that path
-
-### What this is NOT
-
-- **Not** a drop-in replica of **every** upstream Hermes capability and adapter on day one — reinforcement-learning workflows, scheduler/cron depth, the full MCP ecosystem, and adapters beyond the five channels bundled and QA’d here still map to **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** upstream when you need them.
-- **Not** a hosted SaaS — we don’t run your inference; you bring credentials.
-
-### Architecture (one screen)
-
-```
-┌──────────────────────────────────┐
-│  Tauri 2 (Rust + WebView2)       │  ← small shell .exe
-│  tray · window · DPAPI secrets   │
-│  optional gateway_supervisor     │
-│  loopback bridge (approve shell) │
-└───────────────┬──────────────────┘
-                │ supervises
-                ▼
-┌──────────────────────────────────┐
-│  Embedded Python 3.11 (×2)       │  ← bundled runtime
-│  Hermes web + gateway.run       │
-│  (stripped core + overlays)     │
-└───────────────┬──────────────────┘
-                │ HTTP + WS
-                ▼
-┌──────────────────────────────────┐
-│  Shell web (Vite) + /chat        │  ← onboarding, chat, settings
-├──────────────────────────────────┤
-│  Or: Hermes React (hermes/web)   │  ← full dashboard, Skills, desk chat…
-└──────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Tauri["Tauri 2 · WebView2"]
+        A["Tray · window · DPAPI"]
+        B["Gateway supervisor · loopback"]
+    end
+    subgraph Py["Embedded Python ×2"]
+        C["Hermes · desktop_entrypoint"]
+        D["gateway.run"]
+    end
+    subgraph UI["UI"]
+        E["Shell: Vite + /chat"]
+        F["Hermes React console"]
+    end
+    Tauri --> Py
+    Py --> UI
 ```
 
-**Expand: repo layout**
+<details>
+<summary><strong>Repo layout</strong></summary>
 
 ```
 Kabuqina/
-  tauri/        Tauri 2 shell
-  python/       Bundle scripts, overlays, policy layer, tests
-  web/          Shell onboarding + settings (Hermes UI lives under hermes_core/web)
-  hermes_core/  Frozen upstream Hermes Agent snapshot
-  docs/         Architecture, safety, skills, troubleshooting
+├── tauri/        Tauri 2 shell
+├── python/       Bundle scripts, overlays, policy, tests
+├── web/          Shell UI (Hermes SPA under hermes_core/web)
+├── hermes_core/  Frozen upstream snapshot
+└── docs/         Architecture, safety, troubleshooting
 ```
+
+</details>
 
 ### Build from source
 
-**Needs:** Rust **1.80+**, Node **20+**, PowerShell **7+**.
+**Needs:** Rust **1.80+**, Node **20+**, PowerShell **7+**. Prefer **Developer PowerShell** for release builds — [embedded-python-bundled.md](./docs/embedded-python-bundled.md).
 
 ```powershell
 git clone https://github.com/ladylydia/Kabuqina.git
 cd Kabuqina
 
-# Python runtime bundle (downloads standalone CPython the first time)
 .\python\build_bundle.ps1
 
-# Optional: L1 helper unit tests
+# Optional: refresh icons → from `tauri/`:
+# cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
+
 Set-Location python; python -m unittest discover -s tests -p "test_*.py" -v; Set-Location ..
 
-# Shell web (onboarding / in-shell chat / settings). `npm run build` uses `tsc --noEmit`
-# (not `tsc -b`) so `tsconfig.tsbuildinfo` locking on Windows does not break CI — see
-# [docs/troubleshooting.md](docs/troubleshooting.md).
-cd web; npm ci; npm run build; cd ..
+Set-Location web; npm ci; npm run build; Set-Location ..
 
-# Run the desktop shell against the bundle
-cd tauri; cargo tauri dev
+# (A) Dev — blocks until CTRL+C
+Set-Location tauri; cargo tauri dev
 
-# Release / `.msi`. On Windows, prefer **cmd.exe** or **Developer PowerShell**
-# so MSVC / SDK env vars are available when native dependencies need them; see
-# [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md).
-# Optional: `cd tauri` then `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` to refresh `tauri\icons\`
-# (if Windows says the file is in use, `cargo tauri icon` with `-o` to a temp dir, then copy).
-cd tauri; cargo tauri build; cd ..
-# Output: `tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`
-# The `.exe` beside it is the app binary; distribute the `.msi` for installation.
+# (B) Release MSI
+# Set-Location tauri; cargo tauri build; Set-Location ..
 ```
 
-- **Signed installer:** [docs/code-signing.md](docs/code-signing.md)
-- **When something breaks:** [docs/troubleshooting.md](docs/troubleshooting.md) (loopback, proxy/VPN, WebView2, **messaging gateway exit 1 / stale bundle §12**, etc.)
-- **Documentation index:** [docs/README.md](docs/README.md)
+| Output       | Path                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Installer    | `tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`                                                                     |
+| Binary       | `tauri\target\release\kabuqina.exe` — **ship the MSI** for end users                                                               |
+| Portable ZIP | **`.\scripts\package-portable-windows.ps1`** → `portable-dist\Kabuqina-<ver>-win64-portable.zip` (extract, run **`kabuqina.exe`**) |
 
-### Security & skills story
+- **Where the ZIP lands:** Repo root **`portable-dist/`** by default; expanded staging **`_staging_portable/`**. Override ZIP output with **`.\scripts\package-portable-windows.ps1 -OutDir <path>`**.
 
-- **[docs/skills-security.md](docs/skills-security.md)** — trust model for Skills / Recipes / built-in helpers
-- **[docs/skills-design-decision.md](docs/skills-design-decision.md)** — tiered exposure (L1 / L2 / L3)
+- **If those folders don't exist:** they are created **only after** **`.\scripts\package-portable-windows.ps1`** finishes successfully (`cargo`/MSI won't create them). Prerequisites: **`tauri/target/release/kabuqina.exe`** and **`python/dist/runtime`** (from **`.\python\build_bundle.ps1`**).
+
+- **Troubleshooting:** [docs/troubleshooting.md](./docs/troubleshooting.md)
+
+- **Skills:** [skills-security.md](./docs/skills-security.md) · [skills-design-decision.md](./docs/skills-design-decision.md)
 
 ### License
 
-**MIT** — see [LICENSE](LICENSE).
-Hermes Agent is **MIT** as well; its upstream license is kept at [hermes_core/LICENSE](hermes_core/LICENSE). Credit to **[Nous Research](https://nousresearch.com)** for the agent, skills, and tool ecosystem.
+**MIT** — [LICENSE](LICENSE). Hermes: [hermes_core/LICENSE](hermes_core/LICENSE). Thanks to **[Nous Research](https://nousresearch.com)**.

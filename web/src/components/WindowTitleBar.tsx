@@ -50,7 +50,8 @@ export function WindowTitleBar() {
     if (!inApp) {
       return;
     }
-    void getCurrentWindow().close();
+    // Hide to tray; quitting is via the tray menu (close() destroys the window).
+    void getCurrentWindow().hide();
   };
 
   const onShowCompanion = () => {

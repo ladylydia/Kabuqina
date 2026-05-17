@@ -23,6 +23,10 @@ node_modules/
 *.pyc
 __pycache__/
 
+# Portable MSI alternative (staging + zip drops from scripts/package-portable-windows.ps1)
+/_staging_portable/
+/portable-dist/
+
 # Installer outputs
 /installer/dist/
 *.msi

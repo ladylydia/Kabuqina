@@ -39,10 +39,14 @@ pub fn ensure_data_dir(app: &AppHandle) -> Result<PathBuf> {
 ///
 /// Set `HERMESDESK_RUNTIME_DIR` to an absolute path to force the bundle (e.g. after
 /// `build_bundle.ps1` when automatic discovery fails).
+fn runtime_has_python(dir: &Path) -> bool {
+    dir.join("python").join("python.exe").is_file()
+}
+
 pub fn resolve_runtime_dir(app: &AppHandle) -> Result<PathBuf> {
     if let Ok(force) = std::env::var("HERMESDESK_RUNTIME_DIR") {
         let p = PathBuf::from(force.trim());
-        if p.join("python").join("python.exe").exists() {
+        if runtime_has_python(&p) {
             return Ok(p);
         }
         anyhow::bail!(
@@ -51,33 +55,53 @@ pub fn resolve_runtime_dir(app: &AppHandle) -> Result<PathBuf> {
         );
     }
 
-    // `cargo run` / `cargo run --release` puts the binary at `repo/tauri/target/{debug,release}/`.
-    // Tauri also copies `../python/dist/runtime` into `target/.../resources/runtime`, but that
-    // copy is easy to get **stale** (missing new files like `tools/.../file_sync.py`) after
-    // `build_bundle` without a full tauri rebuild. Prefer the repo's canonical runtime first.
+    let mut tried: Vec<PathBuf> = Vec::new();
+
+    // Portable zip / MSI layout: runtime next to kabuqina.exe (see package-portable-windows.ps1).
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(repo_root) = exe
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
-        {
-            let from_repo = repo_root.join("python").join("dist").join("runtime");
-            if from_repo.join("python").join("python.exe").exists() {
-                return Ok(from_repo);
+        if let Some(exe_dir) = exe.parent() {
+            for rel in ["resources/runtime", "runtime"] {
+                let candidate = exe_dir.join(rel);
+                tried.push(candidate.clone());
+                if runtime_has_python(&candidate) {
+                    return Ok(candidate);
+                }
+            }
+
+            // Dev only: `repo/tauri/target/{debug,release}/kabuqina.exe` → prefer fresh
+            // `python/dist/runtime` over a stale `target/.../runtime` copy.
+            let exe_lossy = exe.to_string_lossy();
+            if exe_lossy.contains("\\target\\release\\") || exe_lossy.contains("\\target\\debug\\")
+            {
+                if let Some(repo_root) = exe
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .and_then(|p| p.parent())
+                    .and_then(|p| p.parent())
+                {
+                    let from_repo = repo_root.join("python").join("dist").join("runtime");
+                    tried.push(from_repo.clone());
+                    if runtime_has_python(&from_repo) {
+                        return Ok(from_repo);
+                    }
+                }
             }
         }
     }
 
     let res = app.path().resource_dir().context("resource dir")?;
     let candidate = res.join("runtime");
-    if candidate.join("python").join("python.exe").exists() {
+    tried.push(candidate.clone());
+    if runtime_has_python(&candidate) {
         return Ok(candidate);
     }
-    anyhow::bail!(
-        "Could not locate runtime/. Looked at {}",
-        candidate.display()
-    )
+
+    let list = tried
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("; ");
+    anyhow::bail!("Could not locate bundled Python runtime. Tried: {list}")
 }
 
 pub fn is_power_user(app: &AppHandle) -> bool {

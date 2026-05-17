@@ -92,6 +92,9 @@ export const MESSAGES = {
       greeting: "来一杯{{name}}特调吗？",
       waitingHermes: "正在连接本机助手…",
       errHermesTimeout: "等待本机助手就绪超时。请重启应用或稍后再试。",
+      errHermesBootFailed: "本机助手未能启动。",
+      errHermesProxyHint:
+        "若使用 Clash / V2Ray 等系统代理，请暂时关闭，或在代理里把 127.0.0.1 设为直连，然后重启应用。",
       errLoadThread: "无法加载该会话。",
       errDelete: "删除失败。",
       voiceRecord: "按下录音",
@@ -857,6 +860,9 @@ export const MESSAGES = {
       greeting: "How about a {{name}} special?",
       waitingHermes: "Connecting to the local assistant…",
       errHermesTimeout: "Timed out waiting for the local assistant. Try restarting the app.",
+      errHermesBootFailed: "The local assistant failed to start.",
+      errHermesProxyHint:
+        "If you use Clash, V2Ray, or a system proxy, turn it off temporarily or bypass 127.0.0.1, then restart the app.",
       errLoadThread: "Could not load this session.",
       errDelete: "Could not delete the session.",
       voiceRecord: "Record voice",

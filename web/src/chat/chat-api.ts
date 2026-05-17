@@ -42,6 +42,11 @@ export async function cmdGetHermesPort(): Promise<number | null> {
   return p ?? null;
 }
 
+export async function cmdGetHermesBootstrapError(): Promise<string | null> {
+  const err = await invoke<string | null>("cmd_get_hermes_bootstrap_error");
+  return err?.trim() ? err : null;
+}
+
 export async function cmdGetSessions(limit = 50, offset = 0, source?: string): Promise<SessionsResponse> {
   return invoke<SessionsResponse>("cmd_get_sessions", { limit, offset, source: source ?? null });
 }

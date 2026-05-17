@@ -79,6 +79,7 @@ Run this whole checklist on **both** OS images before tagging a release. Ideally
 
 ## F. Persistence + restart
 
+- [ ] Close main window (title bar **×** or Alt+F4) — app **stays in tray**; left-click tray or **Open** restores the main window
 - [ ] Quit via tray "Quit" — no orphan **`python.exe`** processes (expect **two** while messaging gateway was running: web + gateway — both should exit)
 - [ ] Reopen — skips onboarding when configured; Splash routes per **`cmd_has_secret`** / gate flags (**`/chat`** when key exists)
 - [ ] Reboot the VM, open the app — same behavior, key still works
