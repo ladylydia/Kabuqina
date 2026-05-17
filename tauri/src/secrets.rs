@@ -52,12 +52,65 @@ pub fn vendor_llm_available() -> bool {
 }
 
 fn host_from_api_base(url: &str) -> String {
+    if let Ok(parsed) = url::Url::parse(url.trim()) {
+        if let Some(host) = parsed.host_str() {
+            return host.to_string();
+        }
+    }
     let u = url.trim();
     let rest = u
         .strip_prefix("https://")
         .or_else(|| u.strip_prefix("http://"))
         .unwrap_or(u);
     rest.split('/').next().unwrap_or(rest).to_string()
+}
+
+fn validate_provider_config_for_save(cfg: &mut ProviderConfig, secret: &str) -> Result<(), String> {
+    cfg.provider = cfg.provider.trim().to_ascii_lowercase();
+    cfg.host = cfg.host.trim().to_ascii_lowercase();
+    cfg.api_base_url = cfg
+        .api_base_url
+        .as_ref()
+        .map(|s| s.trim().trim_end_matches('/').to_string())
+        .filter(|s| !s.is_empty());
+
+    if cfg.provider.is_empty() {
+        return Err("provider must be set".into());
+    }
+    if secret.trim().is_empty() {
+        return Err("secret must not be empty".into());
+    }
+    crate::validation::validate_env_value(secret)?;
+
+    if cfg.provider == "custom" {
+        let url = cfg
+            .api_base_url
+            .as_deref()
+            .ok_or_else(|| "api_base_url is required for custom OpenAI-compatible APIs".to_string())?;
+        crate::validation::validate_public_endpoint(url, None)?;
+        let base_host = host_from_api_base(url).to_ascii_lowercase();
+        if cfg.host.is_empty() {
+            cfg.host = base_host;
+        } else if cfg.host != base_host {
+            return Err("host must match api_base_url host".into());
+        }
+        return Ok(());
+    }
+
+    if cfg.host.is_empty() {
+        return Err("host must be set".into());
+    }
+    crate::validation::validate_public_endpoint(&format!("https://{}/", cfg.host), None)?;
+
+    if let Some(url) = cfg.api_base_url.as_deref() {
+        crate::validation::validate_public_endpoint(url, None)?;
+        let base_host = host_from_api_base(url).to_ascii_lowercase();
+        if base_host != cfg.host {
+            return Err("api_base_url host must match provider host".into());
+        }
+    }
+
+    Ok(())
 }
 
 fn read_bool_setting(app: &AppHandle, key: &str) -> bool {
@@ -127,7 +180,7 @@ pub fn provider_api_key_env(provider: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::provider_api_key_env;
+    use super::{validate_provider_config_for_save, provider_api_key_env, ProviderConfig};
 
     #[test]
     fn provider_api_key_env_covers_native_hermes_providers() {
@@ -137,6 +190,48 @@ mod tests {
         assert_eq!(provider_api_key_env("kimi-coding-cn"), "KIMI_CN_API_KEY");
         assert_eq!(provider_api_key_env("minimax"), "MINIMAX_API_KEY");
         assert_eq!(provider_api_key_env("minimax-cn"), "MINIMAX_CN_API_KEY");
+    }
+
+    #[test]
+    fn save_config_rejects_custom_loopback_base_url() {
+        let mut cfg = ProviderConfig {
+            provider: "custom".into(),
+            host: "127.0.0.1".into(),
+            model: None,
+            api_base_url: Some("http://127.0.0.1:11434/v1".into()),
+        };
+
+        let result = validate_provider_config_for_save(&mut cfg, "sk-test");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_config_rejects_secret_with_control_chars() {
+        let mut cfg = ProviderConfig {
+            provider: "openrouter".into(),
+            host: "openrouter.ai".into(),
+            model: None,
+            api_base_url: None,
+        };
+
+        let result = validate_provider_config_for_save(&mut cfg, "sk-test\nEVIL=1");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_config_derives_custom_host_from_valid_base_url() {
+        let mut cfg = ProviderConfig {
+            provider: "custom".into(),
+            host: "".into(),
+            model: None,
+            api_base_url: Some("https://api.example.com/v1".into()),
+        };
+
+        validate_provider_config_for_save(&mut cfg, "sk-test").unwrap();
+
+        assert_eq!(cfg.host, "api.example.com");
     }
 }
 
@@ -320,23 +415,7 @@ pub async fn cmd_save_secret(
     mut cfg: ProviderConfig,
     secret: String,
 ) -> Result<(), String> {
-    if cfg.provider.trim().is_empty() {
-        return Err("provider must be set".into());
-    }
-    if secret.trim().is_empty() {
-        return Err("secret must not be empty".into());
-    }
-    if cfg.provider == "custom" {
-        let url = cfg.api_base_url.as_deref().unwrap_or("").trim();
-        if url.is_empty() {
-            return Err("api_base_url is required for custom OpenAI-compatible APIs".into());
-        }
-        if cfg.host.trim().is_empty() {
-            cfg.host = host_from_api_base(url);
-        }
-    } else if cfg.host.trim().is_empty() {
-        return Err("host must be set".into());
-    }
+    validate_provider_config_for_save(&mut cfg, &secret)?;
     entry_for(&cfg.provider)?
         .set_password(&secret)
         .map_err(|e| e.to_string())?;

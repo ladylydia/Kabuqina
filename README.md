@@ -11,6 +11,14 @@ Powered by the open-source **[Hermes Agent](https://github.com/NousResearch/herm
 
 **App version (packaged):** `0.1.0` (see `tauri/tauri.conf.json`, `web/package.json`).
 
+### Install
+
+For normal use, download the latest Windows installer from **GitHub Releases**:
+
+- `Kabuqina_0.1.0_x64_en-US.msi`
+
+The installer bundles the Tauri shell, WebView assets, and the embedded Python/Hermes runtime. If the installer is not code-signed yet, Windows SmartScreen may show an unknown-publisher warning; signed release builds should be produced after a certificate is configured. See [docs/code-signing.md](docs/code-signing.md).
+
 ---
 
 ## English
@@ -41,7 +49,7 @@ The gateway process loads the LLM API key from the same Windows Credential Manag
 **Highlights in this line (0.1.x):**
 
 - **In-shell chat** (`/chat`) in the Tauri host: sessions, copy on assistant messages, i18n (en/zh) for the shell UI.  
-- **Settings**: workspace copy differs for **normal** vs **power** users; toggling **power user** **restarts** the embedded Python child so `terminal` / `browser` / `code` tools match the switch.  
+- **Settings**: workspace copy differs for **normal** vs **power** users; toggling **power user** **restarts** the embedded Python child so `terminal` / `code_execution` / `moa` tools match the switch.  
 - **Agent policy**: when power tools are off, a **system-prompt** overlay tells the model to **point users at Settings** instead of hallucinating shell access (see `python/overlays/desk_system_prompt.py`).  
 - **Branding**: static launcher icons under `web/public/` (`kabuqina_na_blue.ico` and `kabuqina_na_blue_*.png`); Tauri `cargo tauri icon` can use `web/public/kabuqina_na_blue_256.png` to refresh `tauri/icons/` (on Windows, if a file is locked, generate to a **temp** `-o` folder and copy — see [docs/troubleshooting.md](docs/troubleshooting.md) for loopback/AV issues).  
 - **Control "Desk chat"** (in `hermes/web`) includes a **Copy** action on the assistant block for the embedded dashboard.
@@ -49,10 +57,11 @@ The gateway process loads the LLM API key from the same Windows Credential Manag
 
 ### What this is
 
-- One `**.msi`**-style Windows install story (per-user, no admin for day-to-day use — see docs)
+- A Windows `.msi` installer for normal desktop distribution
 - **Tray + window** that feels like an app
 - Short **onboarding wizard** with minimal jargon, then **chat in the shell** or **open the Hermes console** in the same webview
 - Optional **messaging gateway** for **Telegram / Email / Weixin / QQ Bot / Feishu·Lark** — bind credentials and start/stop the adapter process from **Settings**
+- Built-in reminders and scheduled delivery: `cronjob` and `messaging` are default toolsets, with approval prompts for sensitive sends.
 - **Safe by default**: workspace jail, risky tools **off** until you enable **power user** mode (enforced in the child process, not just a UI flag)
 - **L1 “Recipes”** (built-in helpers) for quick local tasks — whitelisted, no arbitrary `code_execution` for that path
 
@@ -119,14 +128,14 @@ cd web; npm ci; npm run build; cd ..
 # Run the desktop shell against the bundle
 cd tauri; cargo tauri dev
 
-# Release / `.msi` (from repo root). Sidecar/embedded Python ships from
-# `hermes_core/artifacts/desktop-python/`. On Windows, prefer **cmd.exe** or **Developer
-# PowerShell** so MSVC / SDK env vars (e.g. `VCToolsVersion`) are set for vcpkg /
-# `pydantic-core` wheels; see [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md).
+# Release / `.msi`. On Windows, prefer **cmd.exe** or **Developer PowerShell**
+# so MSVC / SDK env vars are available when native dependencies need them; see
+# [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md).
 # Optional: `cd tauri` then `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` to refresh `tauri\icons\`
 # (if Windows says the file is in use, `cargo tauri icon` with `-o` to a temp dir, then copy).
-# cargo tauri build
-# Output (typical): `target\release\bundle\msi\`, `target\release\*.exe`, sidecar + wheelhouse.
+cd tauri; cargo tauri build; cd ..
+# Output: `tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`
+# The `.exe` beside it is the app binary; distribute the `.msi` for installation.
 ```
 
 - **Signed installer:** [docs/code-signing.md](docs/code-signing.md)  
@@ -141,7 +150,7 @@ cd tauri; cargo tauri dev
 ### License
 
 **MIT** — see [LICENSE](LICENSE).  
-Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearch.com)** for the agent, skills, and tool ecosystem.
+Hermes Agent is **MIT** as well; its upstream license is kept at [hermes_core/LICENSE](hermes_core/LICENSE). Credit to **[Nous Research](https://nousresearch.com)** for the agent, skills, and tool ecosystem.
 
 ---
 
@@ -177,7 +186,7 @@ Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearc
 **本大版本（0.1.x）能力摘要：**
 
 - **壳内 /chat**：会话、**助手消息复制**、壳 UI 中/英。  
-- **设置**：普通/超级用户 **工作区文案** 不同；**超级用户** 会 **重启** 内嵌 Python 子进程，让 `terminal` / `browser` / `code` 等工具有无与开关一致。  
+- **设置**：普通/超级用户 **工作区文案** 不同；**超级用户** 会 **重启** 内嵌 Python 子进程，让 `terminal` / `code_execution` / `moa` 等工具有无与开关一致。  
 - **智能体策略**：关超级用户时，**系统提示**（`python/overlays/desk_system_prompt.py`）引导用户去**设置**开启，避免假装有 shell。  
 - **品牌与图标**：壳静态资源在 `web/public/`（`kabuqina_na_blue.ico` 与 `kabuqina_na_blue_*.png`）；在 `tauri` 目录下可执行 `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` 更新 `tauri\icons\`；文件被占用时用临时 `-o` 再合并（[docs/troubleshooting.md](docs/troubleshooting.md)）。  
 - **控制台 Desk 对话**（`hermes/web`）助手区带 **复制**。
@@ -185,14 +194,23 @@ Hermes Agent is **MIT** as well; credit to **[Nous Research](https://nousresearc
 
 **打包版本（建议与仓库维护一致）：** `0.1.0`（见 `tauri/tauri.conf.json`、`web/package.json`）。
 
+### 安装
+
+普通用户请从 **GitHub Releases** 下载最新 Windows 安装包：
+
+- `Kabuqina_0.1.0_x64_en-US.msi`
+
+安装包会包含 Tauri 桌面壳、前端资源，以及内嵌 Python/Hermes 运行时。若当前构建尚未代码签名，Windows SmartScreen 可能提示未知发布者；正式签名流程见 [docs/code-signing.md](docs/code-signing.md)。
+
 ### 能做什么 · 不做什么
 
 **能做什么**
 
-- Windows **安装/分发**思路清晰（按用户安装，日常不必管理员 — 细节见文档）
+- Windows **`.msi` 安装包**，适合普通桌面分发
 - **原生感**：托盘、窗口、系统凭据（DPAPI）保存密钥相关逻辑
 - **短引导** + 之后可在 **壳内 /chat 对话** 或 **在 WebView2 打开** Hermes 全功能页
 - 可选 **消息网关**（**Telegram / 邮件（IMAP/SMTP） / 微信 / QQ / 飞书·Lark**）— 在 **设置** 中完成凭据与网关启停
+- 默认支持提醒与定时交付：`cronjob` 和 `messaging` 默认启用，敏感发送由审批弹窗保护。
 - **默认更安全**：工作区隔离；高风险能力在子进程里与 **超级用户** 一致，不仅是 UI
 - **L1 快捷指令（Recipes）**：内置、白名单的本地小任务（不走任意代码执行那条路）
 
@@ -237,12 +255,12 @@ cd web; npm ci; npm run build; cd ..
 # 开发：启动桌面壳
 cd tauri; cargo tauri dev
 
-# 发布 / 打 `.msi`（在仓库根目录；侧载 Python 来自 `hermes_core/artifacts/desktop-python/`）。
-# Windows 上建议在 **cmd** 或 **Developer PowerShell** 中构建，以便 MSVC / SDK 环境供 vcpkg
-# 与 `pydantic-core` 轮子；详见 [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md)。
+# 发布 / 打 `.msi`。Windows 上建议在 **cmd** 或 **Developer PowerShell** 中构建，
+# 以便 MSVC / SDK 环境供原生依赖使用；详见 [docs/embedded-python-bundled.md](docs/embedded-python-bundled.md)。
 # 可选：`cd tauri` 后 `cargo tauri icon ..\web\public\kabuqina_na_blue_256.png` 更新 `tauri\icons\`；若报文件占用，可 `-o` 到临时目录再拷贝。
-# cargo tauri build
-# 常见产物：`target\release\bundle\msi\`、可执行与 sidecar + wheelhouse。
+cd tauri; cargo tauri build; cd ..
+# 产物：`tauri\target\release\bundle\msi\Kabuqina_0.1.0_x64_en-US.msi`
+# 旁边的 `.exe` 是应用本体；对外分发请使用 `.msi`。
 ```
 
 - **代码签名 / 安装包：** [docs/code-signing.md](docs/code-signing.md)  
@@ -257,4 +275,4 @@ cd tauri; cargo tauri dev
 ### 开源协议
 
 **MIT**，见 [LICENSE](LICENSE)。  
-子模块 Hermes Agent 亦为 **MIT**；核心 agent 与工具生态致谢 **[Nous Research](https://nousresearch.com)**。
+Hermes Agent 亦为 **MIT**；其上游许可证保留在 [hermes_core/LICENSE](hermes_core/LICENSE)。核心 agent 与工具生态致谢 **[Nous Research](https://nousresearch.com)**。

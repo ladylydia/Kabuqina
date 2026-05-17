@@ -68,11 +68,12 @@ automatically by the power-user toggle). See
 
 [`python/overlays/default_toolset.py`](../python/overlays/default_toolset.py)
 forces the default Hermes toolset to the curated keep-list (see
-`DECISIONS.md`). Browser automation is available to all users (it
-uses the pre-installed Edge browser via CDP, with outbound traffic
-going through the L3 network allowlist). The remaining dangerous
-tools — shell (`terminal_tool`), `code_execution_tool`, MCP servers,
-cron — are **only registered** when `HERMESDESK_POWER_USER=1`.
+`DECISIONS.md`). Browser automation, cron/reminders, and messaging
+delivery are available to all users; browser traffic still goes through
+the L3 network allowlist, and cron/messaging calls use the approval
+policy for sensitive sends. The remaining dangerous tools — shell
+(`terminal_tool`), `code_execution_tool`, and MoA — are **only
+registered** when `HERMESDESK_POWER_USER=1`.
 
 When Power-user mode is on, those tools still go through the **shell
 approval bridge**: every command is shown to the user in a native Windows

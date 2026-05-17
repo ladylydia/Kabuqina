@@ -254,7 +254,7 @@ assert hermesdesk_pending_list_contains(new_user_id)
 | 属性 | 内容 |
 |------|------|
 | **Given** | `.env` 中未设置 `GATEWAY_SHELL_ENABLED` |
-| **When** | Agent 尝试调用 terminal / exec / browser / code_execution 工具集 |
+| **When** | Agent 尝试调用 terminal / exec / code_execution 工具集 |
 | **Then** | 工具集返回 `"Shell operations are disabled"`；对应功能不可用 |
 
 **反例**：设置 `GATEWAY_SHELL_ENABLED=true` → 重启网关 → 上述工具集恢复正常

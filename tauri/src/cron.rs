@@ -56,9 +56,11 @@ fn _data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     crate::paths::ensure_data_dir(app).map_err(|e| e.to_string())
 }
 
-/// Schema of ``jobs.json`` as written by ``hermes_core/cron/jobs.py::save_jobs``::
+/// Schema of ``jobs.json`` as written by ``hermes_core/cron/jobs.py::save_jobs``:
 ///
-///     { "jobs": [ {...}, {...} ], "updated_at": "<iso8601>" }
+/// ```text
+/// { "jobs": [ {...}, {...} ], "updated_at": "<iso8601>" }
+/// ```
 ///
 /// We must read AND write this exact shape — the Python scheduler reads the
 /// file on every tick (`data.get("jobs", [])`) and a top-level array would

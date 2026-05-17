@@ -26,8 +26,8 @@ The overlay seeds `config.yaml` so `platform_toolsets["cli"]` matches the table 
 
 | Mode | Enabled toolset **names** (strings) | Intent (from overlay comments) |
 |------|-------------------------------------|----------------------------------|
-| **Default** (`HERMESDESK_POWER_USER` ≠ `1`) | `web`, `file`, `vision`, `image_gen`, `tts`, `skills`, `todo` | “Safe” default: **no** shell, no generic code execution in the default list |
-| **Power user** (`HERMESDESK_POWER_USER=1`) | All of the above **+** `browser`, `terminal`, `code_execution`, `moa` | Adds browser automation, terminal, code execution, MoA, etc. |
+| **Default** (`HERMESDESK_POWER_USER` ≠ `1`) | `web`, `file`, `vision`, `image_gen`, `tts`, `skills`, `todo`, `browser`, `cronjob`, `messaging` | Safe default: browser, reminders, and message delivery are available; shell, generic code execution, and MoA stay off |
+| **Power user** (`HERMESDESK_POWER_USER=1`) | All of the above **+** `terminal`, `code_execution`, `moa` | Adds terminal, generic code execution, MoA, etc. |
 
 **Desk chat / local AI agent** uses the same platform key **`cli`**: `AIAgent` is built with `enabled_toolsets` from `_get_platform_tools(config, "cli")` in [`hermes/hermes_cli/web_server.py`](../hermes/hermes_cli/web_server.py) (`_desk_chat_build_agent`).
 

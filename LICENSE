@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 HermesDesk contributors
+Copyright (c) 2026 Kabuqina Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,4 +24,4 @@ SOFTWARE.
 
 This project bundles and patches the Hermes Agent
 (https://github.com/NousResearch/hermes-agent), which is also MIT-licensed.
-See the upstream LICENSE in the hermes/ submodule.
+See the upstream license at hermes_core/LICENSE.

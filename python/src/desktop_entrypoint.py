@@ -365,7 +365,7 @@ def main() -> int:
         log.exception("failed to import hermes_cli.web_server; aborting")
         return 3
 
-    # Main agent must know about Kabuqina power-user mode (terminal/browser/code gated off by default).
+    # Main agent must know about Kabuqina power-user mode (terminal/code/MoA gated off by default).
     try:
         try:
             from overlays.desk_system_prompt import install as _desk_system_prompt_install

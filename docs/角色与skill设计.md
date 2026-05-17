@@ -26,7 +26,7 @@
 有，写死在策略里：
 
 - 对所有角色可见/低风险：  
-  `web, file, vision, image_gen, tts, skills, todo, browser`
+  `web, file, vision, image_gen, tts, skills, todo, browser, cronjob, messaging`
 - 仅 `power`：  
   `terminal, code_execution, moa`
 - 其他未知 toolset：  

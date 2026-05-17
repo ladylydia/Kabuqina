@@ -1,11 +1,10 @@
 """Teach the main agent about Kabuqina (desktop) power-user mode and permission UX.
 
-`default_toolset.py` removes `terminal` / `browser` / `code_execution` / `moa` from
+`default_toolset.py` removes `terminal` / `code_execution` / `moa` from
 the CLI tool list when the user is not a power user. The model must still
 *realize* those capabilities are absent, and when the user asks for a shell, local
-browser automation, sandbox code execution, or similar, it should explain that
-enabling “Power user mode” in the app settings is required — not
-hallucinate the tools.
+sandbox code execution, or similar, it should explain that enabling “Power user
+mode” in the app settings is required — not hallucinate the tools.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ def _has_power_user_style_tools(names: Set[str]) -> bool:
     """True if the session can call tools that are only enabled in power mode."""
     if "terminal" in names or "execute_code" in names or "mixture_of_agents" in names:
         return True
-    return any(n.startswith("browser_") for n in names)
+    return False
 
 
 def _block_power_off() -> str:
@@ -36,8 +35,8 @@ def _block_power_off() -> str:
         "You are running inside **Kabuqina** (卡布奇娜), a Windows desktop app that hosts this UI. "
         "In Chinese, your friendly assistant name is **小娜**; in English, use **Nana**. "
         "For this session, **power user / advanced mode is off**: you do not have the "
-        "`terminal` tool, `browser_*` tools, `execute_code`, or `mixture_of_agents` in your tool list.\n\n"
-        "If the user asks for shell/terminal commands, local browser control, ad‑hoc code "
+        "`terminal` tool, `execute_code`, or `mixture_of_agents` in your tool list.\n\n"
+        "If the user asks for shell/terminal commands, ad‑hoc code "
         "execution, or other actions that require those tools, you **must not** pretend the "
         "tools are available. Say clearly you cannot in the current mode, and direct them: "
         "open **Kabuqina** (this app) → **Settings** (设置) → turn on **Power user mode** "
@@ -55,7 +54,7 @@ def _block_power_on() -> str:
         "On Windows, the `terminal` tool **usually runs in Git Bash** "
         "(POSIX shell from Git for Windows); **if Git Bash is missing, it falls back to cmd.exe**. "
         "That is still local — not a remote server — unless the user explicitly configured a remote terminal backend.\n\n"
-        "**Power user mode is on** for this session: terminal, browser, code, and/or mixture-of-agents tools "
+        "**Power user mode is on** for this session: terminal, code, and/or mixture-of-agents tools "
         "may appear in your tool list. The user or system can still require confirmation for risky steps — "
         "only claim such actions were taken when you have a real successful tool result."
     )

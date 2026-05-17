@@ -122,7 +122,7 @@ Behind the existing `HERMESDESK_POWER_USER=1` toggle. Adds:
 - (v1.2+) The declarative recipe recorder — see Open Questions.
 
 Power-user mode also unlocks the dangerous tools (`terminal`,
-`code_execution`, `browser`) so authored Skills have something
+`code_execution`, `moa`) so authored Skills have something
 non-trivial to compose.
 
 ## Consequences
@@ -174,7 +174,7 @@ Our chosen tiering closes this hole at the points that matter:
   This rules out a whole class of "I recorded a macro that turned out
   to be a keylogger" scenarios.
 * No automatic enabling of `terminal` / `code_execution` /
-  `browser` for L1 or L2 Skills. If a Skill needs these, it must
+  `moa` for L1 or L2 Skills. If a Skill needs these, it must
   declare them in its manifest and the user sees them on install.
 * No "always allow" for Skills. Each Skill's permissions are granted
   at install time, not on first use; revoke = uninstall.

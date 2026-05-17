@@ -78,7 +78,7 @@
 
 ## TC-SR-04 [P0] `GATEWAY_SHELL_ENABLED` 开关
 
-**背景**：shell/exec/browser/code_execution 等高危工具集默认关闭，需显式启用。
+**背景**：shell/exec/code_execution 等高危工具集默认关闭，需显式启用。
 
 | 场景 | 步骤 | 预期 |
 |------|------|------|
@@ -89,7 +89,6 @@
 **验证清单：**
 - [ ] `terminal` 工具集不可用（默认关闭时）
 - [ ] `exec` 工具集不可用
-- [ ] `browser` 工具集不可用
 - [ ] `code_execution` 工具集不可用
 
 ---

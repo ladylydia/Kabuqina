@@ -1,7 +1,7 @@
 //! Path helpers + workspace setup.
 
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 const SETTING_POWER_USER: &str = "hermesdesk.power_user";
@@ -234,37 +234,7 @@ pub fn cmd_read_shared_prefs(app: AppHandle) -> Result<String, String> {
 pub fn cmd_write_text_file(path_str: String, content: String) -> Result<(), String> {
     use std::io::Write;
     let path = std::path::PathBuf::from(&path_str);
-
-    let canonical = path
-        .canonicalize()
-        .or_else(|_| {
-            if let Some(p) = path.parent() {
-                std::fs::create_dir_all(p).ok();
-            }
-            Ok::<_, std::io::Error>(path.clone())
-        })
-        .map_err(|e| format!("resolve path: {e}"))?;
-    let low = canonical
-        .to_string_lossy()
-        .to_lowercase()
-        .replace('/', "\\");
-
-    let blocked = [
-        "\\windows\\",
-        "\\program files\\",
-        "\\program files (x86)\\",
-        "\\programdata\\",
-        "\\system32\\",
-        "\\syswow64\\",
-        "\\startup\\",
-    ];
-    for prefix in &blocked {
-        if low.contains(prefix) {
-            return Err(format!(
-                "Refusing to write to protected system path: {path_str}"
-            ));
-        }
-    }
+    let path = validate_text_export_path(&path)?;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
@@ -273,6 +243,57 @@ pub fn cmd_write_text_file(path_str: String, content: String) -> Result<(), Stri
     f.write_all(content.as_bytes())
         .map_err(|e| format!("write {path_str:?}: {e}"))?;
     Ok(())
+}
+
+fn validate_text_export_path(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("Export path must be absolute".into());
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .ok_or_else(|| "Export path must have a text file extension".to_string())?;
+    if !matches!(ext.as_str(), "json" | "md" | "markdown" | "txt") {
+        return Err("Export path must end in .json, .md, .markdown, or .txt".into());
+    }
+
+    let normalized = normalize_path_lexically(path);
+    let allowed = known_export_roots();
+    if !allowed.iter().any(|root| path_is_within(&normalized, root)) {
+        return Err("Exports can only be saved under Desktop, Documents, or Downloads".into());
+    }
+
+    Ok(normalized)
+}
+
+fn known_export_roots() -> Vec<PathBuf> {
+    let Some(profile) = std::env::var_os("USERPROFILE").map(PathBuf::from) else {
+        return Vec::new();
+    };
+    ["Desktop", "Documents", "Downloads"]
+        .iter()
+        .map(|name| normalize_path_lexically(&profile.join(name)))
+        .collect()
+}
+
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    path == root || path.starts_with(root)
+}
+
+fn normalize_path_lexically(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Write (overwrite) the shared preferences file.
@@ -290,4 +311,38 @@ pub fn cmd_save_shared_prefs(app: AppHandle, content: String) -> Result<(), Stri
     f.write_all(content.as_bytes())
         .map_err(|e| format!("write {path:?}: {e}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cmd_write_text_file;
+
+    fn unique_temp_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "kabuqina-path-test-{}-{name}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn write_text_file_rejects_untrusted_temp_path() {
+        let path = unique_temp_path("export.md");
+        let _ = std::fs::remove_file(&path);
+
+        let result = cmd_write_text_file(path.display().to_string(), "hello".to_string());
+
+        assert!(result.is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn write_text_file_rejects_script_extension() {
+        let path = unique_temp_path("profile.ps1");
+        let _ = std::fs::remove_file(&path);
+
+        let result = cmd_write_text_file(path.display().to_string(), "Write-Host hi".to_string());
+
+        assert!(result.is_err());
+        assert!(!path.exists());
+    }
 }

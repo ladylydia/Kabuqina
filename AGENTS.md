@@ -77,8 +77,8 @@ Overlays `windows_safety` and `secret_loader` were removed in Phase 4 (no‑op a
 
 Controlled by `HERMESDESK_POWER_USER=1` (Rust sets it before spawning the Python child). Toggling it in Settings **restarts the Python child** — the entire toolset config is rewritten via `default_toolset.py`.
 
-Without power user: `web, file, vision, image_gen, tts, skills, todo` toolsets.
-With power user: adds `browser, terminal, code_execution, moa`.
+Without power user: `web, file, vision, image_gen, tts, skills, todo, browser, cronjob, messaging` toolsets.
+With power user: adds `terminal, code_execution, moa`.
 
 ## Upstream intake policy
 

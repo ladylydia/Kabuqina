@@ -44,9 +44,7 @@
         "enable": true,
         "scope": [
           "$APPDATA/Kabuqina/**",
-          "$LOCALDATA/Kabuqina/**",
-          "$APPDATA/HermesDesk/**",
-          "$LOCALDATA/HermesDesk/**"
+          "$LOCALDATA/Kabuqina/**"
         ]
       }
     }
@@ -74,8 +72,7 @@
         "silent": true
       },
       "wix": {
-        "language": ["en-US"],
-        "template": "../installer/wix/main.wxs"
+        "language": ["en-US"]
       },
       "allowDowngrades": false,
       "certificateThumbprint": null,
@@ -87,7 +84,7 @@
     "updater": {
       "active": false,
       "endpoints": [
-        "https://github.com/your-org/kabuqina/releases/latest/download/latest.json"
+        "https://github.com/ladylydia/Kabuqina/releases/latest/download/latest.json"
       ],
       "dialog": false,
       "pubkey": ""

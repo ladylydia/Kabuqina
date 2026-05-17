@@ -132,14 +132,19 @@ class TestNetworkPolicy(unittest.TestCase):
 class TestToolPolicy(unittest.TestCase):
     def test_default_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=False)
-        self.assertEqual(len(tools), 8)
-        self.assertEqual(tools, ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser"])
+        self.assertEqual(len(tools), 10)
+        self.assertEqual(
+            tools,
+            ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser", "cronjob", "messaging"],
+        )
 
     def test_power_user_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=True)
-        self.assertEqual(len(tools), 11)
+        self.assertEqual(len(tools), 13)
         self.assertTrue("terminal" in tools)
         self.assertTrue("browser" in tools)
+        self.assertTrue("cronjob" in tools)
+        self.assertTrue("messaging" in tools)
         self.assertTrue("code_execution" in tools)
         self.assertTrue("moa" in tools)
 
@@ -147,6 +152,13 @@ class TestToolPolicy(unittest.TestCase):
         tools = ToolPolicy.resolve(power_user=False)
         self.assertNotIn("terminal", tools)
         self.assertNotIn("code_execution", tools)
+
+    def test_gateway_keep_list_includes_default_delivery_tools(self):
+        tools = ToolPolicy.gateway_keep_list()
+        self.assertEqual(
+            tools,
+            ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser", "cronjob", "messaging"],
+        )
 
     def test_is_power_user_from_env(self):
         with patch.dict(os.environ, {"HERMESDESK_POWER_USER": "1"}):

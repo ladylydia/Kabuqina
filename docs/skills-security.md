@@ -12,8 +12,8 @@ These are unchanged; Skills and helpers must coexist with them:
 1. **Workspace jail** (`python/overlays/workspace_jail.py`) — file I/O is
    confined to the user’s workspace (plus a small set of writable system
    paths documented in [safety.md](safety.md)).
-2. **Network allowlist** — outbound HTTP is restricted unless the user is in
-   power-user “open network” mode.
+2. **Network allowlist** — outbound HTTP is restricted unless
+   `HERMESDESK_NET_OPEN=1` is set explicitly.
 3. **Approval bridge** — risky *shell* commands are confirmed in the Tauri
    shell; this does **not** gate individual Skill steps today.
 
@@ -72,7 +72,7 @@ destructive actions.
 - **L2** — Signed Skills from an official market; install-time permission
   sheet from declarative manifest (see ADR table).
 - **L3** — Power-user only: unsigned Skills, editors, and dangerous tools
-  (`terminal`, `code_execution`, `browser`) per existing Kabuqina policy.
+  (`terminal`, `code_execution`, `moa`) per existing Kabuqina policy.
 
 ## Reporting issues
 

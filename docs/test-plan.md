@@ -28,7 +28,7 @@
 | 1 | `TELEGRAM_REQUIRE_MENTION` 默认 `true` → 群聊不 @mention 无回复 | 设置为 `false` 后所有群消息触发 |
 | 2 | `/yolo` 命令：未在 `YOLO_ALLOWED_USERS` 中的用户执行 → 拒绝 | 在白名单中的用户正常开关 |
 | 3 | 网关文件沙箱：agent 尝试写 `/etc/` 或 `C:\Windows\` → PermissionError | 读写工作目录外任意路径均被拦截 |
-| 4 | `GATEWAY_SHELL_ENABLED` 未设置时 terminal / exec / browser / code_execution 工具集不可用 | 设置后恢复可用 |
+| 4 | `GATEWAY_SHELL_ENABLED` 未设置时 terminal / exec / code_execution 工具集不可用 | 设置后恢复可用 |
 | 5 | 飞书 Webhook 未配 `encrypt_key` → 启动打印 WARNING | 配置后不再警告 |
 | 6 | `GATEWAY_OWNER_IDS` 限制：非 owner 执行 `/restart` `/model` `/personality` `/sethome` `/debug` `/update` `/reload-mcp` `/stop` → 拒绝 | 空字符串 = 不限制（兼容旧行为） |
 | 7 | `GATEWAY_ALLOW_ALL_USERS` 激活 → 启动时打印 SECURITY 级别 WARNING | 关闭后无警告 |
