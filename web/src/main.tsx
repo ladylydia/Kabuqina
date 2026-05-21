@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowTitleBar } from "./components/WindowTitleBar";
 import { DesktopDeliveryNotifier } from "./components/DesktopDeliveryNotifier";
+import { DesktopDeliveryPoller } from "./components/DesktopDeliveryPoller";
 import { I18nProvider } from "./lib/i18n";
 import { Wizard } from "./onboarding/Wizard";
 import { Settings } from "./advanced/Settings";
@@ -34,6 +35,15 @@ const windowLabel = (() => {
     return null;
   }
 })();
+
+function showMainWindowWhenReady() {
+  const win = getCurrentWindow();
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      void win.show();
+    });
+  });
+}
 
 if (windowLabel === "capture-overlay") {
   ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -77,10 +87,12 @@ if (windowLabel === "capture-overlay") {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <DesktopDeliveryNotifier />
+              <DesktopDeliveryPoller />
             </div>
           </div>
         </BrowserRouter>
       </I18nProvider>
     </React.StrictMode>,
   );
+  showMainWindowWhenReady();
 }

@@ -39,6 +39,8 @@ mod validation;
 mod wecom_env;
 mod wecom_qr;
 mod weixin_qr;
+#[cfg(windows)]
+mod windows_notification;
 
 use serde::Serialize;
 use std::collections::HashSet;
@@ -46,8 +48,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, RunEvent};
 use tokio::sync::Mutex;
-use url::Url;
-
 /// Fallback ``taskkill`` when the supervisor mutex is contended and
 /// ``try_lock`` cannot acquire it at shutdown.
 fn _emergency_kill_python_child(pid: Option<u32>) {
@@ -153,10 +153,11 @@ pub fn run() {
             cmd_gateway_stop,
             cmd_get_hermes_port,
             cmd_get_hermes_bootstrap_error,
-            cmd_open_hermes_dashboard,
+            chat::cmd_get_hermes_desk_boot_state,
             companion::cmd_show_companion,
             companion::cmd_hide_companion,
             companion::cmd_resize_companion,
+            companion::cmd_ensure_companion_position,
             companion::cmd_focus_main_window,
             desktop_organizer::cmd_desktop_organize_run,
             desktop_organizer::cmd_desktop_organize_preview,
@@ -228,6 +229,8 @@ pub fn run() {
             capture::cmd_hide_capture_overlay,
         ])
         .setup(|app| {
+            #[cfg(windows)]
+            windows_notification::init();
             tray::install_main_close_hides_to_tray(app)?;
             tray::install(app)?;
             let handle = app.handle().clone();
@@ -605,6 +608,7 @@ async fn cmd_gateway_stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
+    let boot_t0 = std::time::Instant::now();
     let reveal_main = || {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.show();
@@ -628,27 +632,19 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // The shell UI can route first-run onboarding before embedded Hermes is ready.
-    // Reveal it before slower helper processes so fresh installs do not look tray-only.
-    reveal_main();
-
-    // 2a. Start Edge CDP browser instance (Windows only) for browser tool.
-    //     Edge is pre-installed on Windows; this replaces the need for Node.js
-    //     Playwright or a Camofox server.
-    {
-        let state: tauri::State<AppState> = app.state();
-        let data_dir = crate::paths::ensure_data_dir(&app).map_err(|e| anyhow::anyhow!(e))?;
-        if let Err(e) = state.edge_browser.start(&data_dir) {
-            log::warn!("Edge browser start skipped (browser tool will be unavailable): {e}");
-        }
-    }
+    log::info!(
+        "bootstrap setup_ms={}",
+        boot_t0.elapsed().as_millis()
+    );
 
     // 2. Stand up the loopback bridge (secret handshake + shell approval + desktop delivery).
     let desktop_q = {
         let state: tauri::State<AppState> = app.state();
         state.desktop_messages.clone()
     };
+    let bridge_t0 = std::time::Instant::now();
     let bridge_ok = bridge::spawn(app.clone(), desktop_q).await;
+    log::info!("bootstrap bridge_ms={}", bridge_t0.elapsed().as_millis());
     if let Err(e) = bridge_ok {
         let msg = format!("{e:#}");
         log::error!("loopback bridge failed: {msg}");
@@ -666,17 +662,47 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         *state.bridge_desktop_delivery_url.lock().await = Some(bridge.desktop_delivery_url.clone());
     }
 
+    // 2a. Start Edge CDP browser in the background — must not block Python spawn.
+    {
+        let edge_app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let edge_t0 = std::time::Instant::now();
+            let state: tauri::State<AppState> = edge_app.state();
+            let data_dir = match crate::paths::ensure_data_dir(&edge_app) {
+                Ok(d) => d,
+                Err(e) => {
+                    log::warn!("Edge browser start skipped (data dir): {e}");
+                    return;
+                }
+            };
+            if let Err(e) = state.edge_browser.start(&data_dir) {
+                log::warn!("Edge browser start skipped (browser tool will be unavailable): {e}");
+            } else {
+                log::info!("bootstrap edge_ms={}", edge_t0.elapsed().as_millis());
+            }
+        });
+    }
+
     // 3. Spawn the Python child (Hermes web_server / desktop_entrypoint).
     //    Errors here are logged but do NOT block the window from showing,
     //    so the user can see the shell UI and diagnose startup issues.
     let hermes_ok = async {
+        let python_t0 = std::time::Instant::now();
         let spawn_cfg = resolve_spawn_config_for_children(&app)
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
         let supervisor = python_supervisor::Supervisor::spawn(spawn_cfg.clone()).await?;
+        log::info!(
+            "bootstrap python_spawn_ms={}",
+            python_t0.elapsed().as_millis()
+        );
 
+        let port_wait_t0 = std::time::Instant::now();
         let port = supervisor.wait_for_port().await?;
-        log::info!("python ready on port {port}");
+        log::info!(
+            "python ready on port {port} (bootstrap port_wait_ms={})",
+            port_wait_t0.elapsed().as_millis()
+        );
 
         {
             let state: tauri::State<AppState> = app.state();
@@ -707,6 +733,7 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
     // 4. Register global screenshot shortcut (Ctrl+Alt+A).
     capture::register_global_shortcut(&app);
 
+    log::info!("bootstrap total_ms={}", boot_t0.elapsed().as_millis());
     Ok(())
 }
 
@@ -753,54 +780,6 @@ async fn cmd_set_power_user(app: tauri::AppHandle, enabled: bool) -> Result<(), 
     respawn_embedded_hermes_python(app).await.map(|_| ())
 }
 
-/// Build `http://127.0.0.1:{port}{path}` with optional `?hermesdesk_lang=` for the embedded Hermes web UI.
-fn hermes_dashboard_url(
-    port: u16,
-    shell_locale: Option<String>,
-    path: Option<String>,
-) -> Result<Url, String> {
-    let path_part = path
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            if s.starts_with('/') {
-                s.to_string()
-            } else {
-                format!("/{s}")
-            }
-        })
-        .unwrap_or_else(|| "/".to_string());
-    let mut u: Url = format!("http://127.0.0.1:{port}{path_part}")
-        .parse()
-        .map_err(|e: url::ParseError| e.to_string())?;
-    if let Some(loc) = shell_locale
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-    {
-        if loc == "zh" || loc == "en" {
-            u.query_pairs_mut().append_pair("hermesdesk_lang", loc);
-        }
-    }
-    Ok(u)
-}
-
-/// Open the Hermes Python web UI in the **system default browser** (not the shell webview).
-/// The app window stays on the current shell page; config still applies to the same local `127.0.0.1` process.
-fn open_hermes_dashboard_in_browser(
-    app: &tauri::AppHandle,
-    port: u16,
-    shell_locale: Option<String>,
-    path: Option<String>,
-) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    let u = hermes_dashboard_url(port, shell_locale, path)?;
-    app.opener()
-        .open_url(u.as_str(), None::<&str>)
-        .map_err(|e| e.to_string())
-}
-
 /// Get the Hermes Python backend port (for diagnostics and fallbacks).
 #[tauri::command]
 async fn cmd_get_hermes_port(app: tauri::AppHandle) -> Result<Option<u16>, String> {
@@ -815,23 +794,6 @@ async fn cmd_get_hermes_bootstrap_error(app: tauri::AppHandle) -> Result<Option<
     let state: tauri::State<AppState> = app.state();
     let err = state.hermes_bootstrap_error.lock().await.clone();
     Ok(err)
-}
-
-/// Open the Hermes dashboard in the **default browser** (shell webview is unchanged).
-/// Optional `shell_locale` (`"zh"` | `"en"`) is passed as `?hermesdesk_lang=` for Hermes i18n.
-/// Optional `path` (e.g. `"/env"`, `"/config"`) deep-links into the SPA; `None` is the home page.
-#[tauri::command]
-async fn cmd_open_hermes_dashboard(
-    app: tauri::AppHandle,
-    shell_locale: Option<String>,
-    path: Option<String>,
-) -> Result<(), String> {
-    let state: tauri::State<AppState> = app.state();
-    let port =
-        state.hermes_port.lock().await.ok_or_else(|| {
-            "Hermes is not ready yet. Wait a few seconds and try again.".to_string()
-        })?;
-    open_hermes_dashboard_in_browser(&app, port, shell_locale, path)
 }
 
 /// Return pending desktop delivery messages (from Python cron/send_message)

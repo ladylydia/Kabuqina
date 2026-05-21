@@ -18,12 +18,53 @@ import urllib.request
 
 log = logging.getLogger("hermesdesk.desktop.delivery")
 
+REMINDER_SESSION_ID = "hermesdesk-reminders"
+REMINDER_SESSION_TITLE = "已提醒"
+
+
+def format_reminder_content(title: str, message: str) -> str:
+    header = (title or "小娜提醒").strip()
+    body = (message or "").strip()
+    if body:
+        return f"**⏰ {header}**\n\n{body}"
+    return f"**⏰ {header}**"
+
+
+def persist_reminder_session(title: str, message: str) -> None:
+    """Append a fired reminder to the desk chat session DB so history survives reloads."""
+    content = format_reminder_content(title, message)
+    if not content.strip():
+        return
+    try:
+        from hermes_state import SessionDB
+
+        db = SessionDB()
+        try:
+            db.create_session(
+                session_id=REMINDER_SESSION_ID,
+                source="hermesdesk",
+                model="cron-reminder",
+            )
+            try:
+                db.set_session_title(REMINDER_SESSION_ID, REMINDER_SESSION_TITLE)
+            except ValueError:
+                pass
+            marker = (title or "小娜提醒").strip()
+            db.append_message(REMINDER_SESSION_ID, role="user", content=f"⏰ {marker}")
+            db.append_message(REMINDER_SESSION_ID, role="assistant", content=content)
+        finally:
+            db.close()
+    except Exception:
+        log.exception("desktop delivery: failed to persist reminder session")
+
 
 def deliver(message: str, title: str = "", attachments: list[str] | None = None) -> bool:
     """Deliver a message to the desktop (Tauri /chat + Windows notification).
 
     Returns True on success.
     """
+    persist_reminder_session(title, message)
+
     url = os.environ.get("HERMESDESK_DESKTOP_DELIVERY_URL")
     if not url:
         log.warning("HERMESDESK_DESKTOP_DELIVERY_URL not set; cannot deliver")
