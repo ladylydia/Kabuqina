@@ -9,7 +9,7 @@ export function WizardFooter({ children, className }: { children: ReactNode; cla
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-20 -mx-[var(--hd-page-pad-x)] border-t border-zinc-200/70 bg-zinc-50/95 px-[var(--hd-page-pad-x)] pt-4 dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:mx-0",
+        "sticky bottom-0 z-20 -mx-[var(--hd-page-pad-x)] border-t border-[var(--kq-color-border)]/80 bg-[var(--kq-color-surface)]/95 px-[var(--hd-page-pad-x)] pt-4 dark:border-zinc-800/70 dark:bg-[#0F172A]/95 sm:mx-0",
         "pb-[max(1rem,env(safe-area-inset-bottom,0px))]",
         className
       )}
@@ -35,7 +35,7 @@ export function WizardPrimaryButton({
       type="button"
       className={cn(
         primaryBase,
-        "bg-sky-600 text-white shadow-sm hover:bg-sky-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-500 dark:hover:bg-sky-400",
+        "kq-btn-primary text-white active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       {...props}
@@ -44,7 +44,7 @@ export function WizardPrimaryButton({
 }
 
 const secondaryBase =
-  "inline-flex w-full min-h-[3rem] items-center justify-center rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-6 py-3.5 text-base font-medium transition sm:w-auto sm:min-w-[12rem]";
+  "inline-flex w-full min-h-[3rem] items-center justify-center rounded-[var(--radius-shell-lg)] border px-6 py-3.5 text-base font-medium transition sm:w-auto sm:min-w-[12rem]";
 
 export function WizardSecondaryButton({
   className,
@@ -55,7 +55,7 @@ export function WizardSecondaryButton({
       type="button"
       className={cn(
         secondaryBase,
-        "text-zinc-800 hover:bg-zinc-100/80 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800/80",
+        "kq-btn-secondary text-[var(--kq-color-ink)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800/80",
         className
       )}
       {...props}
@@ -67,7 +67,7 @@ export function WizardFooterHint({ children, className }: { children: ReactNode;
   return (
     <p
       className={cn(
-        "mt-3 text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-500 sm:text-left",
+        "mt-3 text-center text-xs leading-relaxed text-[var(--kq-color-muted)] sm:text-left dark:text-zinc-500",
         className
       )}
     >

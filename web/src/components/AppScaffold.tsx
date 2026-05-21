@@ -13,15 +13,12 @@ type Props = {
 const narrowInner = "mx-auto w-full max-w-[var(--hd-content-max)] px-[var(--hd-page-pad-x)] py-[var(--hd-page-pad-y)]";
 
 export const AppScaffold = forwardRef<HTMLDivElement, Props>(
-  ({ children, className, variant = "full", surface = "default" }, ref) => {
+  ({ children, className, variant = "full", surface: _surface = "default" }, ref) => {
     return (
       <div
         ref={ref}
         className={cn(
-          "min-h-full w-full text-zinc-900 dark:text-zinc-100",
-          surface === "chat"
-            ? "bg-zinc-50 dark:bg-[#0F172A]"
-            : "bg-gradient-to-br from-zinc-100/90 via-white to-zinc-50/85 dark:from-zinc-950 dark:via-[#0F172A] dark:to-zinc-950",
+          "min-h-full w-full kq-chat-shell text-[var(--kq-color-ink)] dark:bg-[#0F172A] dark:text-zinc-100",
           variant === "narrow" && "flex flex-col",
           className
         )}

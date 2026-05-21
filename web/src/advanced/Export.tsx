@@ -242,7 +242,7 @@ export function Export() {
                   value={f}
                   checked={format === f}
                   onChange={() => setFormat(f)}
-                  className="accent-sky-600"
+                  className="accent-[var(--kq-color-primary)]"
                 />
                 <span className="text-zinc-700 dark:text-zinc-300">
                   {f === "json" ? "JSON" : "Markdown"}
@@ -257,7 +257,7 @@ export function Export() {
           <button
             type="button"
             onClick={selectAll}
-            className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+            className="text-sm text-[var(--kq-color-strong)] hover:text-[var(--kq-color-ink)] dark:text-[#D4C5E2] dark:hover:text-[#D4C5E2]"
           >
             {t("export.selectAll")}
           </button>
@@ -301,7 +301,7 @@ export function Export() {
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleSession(s.id)}
-                    className="accent-sky-600 shrink-0"
+                    className="accent-[var(--kq-color-primary)] shrink-0"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-zinc-800 dark:text-zinc-200">
@@ -327,7 +327,7 @@ export function Export() {
             type="button"
             disabled={selected.size === 0 || exporting}
             onClick={handleExport}
-            className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed dark:bg-sky-500 dark:text-white dark:hover:bg-sky-600"
+            className="kq-btn-primary inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {exporting ? "…" : t("export.exportBtn")}
           </button>
@@ -339,7 +339,7 @@ export function Export() {
         <button
           type="button"
           onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
-          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--kq-color-border)] bg-white/90 text-[var(--kq-color-muted)] shadow-[var(--kq-shadow-card)] backdrop-blur transition hover:bg-white hover:text-[var(--kq-color-strong)] dark:bg-zinc-800/90 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t("settings.scrollTop")}
           title={t("settings.scrollTop")}
         >
@@ -353,7 +353,7 @@ export function Export() {
               behavior: "smooth",
             })
           }
-          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--kq-color-border)] bg-white/90 text-[var(--kq-color-muted)] shadow-[var(--kq-shadow-card)] backdrop-blur transition hover:bg-white hover:text-[var(--kq-color-strong)] dark:bg-zinc-800/90 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t("settings.scrollBottom")}
           title={t("settings.scrollBottom")}
         >

@@ -42,6 +42,7 @@ if (windowLabel === "capture-overlay") {
     </React.StrictMode>,
   );
 } else if (windowLabel === "companion") {
+  document.documentElement.classList.add("kq-companion-window");
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <I18nProvider>

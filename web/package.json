@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "test:desktop-delivery": "node src/lib/desktopDelivery.test.mjs",
+    "test:desktop-startup": "node src/lib/desktopStartup.test.mjs",
     "test:chat-ux": "node src/chat/chatUx.test.mjs",
     "test:gateway-ux": "node src/advanced/gatewayUx.test.mjs",
     "test:onboarding-providers": "node src/onboarding/providerUx.test.mjs",

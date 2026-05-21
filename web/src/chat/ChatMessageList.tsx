@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
-import { AlarmClock, FileText, Image as ImageIcon, PenLine } from "lucide-react";
+import { AlarmClock, BookOpen, FolderOpen, PenLine } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import type { UiMsg } from "./chat-api";
 import { AgentProgress } from "./AgentProgress";
 import { ChatMessage } from "./ChatMessage";
+import { CompanionCup } from "../components/CompanionCup";
 import { cn } from "../lib/cn";
 import type { AgentProgressState } from "./hooks/useAgentProgress";
 
@@ -13,21 +14,20 @@ interface ChatMessageListProps {
   sendErr?: string | null;
   progress?: AgentProgressState | null;
   onPickSuggestion?: (prompt: string) => void;
-  onOrganizeDesktop?: () => void;
 }
 
 function TypingIndicator() {
   const { t } = useI18n();
   return (
     <div className="flex justify-start">
-      <div className="max-w-[min(100%,42rem)] rounded-2xl rounded-tl-sm border border-zinc-200/80 bg-white/95 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)] dark:border-zinc-700/80 dark:bg-zinc-800/90">
+      <div className="kq-chat-bubble-assistant max-w-[min(100%,42rem)] rounded-2xl rounded-tl-sm px-4 py-3 dark:border-zinc-700/80 dark:bg-zinc-800/90">
         <p className="mb-2 text-xs text-zinc-400 dark:text-zinc-500">
           {t("chat.typingStatus")}…
         </p>
         <div className="flex h-4 items-center gap-1" aria-hidden>
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-300 dark:bg-zinc-600" style={{ animationDelay: "0ms" }} />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-300 dark:bg-zinc-600" style={{ animationDelay: "150ms" }} />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-300 dark:bg-zinc-600" style={{ animationDelay: "300ms" }} />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--kq-color-primary)] dark:bg-zinc-600" style={{ animationDelay: "0ms" }} />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--kq-color-primary)] dark:bg-zinc-600" style={{ animationDelay: "150ms" }} />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--kq-color-primary)] dark:bg-zinc-600" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
     </div>
@@ -36,13 +36,12 @@ function TypingIndicator() {
 
 function EmptyState({
   onPickSuggestion,
-  onOrganizeDesktop,
 }: {
   onPickSuggestion?: (prompt: string) => void;
-  onOrganizeDesktop?: () => void;
 }) {
   const { t, locale } = useI18n();
   const brand = t("brand");
+  const productName = t("productName");
   const wordmarkBase =
     locale === "zh" ? "/kabuqina_logo_chinese" : "/kabuqina_logo_english";
   const greeting = t("chat.greeting", { name: brand });
@@ -50,38 +49,38 @@ function EmptyState({
   const actions =
     locale === "zh"
       ? [
-          { label: "提醒我休息", prompt: "提醒我 30 分钟后休息一下", icon: AlarmClock },
-          { label: t("chat.organizeDesktopButton"), onClick: onOrganizeDesktop, icon: FileText },
-          { label: "总结图片", prompt: "帮我看看这张图片里有什么", icon: ImageIcon },
-          { label: "写消息", prompt: "帮我把这段话写得更自然：", icon: PenLine },
+          { label: "陪我复习一会儿", prompt: "陪我复习一会儿，帮我把今天要学的内容拆成小步骤。", icon: BookOpen, iconClass: "kq-color-icon-book" },
+          { label: "整理思路", prompt: "帮我整理一下现在脑子里的想法，先列出重点和下一步。", icon: FolderOpen, iconClass: "kq-color-icon-folder" },
+          { label: "提醒我休息", prompt: "提醒我 30 分钟后休息一下", icon: AlarmClock, iconClass: "kq-color-icon-alarm" },
+          { label: "写一段消息", prompt: "帮我把这段话写得更自然：", icon: PenLine, iconClass: "kq-color-icon-pen" },
         ]
       : [
-          { label: "Set a reminder", prompt: "Remind me to take a break in 30 minutes", icon: AlarmClock },
-          { label: t("chat.organizeDesktopButton"), onClick: onOrganizeDesktop, icon: FileText },
-          { label: "Summarize an image", prompt: "Help me understand what is in this image", icon: ImageIcon },
-          { label: "Write a message", prompt: "Make this message sound more natural:", icon: PenLine },
+          { label: "Study with me", prompt: "Study with me for a while and split this into small steps.", icon: BookOpen, iconClass: "kq-color-icon-book" },
+          { label: "Organize thoughts", prompt: "Help me organize my current thoughts into priorities and next steps.", icon: FolderOpen, iconClass: "kq-color-icon-folder" },
+          { label: "Set a reminder", prompt: "Remind me to take a break in 30 minutes", icon: AlarmClock, iconClass: "kq-color-icon-alarm" },
+          { label: "Write a message", prompt: "Make this message sound more natural:", icon: PenLine, iconClass: "kq-color-icon-pen" },
         ];
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6 py-8 sm:py-10">
-      <div className="flex w-full max-w-xl translate-y-2 flex-col items-center text-center sm:translate-y-3">
-        <div className="mb-5 flex flex-col items-center sm:mb-6">
-          <picture className="block leading-none">
+    <div className="kq-empty-state flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6 py-8 sm:py-10">
+      <div className="flex w-full max-w-3xl translate-y-2 flex-col items-center text-center sm:translate-y-3">
+        <div className="kq-empty-hero mb-7 flex flex-col items-center sm:mb-8">
+          <picture className="sr-only">
             <source type="image/avif" srcSet={`${wordmarkBase}.avif`} />
             <source type="image/webp" srcSet={`${wordmarkBase}.webp`} />
-            <img
-              src={`${wordmarkBase}.webp`}
-              alt={brand}
-              className="mx-auto block h-auto w-full max-w-[220px] object-contain object-center dark:opacity-95 sm:max-w-[260px]"
-              width={260}
-              height={80}
-              decoding="async"
-            />
+            <img src={`${wordmarkBase}.webp`} alt={productName} width={260} height={80} decoding="async" />
           </picture>
-          <p className="mt-4 text-sm tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-            {greetingParts[0]}
-            <span className="font-medium text-sky-600 dark:text-sky-400">{brand}</span>
-            {greetingParts[1]}
+          <h1 className="kq-empty-title">{productName}</h1>
+          <p className="kq-empty-subtitle mt-5 text-base sm:text-lg">
+            <span className="kq-hero-line" aria-hidden />
+            <span className="kq-hero-heart" aria-hidden>♡</span>
+            <span>{locale === "zh" ? "慢慢来，小娜陪你整理思路" : `${greetingParts[0]}${brand}${greetingParts[1]}`}</span>
+            <span className="kq-hero-line" aria-hidden />
           </p>
+          <div className="kq-companion-hero-mat">
+            <div className="kq-companion-big-cup">
+              <CompanionCup />
+            </div>
+          </div>
         </div>
         <div
           className="mt-1 flex w-full flex-wrap justify-center gap-2"
@@ -94,23 +93,18 @@ function EmptyState({
                 key={action.label}
                 type="button"
                 onClick={() => {
-                  if ("onClick" in action && action.onClick) {
-                    action.onClick();
-                    return;
-                  }
                   if ("prompt" in action && action.prompt) {
                     onPickSuggestion?.(action.prompt);
                   }
                 }}
                 className={cn(
-                  "inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium",
-                  "border-zinc-200 bg-white/85 text-zinc-700 shadow-sm transition",
-                  "hover:border-sky-200 hover:bg-sky-50 hover:text-sky-900 active:scale-[0.99]",
+                  "kq-empty-action inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-medium transition",
+                  "text-[var(--kq-color-ink)] active:scale-[0.99]",
                   "dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200",
                   "dark:hover:border-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-100"
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" strokeWidth={2.1} aria-hidden />
+                <Icon className={cn("h-4 w-4 shrink-0", action.iconClass)} strokeWidth={2.1} aria-hidden />
                 <span>{action.label}</span>
               </button>
             );
@@ -127,7 +121,6 @@ export function ChatMessageList({
   sendErr,
   progress,
   onPickSuggestion,
-  onOrganizeDesktop,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -145,12 +138,12 @@ export function ChatMessageList({
   return (
     <div
       className={cn(
-        "min-h-0 flex-1 overflow-y-auto bg-zinc-50/80 dark:bg-[#0F172A]",
+        "kq-chat-scroll min-h-0 flex-1 overflow-y-auto dark:bg-[#0F172A]",
         isEmpty && "flex min-h-0 flex-col"
       )}
     >
       {isEmpty ? (
-        <EmptyState onPickSuggestion={onPickSuggestion} onOrganizeDesktop={onOrganizeDesktop} />
+        <EmptyState onPickSuggestion={onPickSuggestion} />
       ) : (
         <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-5">
           {completedMessages.map((m) => (
@@ -158,6 +151,7 @@ export function ChatMessageList({
               key={m.id}
               role={m.role}
               text={m.text}
+              attachments={m.attachments}
               model={m.model}
               timestamp={m.timestamp}
               streaming={false}
@@ -175,6 +169,7 @@ export function ChatMessageList({
               key={pendingAssistant.id}
               role={pendingAssistant.role}
               text={pendingAssistant.text}
+              attachments={pendingAssistant.attachments}
               model={pendingAssistant.model}
               timestamp={pendingAssistant.timestamp}
               streaming={sending}

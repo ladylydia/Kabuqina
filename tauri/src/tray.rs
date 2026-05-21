@@ -37,7 +37,7 @@ pub fn install(app: &mut App) -> Result<()> {
     let companion = MenuItem::with_id(
         &handle,
         "companion",
-        "Show Nana companion",
+        "Show Nana pill",
         true,
         None::<&str>,
     )?;

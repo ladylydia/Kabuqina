@@ -55,7 +55,7 @@ export function DesktopDeliveryNotifier() {
           role="status"
         >
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--kq-color-primary-pale)] text-[var(--kq-color-strong)] dark:bg-[#D4C5E2]/15 dark:text-[#D4C5E2]">
               <Bell size={16} aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ export function DesktopDeliveryNotifier() {
               )}
               <button
                 type="button"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[var(--kq-color-strong)] transition hover:bg-[var(--kq-color-primary-pale)] dark:text-[#D4C5E2] dark:hover:bg-[#D4C5E2]/15"
                 onClick={() => openChat(notice.id)}
               >
                 <MessageCircle size={14} aria-hidden="true" />

@@ -342,10 +342,7 @@ mod tests {
     use super::cmd_write_text_file;
 
     fn unique_temp_path(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
-            "kabuqina-path-test-{}-{name}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("kabuqina-path-test-{}-{name}", std::process::id()))
     }
 
     #[test]

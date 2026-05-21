@@ -196,16 +196,19 @@ export function useSendMessage({
     progressRef.current = initial;
     setProgress(initial);
 
-    const attLabel =
-      atts.length > 0
-        ? atts.map((a) => `📎 ${a.name}`).join("\n")
+    const imageAtts = atts.filter((a) => a.mime.startsWith("image/"));
+    const fileAtts = atts.filter((a) => !imageAtts.includes(a));
+    const fileAttLabel =
+      fileAtts.length > 0
+        ? fileAtts.map((a) => `📎 ${a.name}`).join("\n")
         : "";
-    const userText = [text, attLabel].filter(Boolean).join("\n");
+    const userText = [text, fileAttLabel].filter(Boolean).join("\n");
     const nowSec = Math.floor(Date.now() / 1000);
     const userMsg: UiMsg = {
       id: `u-${Date.now()}`,
       role: "user",
       text: userText,
+      attachments: atts,
       timestamp: nowSec,
     };
     const placeholder: UiMsg = {

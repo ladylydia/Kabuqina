@@ -987,10 +987,70 @@ def _desk_extract_presentation_text(name: str, mime: str, data: bytes) -> str:
     return ""
 
 
+_DESK_UI_PERSIST_PREFIX = "__hermesdesk_ui__:"
+
+
+def _desk_serialize_ui_persist(plain: str, atts: List[Dict[str, Any]]) -> str:
+    """JSON envelope for SQLite so HermesDesk can replay image previews in chat history."""
+    plain = (plain or "").strip()
+    ui_attachments: List[Dict[str, str]] = []
+    for p in atts:
+        name = str(p.get("name") or "file")
+        mime = (str(p.get("mime") or "")).lower()
+        data: bytes = p.get("data") or b""
+        if not data or not mime.startswith("image/"):
+            continue
+        ui_attachments.append(
+            {
+                "name": name,
+                "mime": mime,
+                "data": base64.b64encode(data).decode("ascii"),
+            }
+        )
+    payload = {"text": plain, "attachments": ui_attachments}
+    return _DESK_UI_PERSIST_PREFIX + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _desk_parse_ui_persist(content: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(content, str) or not content.startswith(_DESK_UI_PERSIST_PREFIX):
+        return None
+    try:
+        parsed = json.loads(content[len(_DESK_UI_PERSIST_PREFIX) :])
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _desk_agent_history_content(content: Any) -> Any:
+    """Collapse desk UI persist envelope to agent-safe plain text (no base64 blobs)."""
+    if not isinstance(content, str):
+        return content
+    parsed = _desk_parse_ui_persist(content)
+    if parsed is None:
+        return content
+    text = (parsed.get("text") or "").strip()
+    atts = parsed.get("attachments")
+    n_img = len(atts) if isinstance(atts, list) else 0
+    if text:
+        return text
+    if n_img:
+        return f"[{n_img} image(s)]"
+    return content
+
+
+def _desk_normalize_history_message(msg: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(msg, dict):
+        return msg
+    out = dict(msg)
+    if msg.get("role") == "user":
+        out["content"] = _desk_agent_history_content(msg.get("content"))
+    return out
+
+
 def _desk_build_user_message(
     plain: str, atts: List[Dict[str, Any]]
 ) -> Optional[Tuple[Union[str, List[Dict[str, Any]]], Optional[str]]]:
-    """persist_user_message is a clean string for logs/memory when user_message is multimodal."""
+    """persist_user_message stores a desk UI envelope when images are attached."""
     plain = (plain or "").strip()
     if not atts:
         if not plain:
@@ -1044,8 +1104,7 @@ def _desk_build_user_message(
     if not image_parts:
         return text_buf, None
     user_content: List[Dict[str, Any]] = [{"type": "text", "text": text_buf}, *image_parts]
-    n_img = len(image_parts)
-    persist = plain if plain else f"[{n_img} image(s)]"
+    persist = _desk_serialize_ui_persist(plain, atts)
     return user_content, persist
 
 
@@ -1442,7 +1501,11 @@ async def desk_chat_stream(request: Request):
             _log.exception("desk stream: load history failed")
             db.close()
             return JSONResponse({"ok": False, "error": "session_db", "detail": str(e)}, status_code=500)
-        history = [m for m in raw_history if m.get("role") != "session_meta"]
+        history = [
+            _desk_normalize_history_message(m)
+            for m in raw_history
+            if m.get("role") != "session_meta"
+        ]
 
         try:
             agent = _desk_chat_build_agent(session_id, db)
@@ -1617,7 +1680,11 @@ async def desk_chat_proto(request: Request):
                 {"ok": False, "error": "session_db", "detail": str(e)},
                 status_code=500,
             )
-        history = [m for m in raw_history if m.get("role") != "session_meta"]
+        history = [
+            _desk_normalize_history_message(m)
+            for m in raw_history
+            if m.get("role") != "session_meta"
+        ]
 
         try:
             agent = _desk_chat_build_agent(session_id, db)

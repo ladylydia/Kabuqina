@@ -17,10 +17,9 @@ export const MESSAGES = {
       close: "关闭",
     },
     companion: {
-      show: "显示小娜悬浮窗",
-      minimize: "缩小悬浮窗",
-      expand: "展开悬浮窗",
-      idleShort: "待机中",
+      show: "缩小到小娜",
+      openMain: "打开主窗口",
+      pillHint: "拖拽移动 · 双击打开主窗口",
     },
     splash: {
       waking: "正在唤醒…",
@@ -785,10 +784,9 @@ export const MESSAGES = {
       close: "Close",
     },
     companion: {
-      show: "Show Nana companion",
-      minimize: "Shrink companion",
-      expand: "Expand companion",
-      idleShort: "Here",
+      show: "Shrink to Nana",
+      openMain: "Open main window",
+      pillHint: "Drag to move · Double-click to open main window",
     },
     splash: {
       waking: "Waking your assistant…",

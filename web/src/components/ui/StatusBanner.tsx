@@ -30,10 +30,10 @@ const variantMeta: Record<
   },
   info: {
     icon: Info,
-    border: "border-sky-200/90 dark:border-sky-800/60",
-    bg: "bg-sky-50/60 dark:bg-sky-950/25",
-    text: "text-sky-950 dark:text-sky-100",
-    iconColor: "text-sky-600 dark:text-sky-400",
+    border: "border-[var(--kq-color-border)] dark:border-[#D4C5E2]/30",
+    bg: "bg-[var(--kq-color-primary-pale)]/70 dark:bg-[#D4C5E2]/10",
+    text: "text-[var(--kq-color-strong)] dark:text-zinc-100",
+    iconColor: "text-[var(--kq-color-primary)] dark:text-[#D4C5E2]",
   },
   error: {
     icon: XCircle,
@@ -44,10 +44,10 @@ const variantMeta: Record<
   },
   neutral: {
     icon: Info,
-    border: "border-zinc-200/90 dark:border-zinc-700/80",
-    bg: "bg-zinc-50/70 dark:bg-zinc-900/40",
-    text: "text-zinc-700 dark:text-zinc-300",
-    iconColor: "text-zinc-500 dark:text-zinc-400",
+    border: "border-[var(--kq-color-border)] dark:border-zinc-700/80",
+    bg: "bg-[var(--kq-color-primary-pale)]/45 dark:bg-zinc-900/40",
+    text: "text-[var(--kq-color-ink)] dark:text-zinc-300",
+    iconColor: "text-[var(--kq-color-muted)] dark:text-zinc-400",
   },
 };
 

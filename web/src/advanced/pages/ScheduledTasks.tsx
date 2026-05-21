@@ -106,7 +106,7 @@ export function ScheduledTasksPage() {
   const renderActiveCard = (job: CronJobEntry) => (
     <div
       key={job.id}
-      className="rounded-xl border border-zinc-200 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900"
+      className="hd-glass-subtle rounded-xl px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -163,7 +163,7 @@ export function ScheduledTasksPage() {
     return (
       <div
         key={job.id}
-        className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/50"
+        className="hd-glass-subtle rounded-xl px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/50"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">

@@ -3,43 +3,57 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const companionSource = fs.readFileSync(new URL("./CompanionWindow.tsx", import.meta.url), "utf8");
-const compactBranch =
-  companionSource.match(/if \(mode === "compact"\) \{([\s\S]*?)\n {2}\}\n\n {2}return \(/)?.[1] ||
-  "";
+const mainSource = fs.readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
+const indexCssSource = fs.readFileSync(new URL("../index.css", import.meta.url), "utf8");
+const titleBarSource = fs.readFileSync(new URL("../components/WindowTitleBar.tsx", import.meta.url), "utf8");
+const cupSource = fs.readFileSync(new URL("../components/CompanionCup.tsx", import.meta.url), "utf8");
 
-assert.match(
-  companionSource,
-  /type CompanionMode = "expanded" \| "compact"/,
-  "CompanionWindow should model expanded and compact modes.",
-);
-
-assert.match(companionSource, /cmd_set_companion_mode/, "CompanionWindow should call the Tauri companion mode resize command.");
-
-assert.match(companionSource, /setMode\("compact"\)/, "The minimize action should enter compact mode.");
-
-assert.match(companionSource, /setMode\("expanded"\)/, "The compact pill should be able to expand back.");
-
-assert.match(
-  compactBranch,
-  /\/companion_compact\.png|COMPACT_ASSET_URL/,
-  "Compact mode should use the PNG mascot asset.",
-);
-
-assert.match(
-  companionSource,
-  /intrinsicLogicalDimsForAsset/,
-  "Compact sizing should read intrinsic bitmap dims and divide by scale factor.",
-);
-
-assert.match(
-  companionSource,
-  /compactWidth/,
-  "Frontend should forward compact intrinsic width to the Rust command.",
-);
 assert.doesNotMatch(
-  compactBranch,
-  /kabuqina_na_blue/,
-  "Compact pill should not use the Na raster logo.",
+  companionSource,
+  /companion_compact\.png|intrinsicLogicalDimsForAsset|<img/,
+  "Compact pill should render the CSS coffee cup, not a PNG mascot.",
+);
+
+assert.match(
+  companionSource,
+  /CompanionCup[\s\S]*kq-companion-pill-cup/,
+  "CompanionWindow should wrap the shared CompanionCup in the pill layout.",
+);
+
+assert.match(
+  cupSource,
+  /kq-companion-cup-body[\s\S]*kq-companion-cup-handle[\s\S]*kq-companion-cup-face/,
+  "CompanionCup should render the Kabuqina coffee cup structure.",
+);
+
+assert.match(
+  companionSource,
+  /PILL_REM_W = 5\.4[\s\S]*PILL_REM_H = 4\.7/,
+  "Pill window size should track the same 5.4rem × 4.7rem cup as the empty chat hero.",
+);
+
+assert.match(
+  indexCssSource,
+  /kq-companion-pill-float/,
+  "Pill cup should use a gentle floating animation.",
+);
+
+assert.match(
+  companionSource,
+  /cmd_resize_companion/,
+  "CompanionWindow should resize via cmd_resize_companion.",
+);
+
+assert.match(
+  companionSource,
+  /onDoubleClick=\{openMain\}/,
+  "Double-click compact surface should open the main window.",
+);
+
+assert.match(
+  companionSource,
+  /cmd_focus_main_window/,
+  "Opening main should hide the compact pill via focus_main_window.",
 );
 
 assert.match(
@@ -49,37 +63,19 @@ assert.match(
 );
 
 assert.match(
-  compactBranch,
-  /onDoubleClick=\{\(\) => void setCompanionMode\("expanded"\)\}/,
-  "Double-click compact surface should expand the companion.",
-);
-
-assert.doesNotMatch(
-  compactBranch,
-  /onClick=\{\(\) => void setCompanionMode\("expanded"\)\}/,
-  "Compact should not expand on single click (keeps drag vs click clean).",
-);
-
-assert.match(
-  compactBranch,
-  /hermes-titlebar-nodrag/,
-  "Compact shell should declare no-drag for reliable pointer delivery.",
+  mainSource,
+  /kq-companion-window/,
+  "Companion entry should mark the document root for transparent shell styling.",
 );
 
 assert.match(
   companionSource,
-  /document\.documentElement\.style\.overflow = "hidden"[\s\S]*document\.body\.style\.overflow = "hidden"/,
-  "The companion window should suppress page scrollbars.",
+  /setShadow\(false\)/,
+  "CompanionWindow should disable native window shadow on the pill.",
 );
 
 assert.match(
-  companionSource,
-  /new LogicalSize\(320, 160\)/,
-  "The expanded fallback size should match the full companion window size.",
-);
-
-assert.doesNotMatch(
-  companionSource,
-  /onClick=\{\(\) => setNotice\(null\)\}/,
-  "The minimize button must not merely clear the current notice.",
+  titleBarSource,
+  /cmd_show_companion/,
+  "Title bar star should shrink the app into the compact pill.",
 );

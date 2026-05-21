@@ -17,8 +17,8 @@ export function ShellFrame({ children }: { children: ReactNode }) {
     <AppScaffold className="flex h-full w-full flex-col">
       <header
         className={cn(
-          "shrink-0 border-b border-zinc-200/60 bg-zinc-50/95 px-[var(--hd-page-pad-x)] py-3.5",
-          "dark:border-zinc-800/60 dark:bg-zinc-950/95"
+          "kq-chat-topbar shrink-0 border-b px-[var(--hd-page-pad-x)] py-3.5",
+          "dark:border-zinc-800/60 dark:bg-[#0F172A]/95"
         )}
       >
         <div className="mx-auto flex max-w-[var(--hd-content-max)] items-center justify-end gap-3">
@@ -45,8 +45,8 @@ function ProgressDots({ index, total }: { index: number; total: number }) {
           className={
             "h-1.5 rounded-full transition-all " +
             (i <= index
-              ? "w-6 bg-sky-500 dark:bg-sky-400"
-              : "w-1.5 bg-zinc-300 dark:bg-zinc-700")
+              ? "w-6 bg-[var(--kq-color-primary)] dark:bg-[#D4C5E2]"
+              : "w-1.5 bg-[#d9cde3] dark:bg-zinc-700")
           }
         />
       ))}

@@ -2,7 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { Check, Copy, Volume2 } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { cmdTtsSpeak } from "./chat-api";
+import { CompanionCup } from "../components/CompanionCup";
+import { cmdTtsSpeak, type DeskAttachmentPayload } from "./chat-api";
 
 const ChatMarkdown = lazy(() => import("./ChatMarkdown"));
 
@@ -23,6 +24,7 @@ function base64ToBlob(b64: string, mimeType: string): Blob {
 export interface ChatMessageProps {
   role: "user" | "assistant";
   text: string;
+  attachments?: DeskAttachmentPayload[];
   model?: string;
   /** Unix seconds or ms (see `MessageRow.timestamp`) */
   timestamp?: number;
@@ -321,27 +323,57 @@ function AssistantMessageFooter({
   );
 }
 
-export function ChatMessage({ role, text, model, timestamp, streaming = false }: ChatMessageProps) {
+function UserImageAttachments({ attachments = [] }: { attachments?: DeskAttachmentPayload[] }) {
+  const imageAttachments = attachments.filter((att) => att.mime.startsWith("image/") && att.data);
+  if (imageAttachments.length === 0) {
+    return null;
+  }
+  return (
+    <div className="kq-user-image-grid mt-2 grid gap-2">
+      {imageAttachments.map((att, index) => (
+        <figure key={`${att.name}-${index}`} className="kq-user-image-preview overflow-hidden">
+          <img
+            src={`data:${att.mime};base64,${att.data}`}
+            alt={att.name}
+            className="block max-h-72 w-full object-contain"
+            loading="lazy"
+          />
+          <figcaption className="truncate px-2 py-1 text-[11px] text-[var(--kq-color-muted)]">
+            {att.name}
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
+export function ChatMessage({ role, text, attachments, model, timestamp, streaming = false }: ChatMessageProps) {
   const { locale } = useI18n();
   const isUser = role === "user";
   const hasTime = timestamp != null && Number.isFinite(timestamp);
   const timeStr = hasTime ? formatChatTime(timestamp, locale) : null;
 
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex items-start gap-3", isUser ? "justify-end" : "justify-start")}>
+      {!isUser && (
+        <div className="kq-assistant-avatar mt-0.5" aria-label="卡布奇娜">
+          <CompanionCup />
+        </div>
+      )}
       <div
         className={cn(
-          "max-w-[min(100%,42rem)] overflow-visible rounded-2xl px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+          "max-w-[min(100%,42rem)] overflow-visible rounded-2xl px-4 py-2.5",
           isUser
-            ? "rounded-tr-sm bg-sky-600 text-white dark:bg-[#3B5BC7] dark:text-white"
-            : "rounded-tl-sm border border-zinc-200/80 bg-white/95 dark:border-zinc-700/80 dark:bg-zinc-800/90"
+            ? "kq-chat-bubble-user rounded-tr-sm dark:bg-[#3B5BC7] dark:text-white"
+            : "kq-chat-bubble-assistant rounded-tl-sm dark:border-zinc-700/80 dark:bg-zinc-800/90"
         )}
       >
         {isUser ? (
           <>
-            <p className="whitespace-pre-wrap text-sm leading-[1.6]">{text}</p>
+            {text.trim() ? <p className="whitespace-pre-wrap text-sm leading-[1.6]">{text}</p> : null}
+            <UserImageAttachments attachments={attachments} />
             {timeStr && (
-              <div className="mt-1.5 text-right text-[11px] font-mono tabular-nums text-sky-100/80 dark:text-sky-200/70">
+              <div className="mt-1.5 text-right text-[11px] font-mono tabular-nums text-[var(--kq-color-muted)] dark:text-sky-200/70">
                 {timeStr}
               </div>
             )}

@@ -83,10 +83,9 @@ fn validate_provider_config_for_save(cfg: &mut ProviderConfig, secret: &str) -> 
     crate::validation::validate_env_value(secret)?;
 
     if cfg.provider == "custom" {
-        let url = cfg
-            .api_base_url
-            .as_deref()
-            .ok_or_else(|| "api_base_url is required for custom OpenAI-compatible APIs".to_string())?;
+        let url = cfg.api_base_url.as_deref().ok_or_else(|| {
+            "api_base_url is required for custom OpenAI-compatible APIs".to_string()
+        })?;
         crate::validation::validate_public_endpoint(url, None)?;
         let base_host = host_from_api_base(url).to_ascii_lowercase();
         if cfg.host.is_empty() {

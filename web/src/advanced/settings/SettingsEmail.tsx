@@ -32,8 +32,7 @@ type EmailOAuthStatus = {
   hasDefaultClientId: boolean;
 };
 
-const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
+const inputClass = "hd-input font-mono dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100";
 
 export function SettingsEmailBlock({ className }: { className?: string }) {
   const { t } = useI18n();
@@ -234,7 +233,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
       ) : null}
 
       {showForm ? (
-        <div className="space-y-3 rounded-lg border border-sky-200/80 bg-sky-50/50 px-3 py-3 dark:border-sky-800/50 dark:bg-sky-950/25">
+        <div className="kq-info-panel space-y-3 rounded-lg px-3 py-3 dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
             {t("settings.emailFormLead")}
           </p>
@@ -287,7 +286,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
               />
               <button
                 type="button"
-                className="text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                className="hd-link text-xs font-medium underline-offset-2"
                 onClick={() => setShowOauthAdvanced((v) => !v)}
               >
                 {showOauthAdvanced

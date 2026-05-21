@@ -219,7 +219,7 @@ export function CapabilitiesPage() {
 
         <div className="flex min-h-0 flex-1 gap-4">
           <aside className="w-48 shrink-0">
-            <div className="flex flex-col gap-0.5 rounded-lg border border-zinc-200 bg-zinc-100/50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50">
+            <div className="flex flex-col gap-0.5 rounded-lg border border-[var(--kq-color-border)] bg-[var(--kq-color-primary-pale)]/45 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50">
               {TABS.map(({ id, icon: Icon }) => (
                 <button
                   key={id}
@@ -260,9 +260,8 @@ export function CapabilitiesPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("capabilities.search")}
                   className={cn(
-                    "h-10 w-full rounded-[var(--radius-shell)] border border-zinc-200 bg-white/90 pl-9 pr-9 text-sm outline-none transition",
-                    "placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-400/25",
-                    "dark:border-zinc-700 dark:bg-zinc-900/80 dark:focus:border-sky-500 dark:focus:ring-sky-500/20",
+                    "hd-input h-10 w-full rounded-[var(--radius-shell)] pl-9 pr-9 text-sm outline-none transition",
+                    "placeholder:text-[var(--kq-color-muted)] dark:placeholder:text-zinc-500",
                   )}
                 />
                 {search && (
@@ -281,7 +280,7 @@ export function CapabilitiesPage() {
                   type="checkbox"
                   checked={recommendedOnly}
                   onChange={(e) => setRecommendedOnly(e.target.checked)}
-                  className="size-3.5 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 dark:border-zinc-600 dark:bg-zinc-800"
+                  className="size-3.5 rounded border-[var(--kq-color-border)] text-[var(--kq-color-primary)] focus:ring-[var(--kq-color-primary)] dark:border-zinc-600 dark:bg-zinc-800"
                 />
                 {t("capabilities.recommendedOnly")}
               </label>
@@ -339,8 +338,8 @@ function CapabilityRow({
         "w-full rounded-[var(--radius-shell-lg)] border p-4 text-left shadow-[var(--shadow-shell)] transition",
         "active:scale-[0.99]",
         active
-          ? "border-sky-300 bg-[var(--hd-info-bg)] dark:border-sky-700/60 dark:bg-[var(--hd-info-bg)]"
-          : "hd-glass-subtle border-zinc-200/90 hover:border-zinc-300 dark:border-zinc-700/90 dark:hover:border-zinc-600",
+          ? "border-[var(--kq-color-primary-light)] bg-[var(--hd-info-bg)] dark:border-[#D4C5E2]/30 dark:bg-[var(--hd-info-bg)]"
+          : "hd-glass-subtle border-[var(--kq-color-border)] hover:border-[var(--kq-color-primary-light)] dark:border-zinc-700/90 dark:hover:border-[#D4C5E2]/40",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -392,7 +391,7 @@ function DetailPanel({
     <aside className="hd-glass w-96 shrink-0 overflow-hidden rounded-[var(--radius-shell-lg)]">
       <div className="flex items-center justify-between border-b border-zinc-200/90 px-4 py-3 dark:border-zinc-700/80">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+          <div className="kq-icon-well flex size-8 shrink-0 items-center justify-center rounded-lg">
             <Boxes className="h-4 w-4" />
           </div>
           <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">{item.label || item.name}</span>
@@ -499,7 +498,7 @@ function RolePill({ role, roleLabel }: { role?: Role; roleLabel: string }) {
   const roleText = role ? t(`capabilities.roleNames.${role}`) : t("capabilities.roleLoading");
   return (
     <div className="hd-glass-subtle flex items-center gap-2 rounded-[var(--radius-shell-lg)] px-3 py-2 text-sm">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+      <div className="kq-icon-well flex size-8 shrink-0 items-center justify-center rounded-lg">
         <Shield className="h-4 w-4" />
       </div>
       <span className="text-zinc-500 dark:text-zinc-400">{roleLabel}</span>
@@ -583,7 +582,7 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "red" | "blue" | 
         tone === "green" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
         tone === "amber" && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
         tone === "red" && "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-        tone === "blue" && "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+        tone === "blue" && "bg-[var(--kq-color-primary-pale)] text-[var(--kq-color-strong)] dark:bg-[#D4C5E2]/15 dark:text-[#D4C5E2]",
         tone === "zinc" && "bg-zinc-100 text-zinc-600 dark:bg-zinc-800/90 dark:text-zinc-300",
       )}
     >

@@ -56,7 +56,7 @@ export function ChatSidebar({
   return (
     <aside
       className={cn(
-        "flex shrink-0 flex-col border-r border-zinc-200/90 bg-zinc-100/30 transition-[width] duration-200 ease-out dark:border-zinc-700 dark:bg-zinc-900/30",
+        "kq-sidebar flex shrink-0 flex-col border-r transition-[width] duration-200 ease-out dark:border-zinc-700 dark:bg-zinc-900/30",
         collapsed ? "w-14" : "w-56",
       )}
     >
@@ -68,7 +68,7 @@ export function ChatSidebar({
           <button
             type="button"
             onClick={() => onNewChat()}
-            className="inline-flex min-w-0 flex-1 items-center justify-start gap-2 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:text-white dark:hover:bg-sky-600"
+            className="kq-new-chat inline-flex min-w-0 flex-1 items-center justify-start gap-2 px-3 py-2.5 text-[15px] font-bold leading-snug transition hover:brightness-[1.03] active:scale-[0.99] dark:text-white"
           >
             <span className="truncate">{t("chat.newChat")}</span>
             <Plus className="h-4 w-4 shrink-0 stroke-[2.75]" aria-hidden />
@@ -77,7 +77,7 @@ export function ChatSidebar({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="kq-soft-icon-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
           title={collapsed ? t("chat.leftRailExpand") : t("chat.leftRailCollapse")}
         >
@@ -86,13 +86,13 @@ export function ChatSidebar({
       </div>
       <div className={cn("min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-2", collapsed ? "px-2" : "px-3")}>
         {loading && (
-          <p className={cn("px-1.5 py-2 text-xs text-zinc-400 dark:text-zinc-500", collapsed && "text-center")}>
+          <p className={cn("kq-sidebar-meta px-1.5 py-2 dark:text-zinc-500", collapsed && "text-center")}>
             {collapsed ? "..." : t("chat.loadingSessions")}
           </p>
         )}
         {!loading && sessions.length === 0 && (
           !collapsed ? (
-            <p className="px-1.5 py-2 text-center text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+            <p className="kq-sidebar-meta px-1.5 py-2 text-center">
               {t("chat.noSessions")}
             </p>
           ) : null
@@ -100,7 +100,7 @@ export function ChatSidebar({
         {grouped.map((group) => (
           <div key={group.group} className="pt-1">
             {!collapsed && (
-              <p className="px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+              <p className="kq-sidebar-group-label px-1.5 pb-1 pt-2 dark:text-zinc-500">
                 {group.group}
               </p>
             )}
@@ -112,12 +112,12 @@ export function ChatSidebar({
                   key={s.id}
                   className={cn(
                     "group relative flex items-stretch overflow-hidden rounded-lg",
-                    active && "bg-zinc-200/60 dark:bg-zinc-800/60",
+                    active && "bg-[#f0e6f2]/80 dark:bg-zinc-800/60",
                   )}
                 >
                   {/* Active indicator bar */}
                   {active && (
-                    <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-sky-500 dark:bg-sky-400" />
+                    <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[var(--kq-color-primary)] dark:bg-sky-400" />
                   )}
                   <button
                     type="button"
@@ -132,8 +132,8 @@ export function ChatSidebar({
                   >
                     <Icon
                       className={cn(
-                        "h-3.5 w-3.5 shrink-0",
-                        active ? "text-sky-600 dark:text-sky-400" : "text-zinc-400 dark:text-zinc-500",
+                        "h-4 w-4 shrink-0",
+                        active ? "text-[var(--kq-color-ink)] dark:text-sky-400" : "text-[var(--kq-color-muted)] dark:text-zinc-500",
                       )}
                       strokeWidth={2.2}
                       aria-hidden
@@ -141,10 +141,10 @@ export function ChatSidebar({
                     {!collapsed && (
                       <div
                         className={cn(
-                          "truncate text-[13px] leading-snug",
+                          "kq-sidebar-session-label truncate",
                           active
-                            ? "font-medium text-zinc-900 dark:text-zinc-100"
-                            : "text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100",
+                            ? "font-semibold text-[var(--kq-color-ink)] dark:text-zinc-100"
+                            : "text-[var(--kq-color-ink)]/78 group-hover:text-[var(--kq-color-ink)] dark:text-zinc-300 dark:group-hover:text-zinc-100",
                         )}
                       >
                         {label}
@@ -168,7 +168,7 @@ export function ChatSidebar({
         ))}
       </div>
       <div className={cn(
-        "shrink-0 space-y-1.5 border-t border-zinc-200/80 bg-zinc-100/50 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/50",
+        "shrink-0 space-y-1.5 border-t border-[#e8e0ed]/80 bg-white/35 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/50",
         collapsed ? "px-2" : "px-3",
       )}>
         <button
@@ -176,13 +176,11 @@ export function ChatSidebar({
           data-action-priority="primary"
           onClick={() => nav("/settings/cron", { state: { cronBackTo: "/chat" } })}
           className={cn(
-            "group inline-flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold tracking-tight",
-            "border-zinc-200/90 bg-white/95 text-zinc-800 shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+            "kq-reminder-card group inline-flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left text-[15px] font-semibold leading-snug",
             "transition-[border-color,background-color,color,box-shadow,transform] duration-150 ease-out",
-            "hover:border-sky-300 hover:bg-sky-50 hover:text-sky-950 hover:shadow-[0_4px_14px_-4px_rgba(14,165,233,0.35)]",
             "active:scale-[0.99]",
             "dark:border-zinc-600 dark:bg-zinc-800/85 dark:text-zinc-100",
-            "dark:hover:border-sky-500/60 dark:hover:bg-sky-950/45 dark:hover:text-sky-50 dark:hover:shadow-[0_4px_18px_-6px_rgba(56,189,248,0.22)]",
+            "dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50",
             collapsed && "justify-center px-0",
           )}
           title={t("cron.title")}
@@ -190,8 +188,8 @@ export function ChatSidebar({
         >
           <AlarmClock
             className={cn(
-              "h-[1.05rem] w-[1.05rem] shrink-0 text-zinc-500 transition-colors duration-150 ease-out",
-              "group-hover:text-sky-600 dark:text-zinc-400 dark:group-hover:text-sky-400",
+              "kq-reminder-icon h-[1.05rem] w-[1.05rem] shrink-0 transition-colors duration-150 ease-out",
+              "group-hover:text-[var(--kq-color-strong)] dark:text-zinc-400 dark:group-hover:text-zinc-100",
             )}
             strokeWidth={2.25}
             aria-hidden

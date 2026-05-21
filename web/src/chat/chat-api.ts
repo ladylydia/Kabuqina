@@ -32,6 +32,7 @@ export type UiMsg = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  attachments?: DeskAttachmentPayload[];
   /** Unix seconds (Hermes `messages.timestamp`), or ms if > 1e12 */
   timestamp?: number;
   model?: string;
@@ -60,7 +61,10 @@ export async function cmdDeleteSession(id: string): Promise<void> {
 }
 
 /** Base64 file payload for Hermes ``/api/desk/chat-proto`` (no data: URL prefix). */
-export type DeskAttachmentPayload = { name: string; mime: string; data: string };
+export type { DeskAttachmentPayload, ParsedDeskUserContent } from "./deskUserContent";
+export { DESK_UI_PERSIST_PREFIX, parseDeskUserContent } from "./deskUserContent";
+
+import type { DeskAttachmentPayload } from "./deskUserContent";
 
 export function fileToDeskAttachment(file: File): Promise<DeskAttachmentPayload> {
   return new Promise((resolve, reject) => {

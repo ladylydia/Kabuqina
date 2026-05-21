@@ -16,18 +16,18 @@ export function Section({ icon: Icon, title, desc, children, className, action }
     >
       <div className="flex items-start gap-3.5">
         {Icon && (
-          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-sky-100/60 text-sky-600 shadow-sm dark:from-sky-950/40 dark:to-sky-900/30 dark:text-sky-400">
+          <div className="kq-icon-well mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl">
             <Icon className="size-[1.125rem]" strokeWidth={2} />
           </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="text-[0.9375rem] font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
+              <h2 className="text-[0.9375rem] font-semibold leading-5 text-[var(--kq-color-strong)] dark:text-zinc-100">
                 {title}
               </h2>
               {desc && (
-                <p className="mt-1 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                <p className="mt-1 text-sm leading-relaxed text-[var(--kq-color-muted)] dark:text-zinc-400">
                   {desc}
                 </p>
               )}

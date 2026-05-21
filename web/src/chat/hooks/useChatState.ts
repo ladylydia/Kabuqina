@@ -2,6 +2,7 @@ import { startTransition, useCallback, useRef, useState } from "react";
 import {
   cmdGetSessionMessages,
   cmdGetSessions,
+  parseDeskUserContent,
   type MessageRow,
   type SessionRow,
   type UiMsg,
@@ -53,9 +54,20 @@ function rowsToUiMessages(rows: MessageRow[], sessionModel: string): UiMsg[] {
     if (role !== "user" && role !== "assistant" && role !== "system") {
       continue;
     }
-    const text = contentToString(m.content).trim();
-    if (!text) {
-      continue;
+    let text: string;
+    let attachments: UiMsg["attachments"];
+    if (role === "user") {
+      const parsed = parseDeskUserContent(m.content);
+      text = parsed.text;
+      attachments = parsed.attachments;
+      if (!text && !attachments?.length) {
+        continue;
+      }
+    } else {
+      text = contentToString(m.content).trim();
+      if (!text) {
+        continue;
+      }
     }
     if (role === "system") {
       out.push({
@@ -71,6 +83,7 @@ function rowsToUiMessages(rows: MessageRow[], sessionModel: string): UiMsg[] {
       id: `m-${n++}`,
       role: role as "user" | "assistant",
       text: text || "",
+      attachments,
       timestamp: typeof m.timestamp === "number" ? m.timestamp : undefined,
       model: role === "assistant" && mdl ? mdl : undefined,
     });

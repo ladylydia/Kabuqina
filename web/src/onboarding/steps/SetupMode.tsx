@@ -4,7 +4,7 @@ import { updateDraft, useDraft } from "../../lib/store";
 import { ArrowRight } from "lucide-react";
 import { cn } from "../../lib/cn";
 
-/** Quick vs full setup path — cards are the buttons. */
+/** Quick vs full setup path 鈥?cards are the buttons. */
 export function SetupMode() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -71,7 +71,7 @@ function ModeCard({
         "hd-glass-subtle w-full rounded-[var(--radius-shell-lg)] p-5 text-left transition",
         recommended
           ? "border-amber-200/80 bg-amber-50/60 hover:border-amber-300/90 hover:bg-amber-50/80 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700/60 dark:hover:bg-amber-950/30"
-          : "hover:border-sky-300/70 hover:bg-sky-50/30 dark:hover:border-sky-700/50 dark:hover:bg-sky-950/20",
+          : "hover:border-[var(--kq-color-primary-light)]/70 hover:bg-[var(--kq-color-primary-pale)]/30 dark:hover:border-[#D4C5E2]/40 dark:hover:bg-[#D4C5E2]/10",
         "active:scale-[0.99]"
       )}
     >
@@ -92,7 +92,7 @@ function ModeCard({
             "mt-0.5 h-5 w-5 shrink-0 transition",
             recommended
               ? "text-amber-400 dark:text-amber-600"
-              : "text-zinc-400 group-hover:text-sky-500 dark:text-zinc-500"
+              : "text-zinc-400 group-hover:text-[var(--kq-color-primary)] dark:text-zinc-500"
           )}
           strokeWidth={2}
         />

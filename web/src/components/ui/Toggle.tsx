@@ -4,10 +4,21 @@ type Props = {
   value: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  tone?: "default" | "kabuqina";
   "aria-label"?: string;
 };
 
-export function Toggle({ value, onChange, disabled, "aria-label": ariaLabel }: Props) {
+export function Toggle({ value, onChange, disabled, tone = "kabuqina", "aria-label": ariaLabel }: Props) {
+  const activeClass =
+    tone === "kabuqina"
+      ? "bg-[var(--kq-color-primary)] dark:bg-[#D4C5E2]"
+      : "bg-[var(--kq-color-primary)] dark:bg-[#D4C5E2]";
+  const idleClass =
+    tone === "kabuqina"
+      ? "bg-[#d9cde3] dark:bg-zinc-700"
+      : "bg-[#d9cde3] dark:bg-zinc-700";
+  const focusClass = "focus-visible:ring-[var(--kq-color-primary)] dark:focus-visible:ring-[#D4C5E2]";
+
   return (
     <button
       type="button"
@@ -18,9 +29,10 @@ export function Toggle({ value, onChange, disabled, "aria-label": ariaLabel }: P
       onClick={() => onChange(!value)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-sky-500",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        focusClass,
         "disabled:cursor-not-allowed disabled:opacity-50",
-        value ? "bg-sky-600 dark:bg-sky-500" : "bg-zinc-300 dark:bg-zinc-700",
+        value ? activeClass : idleClass,
       )}
     >
       <span

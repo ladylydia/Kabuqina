@@ -33,7 +33,7 @@ export function SettingsDisplay({
   return (
     <>
       <Section icon={Type} title={t("settings.fontTitle")} desc={t("settings.fontDesc")}>
-        <div className="inline-flex w-full max-w-md rounded-lg border border-zinc-200 bg-zinc-100/50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50 sm:w-auto">
+        <div className="inline-flex w-full max-w-md rounded-lg border border-[var(--kq-color-border)] bg-[var(--kq-color-primary-pale)]/45 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50 sm:w-auto">
           {(
             [
               { id: "small" as const, label: t("settings.fontSmall") },

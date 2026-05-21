@@ -268,7 +268,7 @@ export function FeishuQrRouteBlock({ className, onSuccess, onHermesRunningChange
             href={view.progress.qr_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block max-w-full break-all text-sm font-medium text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+            className="inline-block max-w-full break-all text-sm font-medium text-[var(--kq-color-strong)] underline-offset-2 hover:underline dark:text-[#D4C5E2]"
           >
             {t("settings.feishuOpenLink")}
           </a>

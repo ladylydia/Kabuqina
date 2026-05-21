@@ -18,8 +18,7 @@ type Props = {
   spellCheck?: boolean;
 };
 
-const inputBase =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 text-sm font-mono dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
+export const inputBase = "hd-input font-mono dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100";
 
 export function FormField({
   id,
@@ -39,12 +38,12 @@ export function FormField({
     <div className={cn("space-y-1.5", className)}>
       <label
         htmlFor={fieldId}
-        className="block text-sm font-medium text-zinc-800 dark:text-zinc-200"
+        className="block text-sm font-medium text-[var(--kq-color-strong)] dark:text-zinc-200"
       >
         {label}
       </label>
       {description ? (
-        <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs leading-relaxed text-[var(--kq-color-muted)] dark:text-zinc-400">
           {description}
         </p>
       ) : null}

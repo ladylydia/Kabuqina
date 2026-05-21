@@ -30,7 +30,7 @@ type WorkspacePanelProps = {
 
 function WorkspaceSectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h3 className="workspace-section-heading inline-flex rounded-md bg-sky-600 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm shadow-sky-900/10 dark:bg-[#3B5BC7] dark:text-white">
+    <h3 className="workspace-section-heading kq-section-heading inline-flex px-3 py-1.5 text-sm font-semibold leading-snug tracking-normal dark:bg-zinc-800 dark:text-zinc-100">
       {children}
     </h3>
   );
@@ -50,11 +50,11 @@ function WorkspaceSection({
   return (
     <section
       data-workspace-section={sectionId}
-      className="border-b border-zinc-200/80 pb-4 last:border-b-0 dark:border-zinc-800"
+      className="kq-workspace-card dark:border-zinc-800 dark:bg-zinc-900/60"
     >
       <WorkspaceSectionHeading>{title}</WorkspaceSectionHeading>
       {children ?? (
-        <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+        <p className="kq-workspace-body mt-3 dark:text-zinc-300">
           {body}
         </p>
       )}
@@ -73,15 +73,15 @@ function WorkspaceItemList({
   return (
     <ul className="mt-3 space-y-2">
       {items.map((item) => (
-        <li key={item.id} className="min-w-0 text-sm">
+        <li key={item.id} className="min-w-0">
           <div className="flex min-w-0 items-start gap-2">
             <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" aria-hidden />
             <div className="min-w-0">
-              <div className="truncate font-medium text-zinc-800 dark:text-zinc-100" title={item.label}>
+              <div className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100" title={item.label}>
                 {item.label}
               </div>
               {item.detail ? (
-                <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400" title={item.detail}>
+                <div className="mt-0.5 truncate text-[13px] leading-snug text-zinc-600 dark:text-zinc-400" title={item.detail}>
                   {item.detail}
                 </div>
               ) : null}
@@ -109,18 +109,18 @@ export function WorkspacePanel({
   return (
     <aside
       className={cn(
-        "flex w-64 shrink-0 flex-col border-l border-zinc-200/90 bg-white/70 dark:border-zinc-700 dark:bg-zinc-950/40",
+        "kq-workspace-panel flex w-64 shrink-0 flex-col border-l dark:border-zinc-700 dark:bg-zinc-950/40",
         className,
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b border-zinc-200/80 px-4 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+      <div className="flex h-14 items-center justify-between border-b border-[#e8e0ed]/80 px-4 dark:border-zinc-800">
+        <h2 className="text-base font-semibold tracking-normal text-[var(--kq-color-strong)] dark:text-zinc-100">
           {t("chat.workspaceTitle")}
         </h2>
         <button
           type="button"
           onClick={onCollapse}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="kq-soft-icon-btn inline-flex h-8 w-8 items-center justify-center rounded-md transition dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t("chat.workspaceCollapse")}
           title={t("chat.workspaceCollapse")}
         >
@@ -137,10 +137,10 @@ export function WorkspacePanel({
           {goal || activeTool || activity.length ? (
             <div className="mt-3 space-y-3">
               {goal ? (
-                <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{goal}</p>
+                <p className="kq-workspace-body dark:text-zinc-200">{goal}</p>
               ) : null}
               {activeTool ? (
-                <div className="flex min-w-0 items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+                <div className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-zinc-700 dark:text-zinc-300">
                   <Wrench className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
                   <span className="truncate">{activeTool.replace(/_/g, " ")}</span>
                 </div>
@@ -148,7 +148,7 @@ export function WorkspacePanel({
               {activity.length ? (
                 <ul className="space-y-1.5">
                   {activity.map((item) => (
-                    <li key={item.id} className="min-w-0 text-xs text-zinc-500 dark:text-zinc-400">
+                    <li key={item.id} className="min-w-0 text-[13px] leading-snug text-zinc-600 dark:text-zinc-400">
                       <span
                         className={cn(
                           "mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle",
@@ -186,17 +186,17 @@ export function WorkspacePanel({
             <button
               type="button"
               onClick={onOrganizeDesktop}
-              className="hd-btn-ghost justify-start text-left"
+              className="kq-quick-action justify-start rounded-xl px-3 py-2.5 text-left text-[15px] leading-snug transition"
             >
-              <FolderKanban className="mr-2 inline h-4 w-4" aria-hidden />
+              <FolderKanban className="kq-color-icon-folder mr-2 inline h-4 w-4" aria-hidden />
               {t("chat.workspaceOrganizeDesktop")}
             </button>
             <button
               type="button"
               onClick={() => nav("/export")}
-              className="hd-btn-ghost justify-start text-left"
+              className="kq-quick-action justify-start rounded-xl px-3 py-2.5 text-left text-[15px] leading-snug transition"
             >
-              <Download className="mr-2 inline h-4 w-4" aria-hidden />
+              <Download className="kq-color-icon-download mr-2 inline h-4 w-4" aria-hidden />
               {t("chat.exportButton")}
             </button>
           </div>

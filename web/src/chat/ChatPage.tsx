@@ -87,6 +87,13 @@ function buildWorkspaceState(
 
   for (const message of messages) {
     if (message.role === "user") {
+      for (const att of message.attachments ?? []) {
+        pushUnique(materials, materialSeen, {
+          id: `sent-attachment-${att.name}`,
+          label: att.name,
+          detail: att.mime || "attached",
+        });
+      }
       for (const name of extractAttachmentNames(message.text)) {
         pushUnique(materials, materialSeen, {
           id: `sent-attachment-${name}`,
@@ -455,20 +462,20 @@ export function ChatPage() {
           />
         )}
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 bg-zinc-50/90 px-3 dark:border-zinc-800 dark:bg-[#0F172A]">
+          <div className="kq-chat-topbar flex h-11 shrink-0 items-center justify-between border-b px-3 dark:border-zinc-800 dark:bg-[#0F172A]">
             <div className="flex min-w-0 items-center gap-2">
               {!workbench.showLeftRail && (
                 <button
                   type="button"
                   onClick={openLeftRail}
-                  className="hd-btn-ghost inline-flex h-8 w-8 shrink-0 items-center justify-center px-0"
+                  className="kq-soft-icon-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg px-0 transition"
                   aria-label={t("chat.leftRailExpand")}
                   title={t("chat.leftRailExpand")}
                 >
                   <PanelLeftOpen className="h-4 w-4" />
                 </button>
               )}
-              <p className="truncate text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">
+              <p className="truncate text-xs font-medium uppercase text-[var(--kq-color-muted)] dark:text-zinc-500">
                 {t("chat.activeWork")}
               </p>
             </div>
@@ -477,7 +484,7 @@ export function ChatPage() {
                 <button
                   type="button"
                   onClick={openWorkspace}
-                  className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                  className="kq-soft-icon-btn inline-flex h-8 w-8 items-center justify-center rounded-lg px-0 transition"
                   aria-label={t("chat.workspaceExpand")}
                   title={t("chat.workspaceExpand")}
                 >
@@ -487,7 +494,7 @@ export function ChatPage() {
               <button
                 type="button"
                 onClick={workbench.toggleFocusMode}
-                className="hd-btn-ghost inline-flex h-8 w-8 items-center justify-center px-0"
+                className="kq-soft-icon-btn inline-flex h-8 w-8 items-center justify-center rounded-lg px-0 transition"
                 aria-label={workbench.focusMode ? t("chat.focusExit") : t("chat.focusEnter")}
                 title={workbench.focusMode ? t("chat.focusExit") : t("chat.focusEnter")}
               >
@@ -501,7 +508,6 @@ export function ChatPage() {
             sendErr={sendErr}
             progress={progress}
             onPickSuggestion={setInput}
-            onOrganizeDesktop={handleOrganizeDesktop}
           />
           <ChatInput
             value={input}

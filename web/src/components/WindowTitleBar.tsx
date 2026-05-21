@@ -67,16 +67,21 @@ export function WindowTitleBar() {
   const isWizard = location.pathname.startsWith("/onboarding");
   const settingsLabel = t("chat.openSettings");
   const capabilitiesLabel = t("capabilities.title");
+  const navLinkClass = (active: boolean) =>
+    cn(
+      "kq-titlebar-link no-underline rounded-lg px-3 py-1 text-sm font-medium transition",
+      active && "kq-titlebar-link-active",
+    );
 
   return (
     <div
       className={cn(
-        "flex h-9 shrink-0 select-none items-stretch border-b border-zinc-200/90 bg-zinc-50/95",
+        "kq-titlebar grid h-9 shrink-0 select-none grid-cols-[1fr_auto_1fr] items-stretch border-b",
         "dark:border-zinc-700 dark:bg-zinc-900/95"
       )}
     >
       <div
-        className="hermes-titlebar-drag flex min-w-0 flex-1 items-center pl-3 sm:pl-4"
+        className="hermes-titlebar-drag col-start-1 flex min-w-0 items-center pl-3 sm:pl-4"
         data-tauri-drag-region
         aria-label={t("brand")}
       >
@@ -88,72 +93,85 @@ export function WindowTitleBar() {
           height={20}
           decoding="async"
         />
-        <span className="ml-2 truncate text-sm font-semibold tracking-wide text-zinc-700 dark:text-zinc-200">
+        <span className="kq-titlebar-brand ml-2 truncate text-sm font-semibold dark:text-zinc-200">
           {t("productName")}
         </span>
       </div>
 
       <div
-        className="hermes-titlebar-nodrag flex items-center gap-0.5 pr-1 pl-1 sm:gap-1.5"
+        className="kq-titlebar-nav hermes-titlebar-nodrag col-start-2 flex items-center justify-center gap-0.5 px-1 sm:gap-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <Link
           to="/chat"
-          className={cn(
-            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
-            isChat && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-          )}
+          className={navLinkClass(isChat)}
           title={t("chat.title")}
         >
           {t("chat.title")}
         </Link>
         <Link
           to="/onboarding/welcome"
-          className={cn(
-            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
-            isWizard && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-          )}
+          className={navLinkClass(isWizard)}
           title={t("chat.wizardButton")}
         >
           {t("chat.wizardButton")}
         </Link>
         <Link
           to="/settings"
-          className={cn(
-            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
-            isSettings && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-          )}
+          className={navLinkClass(isSettings)}
           title={settingsLabel}
         >
           {settingsLabel}
         </Link>
         <Link
           to="/capabilities"
-          className={cn(
-            "hd-btn-ghost no-underline rounded-md px-2.5 py-1 text-sm",
-            isCapabilities && "bg-sky-100/90 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-          )}
+          className={navLinkClass(isCapabilities)}
           title={capabilitiesLabel}
         >
           {capabilitiesLabel}
         </Link>
-
         {inApp && (
           <>
-            <div className="mx-0.5 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+            <div className="kq-titlebar-divider mx-1 h-4 w-px shrink-0 dark:bg-zinc-700" aria-hidden />
             <button
               type="button"
               onClick={onShowCompanion}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-sky-100 hover:text-sky-700 dark:hover:bg-sky-950 dark:hover:text-sky-300"
+              className="kq-titlebar-companion-btn hermes-titlebar-nodrag"
               title={t("companion.show")}
               aria-label={t("companion.show")}
             >
-              <Sparkles className="h-3.5 w-3.5" strokeWidth={2.25} />
+              <svg width="0" height="0" className="absolute" aria-hidden>
+                <defs>
+                  <linearGradient id="kq-titlebar-sparkle-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#f97316" />
+                    <stop offset="48%" stopColor="#fbbf24" />
+                    <stop offset="100%" stopColor="#ef4444" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Sparkles
+                className="kq-titlebar-companion-icon"
+                stroke="url(#kq-titlebar-sparkle-grad)"
+                fill="url(#kq-titlebar-sparkle-grad)"
+                fillOpacity={0.42}
+                strokeWidth={2.25}
+                aria-hidden
+              />
             </button>
+          </>
+        )}
+      </div>
+
+      <div
+        className="kq-titlebar-controls hermes-titlebar-nodrag col-start-3 flex items-center justify-end gap-0.5 pr-1 sm:gap-1.5"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {inApp && (
+          <>
             <button
               type="button"
               onClick={onMinimize}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-200/90 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              className="kq-titlebar-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded transition dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
               title={t("shell.minimize")}
               aria-label={t("shell.minimize")}
             >
@@ -162,7 +180,7 @@ export function WindowTitleBar() {
             <button
               type="button"
               onClick={onToggleMax}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-200/90 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              className="kq-titlebar-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded transition dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
               title={isMaximized ? t("shell.restore") : t("shell.maximize")}
               aria-label={isMaximized ? t("shell.restore") : t("shell.maximize")}
             >
@@ -171,7 +189,7 @@ export function WindowTitleBar() {
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 transition hover:bg-red-500/90 hover:text-white dark:hover:bg-red-600/90"
+              className="kq-titlebar-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded transition hover:bg-red-500/90 hover:text-white dark:hover:bg-red-600/90"
               title={t("shell.close")}
               aria-label={t("shell.close")}
             >

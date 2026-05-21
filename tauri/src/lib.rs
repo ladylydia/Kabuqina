@@ -156,7 +156,7 @@ pub fn run() {
             cmd_open_hermes_dashboard,
             companion::cmd_show_companion,
             companion::cmd_hide_companion,
-            companion::cmd_set_companion_mode,
+            companion::cmd_resize_companion,
             companion::cmd_focus_main_window,
             desktop_organizer::cmd_desktop_organize_run,
             desktop_organizer::cmd_desktop_organize_preview,
@@ -628,6 +628,10 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // The shell UI can route first-run onboarding before embedded Hermes is ready.
+    // Reveal it before slower helper processes so fresh installs do not look tray-only.
+    reveal_main();
+
     // 2a. Start Edge CDP browser instance (Windows only) for browser tool.
     //     Edge is pre-installed on Windows; this replaces the need for Node.js
     //     Playwright or a Camofox server.
@@ -649,7 +653,6 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         let msg = format!("{e:#}");
         log::error!("loopback bridge failed: {msg}");
         *app.state::<AppState>().hermes_bootstrap_error.lock().await = Some(msg);
-        reveal_main();
         capture::register_global_shortcut(&app);
         return Ok(());
     }
@@ -701,11 +704,7 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
         }
     }
 
-    // 4. Reveal the window regardless of Hermes state.
-    //    The frontend will show a "waiting for Hermes" or error state if needed.
-    reveal_main();
-
-    // 5. Register global screenshot shortcut (Ctrl+Alt+A).
+    // 4. Register global screenshot shortcut (Ctrl+Alt+A).
     capture::register_global_shortcut(&app);
 
     Ok(())

@@ -221,7 +221,7 @@ export function SetupOptionsTable({
                         </span>
                       ) : null}
                       {hasAnyValue(row.id) ? (
-                        <span className="text-[0.7rem] text-sky-700 dark:text-sky-400">{t("setupOptions.hasPrefill")}</span>
+                        <span className="text-[0.7rem] text-[var(--kq-color-strong)] dark:text-[#D4C5E2]">{t("setupOptions.hasPrefill")}</span>
                       ) : null}
                       {envOk ? (
                         <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[0.7rem] font-medium text-emerald-800 dark:text-emerald-200">
@@ -242,7 +242,7 @@ export function SetupOptionsTable({
                         className={cn(
                           "whitespace-nowrap",
                           rowAllowsConfig(row)
-                            ? "text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+                            ? "text-[var(--kq-color-strong)] underline-offset-2 hover:underline dark:text-[#D4C5E2]"
                             : "cursor-not-allowed text-zinc-300 dark:text-zinc-600"
                         )}
                       >

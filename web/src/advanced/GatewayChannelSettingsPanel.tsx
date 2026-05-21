@@ -105,7 +105,7 @@ export function GatewayChannelSettingsPanel({ platform }: Props) {
 
       <button
         type="button"
-        className="mb-3 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+        className="mb-3 text-xs font-medium text-[var(--kq-color-strong)] underline-offset-2 hover:underline dark:text-[#D4C5E2]"
         onClick={() => setShowAdvanced((v) => !v)}
       >
         {showAdvanced ? t("settings.channelEnv.hideAdvanced") : t("settings.channelEnv.showAdvanced")}
@@ -202,7 +202,7 @@ function FieldRow({
           id={id}
           type={field.type === "secret" ? "password" : "text"}
           autoComplete="off"
-          className="w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 text-sm font-mono dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition"
+          className="hd-input font-mono dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100"
           value={value}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}

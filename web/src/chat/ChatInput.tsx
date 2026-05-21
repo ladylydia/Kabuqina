@@ -236,11 +236,11 @@ export function ChatInput({
   const canSend = !sending && (value.trim() || pendingAttachmentNames.length > 0);
 
   return (
-    <div className="shrink-0 bg-zinc-50/90 px-3 pb-5 pt-2 dark:bg-[#0F172A]">
+    <div className="kq-input-area shrink-0 pt-0 dark:bg-[#0F172A]">
+      <div className="kq-input-container">
       <div
         className={cn(
-          "mx-auto max-w-3xl rounded-lg border border-zinc-200/95 bg-white",
-          "shadow-[0_2px_12px_rgba(0,0,0,0.05)]",
+          "kq-composer mx-auto max-w-3xl",
           "dark:border-zinc-700 dark:bg-zinc-800/50"
         )}
       >
@@ -276,7 +276,7 @@ export function ChatInput({
           rows={1}
           placeholder={placeholder ?? t("chat.placeholder")}
           disabled={sending}
-          className="max-h-[200px] min-h-[3.25rem] w-full resize-none bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:ring-2 focus:ring-sky-500/20 focus:ring-inset disabled:opacity-50 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          className="max-h-[200px] min-h-[3.25rem] w-full resize-none bg-transparent px-4 py-3.5 text-[15px] leading-relaxed text-[var(--kq-color-ink)] placeholder:text-[var(--kq-color-muted)] outline-none transition focus:ring-2 focus:ring-[#b8a9c9]/25 focus:ring-inset disabled:opacity-50 dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
 
         <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-2.5 pb-2.5 pt-1 dark:border-zinc-800">
@@ -290,7 +290,7 @@ export function ChatInput({
                   setScreenshotMenuOpen(false);
                   setPathMenuOpen((o) => !o);
                 }}
-                className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
+                className="kq-soft-icon-btn group relative flex h-9 w-9 items-center justify-center rounded-lg transition active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={t("chat.insertPath")}
                 aria-expanded={pathMenuOpen}
                 aria-haspopup="menu"
@@ -346,7 +346,7 @@ export function ChatInput({
               type="button"
               disabled={sending}
               onClick={() => fileRef.current?.click()}
-              className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
+              className="kq-soft-icon-btn group relative flex h-9 w-9 items-center justify-center rounded-lg transition active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={t("chat.attach")}
             >
               <Paperclip className="h-5 w-5" />
@@ -364,7 +364,7 @@ export function ChatInput({
                   setPathMenuOpen(false);
                   setScreenshotMenuOpen((o) => !o);
                 }}
-                className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
+                className="kq-soft-icon-btn group relative flex h-9 w-9 items-center justify-center rounded-lg transition active:scale-[0.98] dark:text-zinc-400 dark:hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={t("chat.screenshot")}
                 aria-expanded={screenshotMenuOpen}
                 aria-haspopup="menu"
@@ -437,7 +437,7 @@ export function ChatInput({
               type="button"
               onClick={() => void onSend()}
               disabled={!canSend}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-sm transition hover:opacity-90 hover:shadow-[0_0_12px_rgba(14,165,233,0.35)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none dark:bg-[#3B5BC7] dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
+              className="kq-send-button flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-[1.04] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none dark:bg-[#3B5BC7] dark:text-white dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
               title={sending ? t("chat.sending") : t("chat.send")}
               aria-label={sending ? t("chat.sending") : t("chat.send")}
             >
@@ -482,24 +482,25 @@ export function ChatInput({
           {screenshotErr}
         </p>
       )}
-      <div className="mx-auto mt-2.5 flex max-w-3xl items-center justify-between gap-3">
-        <p className="text-xs leading-[1.5] text-zinc-400 dark:text-zinc-500">{t("chat.hint")}</p>
+      <div className="kq-input-footer mx-auto mt-2.5 flex max-w-3xl flex-wrap items-center justify-center gap-3 text-center">
+        <p className="text-xs leading-[1.5] text-[var(--kq-color-muted)] dark:text-zinc-500">{t("chat.hint")}</p>
         {onTogglePowerUser && (
           <div
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-200/50 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
+            className="kq-power-toggle inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300"
             title={t("settings.powerTitle")}
           >
             <Zap
               className={cn(
                 "h-3.5 w-3.5 transition",
-                powerUser ? "text-amber-500 dark:text-amber-400" : "text-zinc-400 dark:text-zinc-500"
+                powerUser ? "kq-power-icon dark:text-amber-300" : "text-[var(--kq-color-muted)] dark:text-zinc-500"
               )}
               strokeWidth={2.5}
             />
             <span>{t("settings.powerTitle")}</span>
-            <Toggle value={powerUser} onChange={(v) => onTogglePowerUser(v)} />
+            <Toggle tone="kabuqina" value={powerUser} onChange={(v) => onTogglePowerUser(v)} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

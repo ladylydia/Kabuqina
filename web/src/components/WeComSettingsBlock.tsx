@@ -24,8 +24,7 @@ export type WeComQrStatusPayload = {
   result: { ok?: boolean; bot_id?: string; error?: string } | null;
 };
 
-const inputClass =
-  "w-full rounded-lg border border-zinc-300/90 bg-white/90 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400/60 transition";
+const inputClass = "hd-input font-mono dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100";
 
 const ipcErr = (e: unknown): string =>
   e instanceof Error ? e.message : String(e);
@@ -275,14 +274,14 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
 
       {/* QR progress */}
       {qrPolling && qrView?.progress?.phase ? (
-        <div className="rounded-lg border border-sky-200/80 bg-sky-50/50 px-3 py-2.5 text-sm dark:border-sky-800/50 dark:bg-sky-950/25">
+        <div className="kq-info-panel rounded-lg px-3 py-2.5 text-sm dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">{qrPhaseLabel(qrView.progress.phase)}</p>
           {qrView.progress.message ? (
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{qrView.progress.message}</p>
           ) : null}
           {qrView.progress.url ? (
             <a href={qrView.progress.url} target="_blank" rel="noopener noreferrer"
-              className="mt-1 inline-block break-all text-xs font-medium text-sky-600 underline-offset-2 hover:underline dark:text-sky-400">
+              className="hd-link mt-1 inline-block break-all text-xs font-medium underline-offset-2">
               {qrView.progress.url}
             </a>
           ) : null}

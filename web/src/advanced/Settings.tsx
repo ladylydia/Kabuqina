@@ -129,32 +129,32 @@ export function Settings() {
           </BackButton>
           <h1 className="hd-page-title">{t("settings.title")}</h1>
           {t("settings.pageLead") && (
-            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-[var(--kq-color-muted)] dark:text-zinc-400">
               {t("settings.pageLead")}
             </p>
           )}
         </div>
 
         <Section icon={Activity} title={t("settings.status")}>
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--kq-color-ink)] dark:text-zinc-300">
             <div className="flex items-center gap-2">
               <span className={`inline-block h-2 w-2 rounded-full ${status?.pythonRunning ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
               <span>{t("settings.pyRunning")}</span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              <span className="font-medium text-[var(--kq-color-strong)] dark:text-zinc-100">
                 {status?.pythonRunning ? t("settings.yes") : t("settings.no")}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-block h-2 w-2 rounded-full ${status?.hasSecret ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
               <span>{t("settings.hasPass")}</span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              <span className="font-medium text-[var(--kq-color-strong)] dark:text-zinc-100">
                 {status?.hasSecret ? t("settings.yes") : t("settings.no")}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-block h-2 w-2 rounded-full ${gatewayStatus.running ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
               <span>{t("settings.gatewayShort")}</span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              <span className="font-medium text-[var(--kq-color-strong)] dark:text-zinc-100">
                 {gatewayStatus.running ? t("settings.yes") : t("settings.no")}
               </span>
             </div>
@@ -196,7 +196,7 @@ export function Settings() {
         <button
           type="button"
           onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
-          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--kq-color-border)] bg-white/90 text-[var(--kq-color-muted)] shadow-[var(--kq-shadow-card)] backdrop-blur transition hover:bg-white hover:text-[var(--kq-color-strong)] dark:bg-zinc-800/90 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t("settings.scrollTop")}
           title={t("settings.scrollTop")}
         >
@@ -210,7 +210,7 @@ export function Settings() {
               behavior: "smooth",
             })
           }
-          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-600 shadow-lg ring-1 ring-zinc-200 backdrop-blur transition hover:bg-white hover:text-zinc-900 dark:bg-zinc-800/90 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--kq-color-border)] bg-white/90 text-[var(--kq-color-muted)] shadow-[var(--kq-shadow-card)] backdrop-blur transition hover:bg-white hover:text-[var(--kq-color-strong)] dark:bg-zinc-800/90 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t("settings.scrollBottom")}
           title={t("settings.scrollBottom")}
         >

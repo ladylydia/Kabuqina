@@ -56,13 +56,13 @@ export function Splash() {
           height={64}
           decoding="async"
         />
-        <div className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("brand")}</div>
+        <div className="text-2xl font-semibold tracking-tight text-[var(--kq-color-strong)] sm:text-3xl">{t("brand")}</div>
         <p className="hd-hint mt-3 justify-center">
           <span aria-hidden>✨</span>
           {t("splash.waking")}
         </p>
-        <div className="mx-auto mt-8 h-1 w-48 max-w-full overflow-hidden rounded-full bg-zinc-200/90 dark:bg-zinc-800">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-zinc-400/90 dark:bg-zinc-500" />
+        <div className="mx-auto mt-8 h-1 w-48 max-w-full overflow-hidden rounded-full bg-[var(--kq-color-primary-pale)] dark:bg-zinc-800">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-[var(--kq-color-primary)]/70 dark:bg-[#D4C5E2]" />
         </div>
       </div>
     </AppScaffold>

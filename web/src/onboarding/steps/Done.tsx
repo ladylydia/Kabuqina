@@ -48,16 +48,16 @@ export function Done() {
     <div className="space-y-8">
       <div className="space-y-3">
         <div className="text-4xl">{"\u{1F44B}"}</div>
-        <h1 className="text-3xl font-semibold tracking-tight">{t("done.title")}</h1>
-        <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">{t("done.lead")}</p>
+        <h1 className="hd-page-title text-3xl">{t("done.title")}</h1>
+        <p className="hd-lead">{t("done.lead")}</p>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-2">
-        <div className="text-sm font-medium">{t("done.workspaceTitle")}</div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t("done.workspaceBody")}</p>
+      <div className="hd-glass-subtle space-y-2 rounded-2xl p-5">
+        <div className="text-sm font-medium text-[var(--kq-color-strong)]">{t("done.workspaceTitle")}</div>
+        <p className="text-sm text-[var(--kq-color-muted)] dark:text-zinc-400">{t("done.workspaceBody")}</p>
         <button
           onClick={openWorkspace}
-          className="text-sm underline underline-offset-4 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="hd-link text-sm underline underline-offset-4"
         >
           {t("done.openFolder")}
         </button>
@@ -65,7 +65,7 @@ export function Done() {
 
       <button
         onClick={() => void openChat()}
-        className="w-full rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-4 text-lg font-medium hover:opacity-90 transition"
+        className="kq-btn-primary w-full rounded-2xl px-6 py-4 text-lg font-medium transition hover:opacity-95"
       >
         {t("done.cta")}
       </button>

@@ -17,8 +17,8 @@ const weixinSource = fs.readFileSync(
 
 assert.match(
   platformButtonSource,
-  /primary:[\s\S]*bg-sky-600[\s\S]*text-white/,
-  "Messaging platform primary buttons should be blue-white.",
+  /primary:[\s\S]*kq-btn-primary/,
+  "Messaging platform primary buttons should use the Kabuqina lavender primary style.",
 );
 
 assert.doesNotMatch(
@@ -29,8 +29,8 @@ assert.doesNotMatch(
 
 assert.match(
   platformButtonSource,
-  /secondary:[\s\S]*border-sky-200[\s\S]*bg-white[\s\S]*text-sky-700/,
-  "Messaging platform default buttons should use a blue-white secondary style.",
+  /secondary:[\s\S]*kq-btn-secondary/,
+  "Messaging platform default buttons should use the Kabuqina frosted secondary style.",
 );
 
 assert.match(
@@ -41,8 +41,8 @@ assert.match(
 
 assert.match(
   settingsGatewaySource,
-  /gateway-platform-nav[\s\S]*border-sky-200[\s\S]*bg-white[\s\S]*text-sky-700/,
-  "Messaging platform page buttons should use the blue-white navigation style.",
+  /gateway-platform-nav[\s\S]*kq-btn-secondary/,
+  "Messaging platform page buttons should use the Kabuqina navigation style.",
 );
 
 assert.match(
