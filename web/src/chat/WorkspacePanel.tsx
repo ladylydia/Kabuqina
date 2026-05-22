@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, FileText, FolderKanban, PanelRightClose, Wrench } from "lucide-react";
+import { AlarmClock, CheckCircle2, Download, FileText, FolderKanban, PanelRightClose, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
@@ -30,7 +30,7 @@ type WorkspacePanelProps = {
 
 function WorkspaceSectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h3 className="workspace-section-heading kq-section-heading inline-flex px-3 py-1.5 text-sm font-semibold leading-snug tracking-normal dark:bg-zinc-800 dark:text-zinc-100">
+    <h3 className="workspace-section-heading kq-section-heading inline-flex px-3 py-1.5 text-sm font-semibold leading-snug tracking-normal dark:border-l-[#9b87b8] dark:bg-zinc-800/40 dark:text-zinc-200">
       {children}
     </h3>
   );
@@ -129,6 +129,36 @@ export function WorkspacePanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <section data-workspace-section="workspace.quickActions">
+          <WorkspaceSectionHeading>{t("chat.workspaceQuickActions")}</WorkspaceSectionHeading>
+          <div className="mt-3 grid gap-2">
+            <button
+              type="button"
+              onClick={() => nav("/settings/cron", { state: { cronBackTo: "/chat" } })}
+              className="kq-quick-action justify-start rounded-lg px-3 py-2.5 text-left text-[15px] leading-snug transition"
+            >
+              <AlarmClock className="kq-color-icon-alarm mr-2 inline h-4 w-4" aria-hidden />
+              {t("cron.title")}
+            </button>
+            <button
+              type="button"
+              onClick={onOrganizeDesktop}
+              className="kq-quick-action justify-start rounded-lg px-3 py-2.5 text-left text-[15px] leading-snug transition"
+            >
+              <FolderKanban className="kq-color-icon-folder mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.workspaceOrganizeDesktop")}
+            </button>
+            <button
+              type="button"
+              onClick={() => nav("/export")}
+              className="kq-quick-action justify-start rounded-lg px-3 py-2.5 text-left text-[15px] leading-snug transition"
+            >
+              <Download className="kq-color-icon-download mr-2 inline h-4 w-4" aria-hidden />
+              {t("chat.exportButton")}
+            </button>
+          </div>
+        </section>
+
         <WorkspaceSection
           sectionId="workspace.currentGoal"
           title={t("chat.workspaceCurrentGoal")}
@@ -179,28 +209,6 @@ export function WorkspacePanel({
         >
           {outputs.length ? <WorkspaceItemList items={outputs} icon="output" /> : undefined}
         </WorkspaceSection>
-
-        <section data-workspace-section="workspace.quickActions">
-          <WorkspaceSectionHeading>{t("chat.workspaceQuickActions")}</WorkspaceSectionHeading>
-          <div className="mt-3 grid gap-2">
-            <button
-              type="button"
-              onClick={onOrganizeDesktop}
-              className="kq-quick-action justify-start rounded-xl px-3 py-2.5 text-left text-[15px] leading-snug transition"
-            >
-              <FolderKanban className="kq-color-icon-folder mr-2 inline h-4 w-4" aria-hidden />
-              {t("chat.workspaceOrganizeDesktop")}
-            </button>
-            <button
-              type="button"
-              onClick={() => nav("/export")}
-              className="kq-quick-action justify-start rounded-xl px-3 py-2.5 text-left text-[15px] leading-snug transition"
-            >
-              <Download className="kq-color-icon-download mr-2 inline h-4 w-4" aria-hidden />
-              {t("chat.exportButton")}
-            </button>
-          </div>
-        </section>
       </div>
     </aside>
   );

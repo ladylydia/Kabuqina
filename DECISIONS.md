@@ -27,6 +27,33 @@ The "Kabuqina" name is provisional. Trademark check is pending — see
 | Gateway platforms | All 6 (Weixin, QQ Bot, Feishu/Lark, Telegram, DingTalk, WeCom) stay in the onboarding UI. Weixin and Feishu are feature-flagged at the `GatewayPolicy` level. |
 | Architecture | `agent_core` (frozen Hermes) + `desktop_policy` (6 injected policy objects). Overlays are transitional and tagged `# DEPRECATED`. |
 
+## Desk-minimal runtime (2026-05-21)
+
+| Question | Decision |
+|----------|----------|
+| Hermes dashboard SPA | **Removed from product path.** Kabuqina shell is the only UI; `web_dist` is not bundled by default (`build_bundle.ps1 -BuildHermesDashboard` opt-in for upstream comparison). |
+| Python boot | **`HERMESDESK_DESK_MINIMAL=1`** — lazy tool/plugin discovery, early `port.txt`, background warm thread; chat returns 503 `warming` until tools are ready. |
+| Edge CDP | Starts **async** after bridge; does not block Python spawn. |
+| Gateway | Unchanged in this pass (still optional second process). |
+
+## Desk server split (2026-05-21)
+
+| Question | Decision |
+|----------|----------|
+| Product HTTP API | **`python/src/desk_server/`** — Kabuqina-owned FastAPI app with `/api/desk/*`, `/api/sessions*`, `/api/hermesdesk/*`, slim `/api/status`. |
+| Upstream `web_server.py` | **Dashboard-only.** Desk routes, HermesDesk auth bridge, and catalog code removed from `hermes_core/`. Optional `-BuildHermesDashboard` still builds `web_dist` for `hermes dashboard` dev comparison. |
+| Entrypoint | `desktop_entrypoint.py` imports and starts `desk_server`, not `hermes_cli.web_server`. |
+
+## Cron notify mode (2026-05-21)
+
+| Question | Decision |
+|----------|----------|
+| Fixed-text reminders | **`mode: notify`** on cron jobs in `hermes_core/cron/`. Delivers `message` (or `prompt`) via existing `tick()` → `_deliver_result` pipeline **without** invoking `AIAgent`. |
+| Default | `mode` omitted or `agent` — unchanged LLM cron behavior. |
+| Aliases | `static`, `message` normalized to `notify`. |
+| vs `wakeAgent: false` | Script gate skips LLM and returns `[SILENT]` (**no delivery**). Notify is for user-visible reminders only. |
+| Desktop delivery | Still `python/overlays/cron_desktop_delivery.py` for `deliver=desktop` / `local`. |
+
 **Cherry-pick log:**
 
 | Date | Commit | Origin | Reason |

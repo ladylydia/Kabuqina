@@ -54,3 +54,13 @@ assert.match(
   /"kimi-coding-cn":\s*\{\s*host:\s*"https:\/\/api\.kimi\.com\/coding\/v1"/,
   "Kimi / Moonshot (China) should use the current Kimi Coding base URL.",
 );
+
+assert.doesNotMatch(getAccessPassSource, /Deepseek API Key|自定义AI模型/);
+assert.match(getAccessPassSource, /hd-wizard-title[\s\S]*t\("pass\.title"\)/);
+
+const shellFrameSource = fs.readFileSync(new URL("./ShellFrame.tsx", import.meta.url), "utf8");
+const indexCssSource = fs.readFileSync(new URL("../index.css", import.meta.url), "utf8");
+assert.match(shellFrameSource, /onboarding\.progress/);
+assert.match(shellFrameSource, /hd-wizard-progress/);
+assert.match(indexCssSource, /\.hd-wizard-title/);
+assert.match(indexCssSource, /\.hd-wizard-lead/);

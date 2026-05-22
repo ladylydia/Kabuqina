@@ -43,6 +43,15 @@ export async function cmdGetHermesPort(): Promise<number | null> {
   return p ?? null;
 }
 
+export type HermesDeskBootState = {
+  port: number | null;
+  warming: boolean;
+};
+
+export async function cmdGetHermesDeskBootState(): Promise<HermesDeskBootState> {
+  return invoke<HermesDeskBootState>("cmd_get_hermes_desk_boot_state");
+}
+
 export async function cmdGetHermesBootstrapError(): Promise<string | null> {
   const err = await invoke<string | null>("cmd_get_hermes_bootstrap_error");
   return err?.trim() ? err : null;

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ArrowUp, Crop, FolderOpen, Paperclip, Square, X, Zap } from "lucide-react";
+import { ArrowUp, Crop, FolderOpen, Paperclip, Square, X } from "lucide-react";
 import { useI18n } from "../lib/i18n";
-import { Toggle } from "../components/ui/Toggle";
 import { cn } from "../lib/cn";
 import { captureFullscreen, showCaptureOverlay } from "../capture/capture-api";
 import { VoiceButton } from "./VoiceButton";
@@ -20,8 +19,6 @@ export interface ChatInputProps {
   onRemoveAttachment: (index: number) => void;
   onFilesPicked: (files: FileList | null) => void;
   onStop?: () => void;
-  powerUser?: boolean;
-  onTogglePowerUser?: (v: boolean) => void;
 }
 
 export function ChatInput({
@@ -34,8 +31,6 @@ export function ChatInput({
   onRemoveAttachment,
   onFilesPicked,
   onStop,
-  powerUser = false,
-  onTogglePowerUser,
 }: ChatInputProps) {
   const { t } = useI18n();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -236,11 +231,11 @@ export function ChatInput({
   const canSend = !sending && (value.trim() || pendingAttachmentNames.length > 0);
 
   return (
-    <div className="kq-input-area shrink-0 pt-0 dark:bg-[#0F172A]">
+    <div className="kq-input-area shrink-0 dark:bg-[#0F172A]">
       <div className="kq-input-container">
       <div
         className={cn(
-          "kq-composer mx-auto max-w-3xl",
+          "kq-composer mx-auto max-w-[var(--kq-chat-column-max)]",
           "dark:border-zinc-700 dark:bg-zinc-800/50"
         )}
       >
@@ -447,7 +442,7 @@ export function ChatInput({
         </div>
       </div>
       {needsModelDownload && (
-        <div className="mx-auto mt-1.5 flex max-w-3xl flex-wrap items-center justify-between gap-2 rounded-md border border-sky-200 bg-sky-50/70 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100">
+        <div className="mx-auto mt-1.5 flex max-w-[var(--kq-chat-column-max)] flex-wrap items-center justify-between gap-2 rounded-md border border-sky-200 bg-sky-50/70 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100">
           <span className="leading-relaxed">{t("chat.voiceModelConfirm")}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             <button
@@ -468,38 +463,22 @@ export function ChatInput({
         </div>
       )}
       {voiceErr && (
-        <p className="mx-auto mt-1.5 max-w-3xl text-xs text-red-500 dark:text-red-400">
+        <p className="mx-auto mt-1.5 max-w-[var(--kq-chat-column-max)] text-xs text-red-500 dark:text-red-400">
           {voiceErr}
         </p>
       )}
       {pathPickerErr && (
-        <p className="mx-auto mt-1.5 max-w-3xl text-xs text-amber-700 dark:text-amber-400">
+        <p className="mx-auto mt-1.5 max-w-[var(--kq-chat-column-max)] text-xs text-amber-700 dark:text-amber-400">
           {pathPickerErr}
         </p>
       )}
       {screenshotErr && (
-        <p className="mx-auto mt-1.5 max-w-3xl text-xs text-amber-700 dark:text-amber-400">
+        <p className="mx-auto mt-1.5 max-w-[var(--kq-chat-column-max)] text-xs text-amber-700 dark:text-amber-400">
           {screenshotErr}
         </p>
       )}
-      <div className="kq-input-footer mx-auto mt-2.5 flex max-w-3xl flex-wrap items-center justify-center gap-3 text-center">
+      <div className="kq-input-footer mx-auto mt-2.5 flex max-w-[var(--kq-chat-column-max)] justify-center text-center">
         <p className="text-xs leading-[1.5] text-[var(--kq-color-muted)] dark:text-zinc-500">{t("chat.hint")}</p>
-        {onTogglePowerUser && (
-          <div
-            className="kq-power-toggle inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300"
-            title={t("settings.powerTitle")}
-          >
-            <Zap
-              className={cn(
-                "h-3.5 w-3.5 transition",
-                powerUser ? "kq-power-icon dark:text-amber-300" : "text-[var(--kq-color-muted)] dark:text-zinc-500"
-              )}
-              strokeWidth={2.5}
-            />
-            <span>{t("settings.powerTitle")}</span>
-            <Toggle tone="kabuqina" value={powerUser} onChange={(v) => onTogglePowerUser(v)} />
-          </div>
-        )}
       </div>
       </div>
     </div>

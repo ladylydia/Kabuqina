@@ -123,8 +123,8 @@ export function SetupOptionsTable({
   return (
     <div className={cn("space-y-3", className)}>
       {showSkip ? (
-        <div className="mb-3 space-y-1.5 rounded-[var(--radius-shell)] border border-amber-200/80 bg-amber-50/60 px-4 py-3 dark:border-amber-800/50 dark:bg-amber-950/30">
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-800 dark:text-zinc-200">
+        <div className="mb-3 space-y-1.5 rounded-[var(--radius-shell-lg)] border border-amber-200/80 bg-amber-50/60 px-4 py-3 dark:border-amber-800/50 dark:bg-amber-950/30">
+          <label className="flex cursor-pointer items-start gap-3 hd-wizard-body">
             <input
               type="checkbox"
               className="mt-1 h-4 w-4 rounded border-zinc-400"
@@ -144,7 +144,7 @@ export function SetupOptionsTable({
             />
             <span>
               <span className="font-medium">{t("setupOptions.skipKeepTitle")}</span>
-              <span className="mt-1 block text-xs font-normal text-zinc-600 dark:text-zinc-400">
+              <span className="hd-wizard-hint mt-1 block font-normal">
                 {t("setupOptions.skipKeepBody")}
               </span>
             </span>
@@ -154,7 +154,7 @@ export function SetupOptionsTable({
 
       <div
         className={cn(
-          "hd-glass-subtle overflow-x-auto rounded-[var(--radius-shell)] p-0",
+          "hd-glass-subtle overflow-x-auto p-0",
           isSkip && hasChoiceUi && "pointer-events-none opacity-45"
         )}
       >

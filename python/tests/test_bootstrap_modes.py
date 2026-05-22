@@ -72,6 +72,13 @@ class TestBoostrapModes(unittest.TestCase):
             cfg = from_env()
             self.assertEqual(cfg.contract_version, 0)
 
+    def test_desk_minimal_flag(self):
+        env = self._make_env()
+        env["HERMESDESK_DESK_MINIMAL"] = "1"
+        with patch.dict(os.environ, env):
+            cfg = from_env()
+            self.assertTrue(cfg.desk_minimal)
+
 
 if __name__ == "__main__":
     unittest.main()

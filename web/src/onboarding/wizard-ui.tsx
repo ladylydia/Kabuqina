@@ -67,7 +67,7 @@ export function WizardFooterHint({ children, className }: { children: ReactNode;
   return (
     <p
       className={cn(
-        "mt-3 text-center text-xs leading-relaxed text-[var(--kq-color-muted)] sm:text-left dark:text-zinc-500",
+        "hd-wizard-hint mt-3 text-center sm:text-left",
         className
       )}
     >

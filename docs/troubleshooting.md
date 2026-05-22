@@ -365,7 +365,7 @@ The `.pth` file remains as belt-and-braces but is no longer relied on.
 
 **Symptom**
 
-* `ERROR: no run()/main() entry in hermes_cli.web_server; check upstream`.
+* `ERROR: no start_server()/run()/main() entry in desk_server; check desk_server package`.
 
 **Root cause**
 
@@ -575,6 +575,62 @@ QQ Bot 连接时调用 `_acquire_platform_lock("qqbot-appid", ...)`，检测到 
 **Lesson**
 
 Windows 上任何 `os.kill(pid, 0)` 调用都需要 catch `OSError`，不可仅依赖 `ProcessLookupError`。
+
+---
+
+## 15. Slow cold start / long “connecting to local assistant” screen
+
+**Symptom**
+
+* Chat page shows **正在连接本机助手…** or **正在加载助手模块…** for 10–40+ seconds on first launch.
+* `%LOCALAPPDATA%\com.kabuqina.app\logs\hermesdesk.log` shows long gaps between `starting HermesDesk Python` and `bound port`.
+
+**Root cause**
+
+* Embedded Python imports `desk_server` (not the full `hermes_cli.web_server` dashboard monolith) before writing `port.txt`. Tool/plugin discovery runs in a background warm thread.
+* Windows Defender real-time scanning on `tauri\target\debug\runtime` adds seconds on dev builds.
+* Headless Edge CDP startup used to block Python spawn (fixed: Edge now starts in parallel).
+
+**Fix / diagnostics**
+
+* Read segmented timings:
+  * Rust: Tauri log lines `bootstrap bridge_ms=`, `bootstrap python_spawn_ms=`, `bootstrap port_wait_ms=`, `bootstrap total_ms=`.
+  * Python: `boot timing deps_ms=`, `overlays_ms=`, `desk_server_import_ms=`, `port_write_ms=` in `hermesdesk.log`.
+  * Web (dev): browser console `[kabuqina] hermes_ready_ms=`.
+* Desk-minimal mode (`HERMESDESK_DESK_MINIMAL=1`) defers tool/plugin discovery to a background warm thread; `/api/status` reports `desk_warming: true` until warm completes.
+* Release builds exclude `hermes_cli/web_dist` by default (`build_bundle.ps1` without `-BuildHermesDashboard`).
+* For dev loops, add Defender exclusion for `%LOCALAPPDATA%\com.kabuqina.app` and the repo `python\dist\runtime` tree.
+
+---
+
+## 13. Cron reminder toast shows “Windows PowerShell” as sender
+
+**Symptom**
+
+* Scheduled reminders fire correctly (in-app reminder log + chat history),
+  but the Windows Action Center entry lists **PowerShell** as the app, not Kabuqina.
+
+**Root cause**
+
+* Desktop delivery toasts go through `tauri-plugin-notification`. On Windows it
+  **skips** `System.AppUserModel.ID` when the exe path ends in `target\debug` or
+  `target\release` (typical `cargo tauri dev` layout). Without an AUMID, WinRT
+  falls back to the PowerShell app id — this is upstream Tauri behavior, not the
+  cron pipeline itself.
+
+**Fix**
+
+* Kabuqina registers `com.kabuqina.app` at startup and sends delivery toasts via
+  `tauri/src/windows_notification.rs` with that id always set.
+* **MSI installs** already get the correct name from the Start Menu shortcut
+  (`System.AppUserModel.ID` in `tauri/wix/main.wxs`).
+* After pulling the fix: rebuild/restart the Tauri shell (`cargo tauri dev` or
+  reinstall MSI). Python bundle rebuild is **not** required for this cosmetic change.
+
+**Lesson**
+
+> Windows toast attribution is about **AUMID + install shortcut**, not about
+> whether the reminder HTTP POST succeeded.
 
 ---
 

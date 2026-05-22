@@ -17,6 +17,7 @@
 #   .\python\build_bundle.ps1 -Verify        # build + smoke-test (+ STT binary checks)
 #   .\python\build_bundle.ps1 -Clean         # wipe and rebuild
 #   .\python\build_bundle.ps1 -SkipWebBuild  # faster: reuse existing hermes_cli/web_dist (risk: stale UI)
+#   .\python\build_bundle.ps1 -BuildHermesDashboard  # opt-in: build upstream Hermes dashboard SPA
 #
 # NOTE (PowerShell): named parameters conventionally use ONE dash (`-Verify`), unlike many
 # POSIX/GNU CLIs (`--verify`). Passing `--Verify` unquoted can accidentally bind as -PythonVersion
@@ -28,7 +29,8 @@ param(
     [string]$PbsRelease    = "20260414",   # python-build-standalone tag (latest as of 2026-04-19)
     [switch]$Clean,
     [switch]$Verify,
-    [switch]$SkipWebBuild
+    [switch]$SkipWebBuild,
+    [switch]$BuildHermesDashboard
 )
 
 # Recover GNU-style `--Flag` mistakenly bound to positional -PythonVersion (PowerShell habit vs
@@ -222,31 +224,35 @@ function Invoke-HermesWebNpmCommand {
     }
 }
 
-# ------------------------------------------------------------------ 4b. Build Hermes' SPA (web/ -> hermes_cli/web_dist)
-# `hermes_cli/web_server.py` expects the built SPA at
-# `<package>/web_dist/`. Without this, every HTTP path returns
-# {"error":"Frontend not built. Run: cd web && npm run build"}.
-# Hermes dashboard SPA lives under the frozen source: hermes_core/web → hermes_core/hermes_cli/web_dist.
-#
-# IMPORTANT: always run `npm run build` by default. A stale hermes_cli/web_dist
-# (e.g. from an older run) would previously skip the build and bundle an
-# outdated UI — users saw old behaviour (e.g. desk chat stuck on a fallback).
+# ------------------------------------------------------------------ 4b. Hermes dashboard SPA (opt-in; Kabuqina desk-minimal skips web_dist)
+# `hermes_cli/web_server.py` can serve the upstream React dashboard from
+# `hermes_cli/web_dist/`. Kabuqina shell does not use it — pass
+# `-BuildHermesDashboard` only when comparing against upstream Hermes UI.
 $hermesWeb     = Join-Path $HermesDir "web" | Resolve-Path | Select-Object -ExpandProperty Path
 $hermesWebDist = Join-Path $HermesDir "hermes_cli\web_dist"
-if ($SkipWebBuild) {
+$bundledWebDist = Join-Path $bundledHermes "hermes_cli\web_dist"
+$buildHermesDashboard = $BuildHermesDashboard -and -not $SkipWebBuild
+if (-not $buildHermesDashboard) {
+    Write-Host "  (skip) Hermes dashboard SPA — Kabuqina desk-minimal bundle" -ForegroundColor DarkYellow
+    if (Test-Path $bundledWebDist) {
+        Remove-Item -Recurse -Force $bundledWebDist
+    }
+} elseif ($SkipWebBuild) {
     Write-Host "  (skip) npm run build — using existing hermes_cli\web_dist" -ForegroundColor DarkYellow
+    if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
+        throw "Hermes SPA missing at $hermesWebDist\index.html (run without -SkipWebBuild or drop -BuildHermesDashboard)"
+    }
+    Copy-Item -Recurse -Force $hermesWebDist $bundledWebDist
 } else {
-    # Always install so `sync-assets` (prebuild) sees a complete `node_modules` — a prior Windows-only
-    # `npm install` can leave packages half-installed because `sync-assets` uses POSIX rm/cp.
     Write-Host "  npm install (hermes/web)..." -ForegroundColor DarkGray
     Invoke-HermesWebNpmCommand -WebDir $hermesWeb -NpmCmd @("install", "--no-audit", "--no-fund")
     Write-Host "  npm run build (hermes/web)..." -ForegroundColor DarkGray
     Invoke-HermesWebNpmCommand -WebDir $hermesWeb -NpmCmd @("run", "build")
+    if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
+        throw "Hermes SPA build failed: $hermesWebDist\index.html not found"
+    }
+    Copy-Item -Recurse -Force $hermesWebDist $bundledWebDist
 }
-if (-not (Test-Path (Join-Path $hermesWebDist "index.html"))) {
-    throw "Hermes SPA build failed: $hermesWebDist\index.html not found (run without -SkipWebBuild to build)"
-}
-Copy-Item -Recurse -Force $hermesWebDist (Join-Path $bundledHermes "hermes_cli\web_dist")
 
 # ------------------------------------------------------------------ 5. Install deps into a target dir (no venv)
 $siteDir = Join-Path $Dist "site-packages"
@@ -341,10 +347,14 @@ Copy-Item -Force (Join-Path $PSScriptRoot "src\secret_store.py") (Join-Path $Dis
 Copy-Item -Force (Join-Path $PSScriptRoot "src\approval_backend.py") (Join-Path $Dist "approval_backend.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\messaging_policy.py") (Join-Path $Dist "messaging_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\cron_scheduler_runner.py") (Join-Path $Dist "cron_scheduler_runner.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\gateway_env_loader.py") (Join-Path $Dist "gateway_env_loader.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\desktop_timezone.py") (Join-Path $Dist "desktop_timezone.py")
+Copy-Item -Force (Join-Path $PSScriptRoot "src\windows_registry_tz.py") (Join-Path $Dist "windows_registry_tz.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\desktop_delivery.py") (Join-Path $Dist "desktop_delivery.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\network_policy.py") (Join-Path $Dist "network_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\tool_policy.py") (Join-Path $Dist "tool_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\capability_policy.py") (Join-Path $Dist "capability_policy.py")
+Copy-Item -Recurse -Force (Join-Path $PSScriptRoot "src\desk_server") (Join-Path $Dist "desk_server")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\gateway_policy.py") (Join-Path $Dist "gateway_policy.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\weixin_qr_worker.py") (Join-Path $Dist "weixin_qr_worker.py")
 Copy-Item -Force (Join-Path $PSScriptRoot "src\qqbot_qr_worker.py") (Join-Path $Dist "qqbot_qr_worker.py")
@@ -495,6 +505,8 @@ from overlays import apply_all
 apply_all()
 import hermes_cli.web_server
 print('OK: hermes_cli.web_server importable')
+import desk_server
+print('OK: desk_server importable')
 "@
     if ($LASTEXITCODE -ne 0) {
         Write-Error "smoke test FAILED"

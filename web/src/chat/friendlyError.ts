@@ -8,6 +8,7 @@ const ZH = {
   network: "我暂时连不上需要的服务。你可以检查网络后再试一次。",
   json: "本机助手返回的内容我没读懂。请重启应用，或重新构建 Python bundle 后再试。",
   generic: "这个步骤我没成功。你可以换个说法，或把要处理的文件拖进来再试。",
+  warming: "助手模块还在加载，请稍等再试。",
 };
 
 const EN = {
@@ -18,6 +19,7 @@ const EN = {
   network: "I cannot reach the service I need right now. Please check the network and try again.",
   json: "The local assistant sent back something I could not read. Please restart the app or rebuild the Python bundle.",
   generic: "I could not finish that step. Try phrasing it another way, or drag the file in here and I can try again.",
+  warming: "Assistant modules are still loading. Please wait a moment and try again.",
 };
 
 export function friendlyChatError(raw: string, locale: Locale): string {
@@ -26,6 +28,13 @@ export function friendlyChatError(raw: string, locale: Locale): string {
   const lower = text.toLowerCase();
   const copy = locale === "en" ? EN : ZH;
 
+  if (
+    lower.includes("desk_warming") ||
+    lower.includes('"status":"warming"') ||
+    lower.includes('status": "warming')
+  ) {
+    return copy.warming;
+  }
   if (
     lower.includes("permission denied") ||
     lower.includes("access is denied") ||

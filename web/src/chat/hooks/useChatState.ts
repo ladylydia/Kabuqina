@@ -7,6 +7,7 @@ import {
   type SessionRow,
   type UiMsg,
 } from "../chat-api";
+import { REMINDER_SESSION_ID } from "../reminderSession";
 import type { LoadSessionsOptions } from "./useSessions";
 
 const LAST_SESSION_KEY = "hermesdesk.shell.chat.lastSessionId";
@@ -178,6 +179,43 @@ export function useChatState({
     [activeSessionId, onNewChat, loadSessions]
   );
 
+  const refreshActiveThread = useCallback(async () => {
+    if (!activeSessionId) {
+      return;
+    }
+    await loadThread(activeSessionId);
+  }, [activeSessionId, loadThread]);
+
+  const openReminderSession = useCallback(async (emptyHint?: string) => {
+    try {
+      const list = await cmdGetSessions(100, 0, "hermesdesk");
+      const exists = (list.sessions ?? []).some((s: SessionRow) => s.id === REMINDER_SESSION_ID);
+      if (exists) {
+        await loadThread(REMINDER_SESSION_ID);
+        return;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    loadSeqRef.current += 1;
+    setSendErr(null);
+    setActiveSessionId(REMINDER_SESSION_ID);
+    persistSession(REMINDER_SESSION_ID);
+    setThreadModel("");
+    setMessages(
+      emptyHint
+        ? [
+            {
+              id: "reminder-log-empty",
+              role: "assistant" as const,
+              text: emptyHint,
+              timestamp: Date.now() / 1000,
+            },
+          ]
+        : [],
+    );
+  }, [loadThread]);
+
   return {
     activeSessionId,
     setActiveSessionId,
@@ -192,5 +230,7 @@ export function useChatState({
     onNewChat,
     onPickSession,
     onDeleteSession,
+    refreshActiveThread,
+    openReminderSession,
   } as const;
 }

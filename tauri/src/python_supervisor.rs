@@ -85,6 +85,7 @@ impl Supervisor {
                 "HERMESDESK_POWER_USER",
                 if cfg.power_user { "1" } else { "0" },
             )
+            .env("HERMESDESK_DESK_MINIMAL", "1")
             // HermesDesk desktop contract version.  Must match
             // ``python/src/desktop_contract.py:CONTRACT_VERSION``.
             .env("HERMESDESK_CONTRACT_VERSION", "1")
@@ -158,7 +159,7 @@ impl Supervisor {
     }
 
     pub async fn wait_for_port(&self) -> Result<u16> {
-        // Cold start imports `hermes_cli.web_server` before writing port.txt — on first
+        // Cold start imports `desk_server` before writing port.txt — on first
         // launch Windows Defender indexing this tree can exceed 30s; portable users then
         // see "connecting forever" because Rust abandoned the waiter while Python is still waking.
         let deadline = std::time::Instant::now() + Duration::from_secs(180);
@@ -171,7 +172,7 @@ impl Supervisor {
                 }
             }
             if std::time::Instant::now() > deadline {
-                anyhow::bail!("python did not write port within 30s");
+                anyhow::bail!("python did not write port within 180s");
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }

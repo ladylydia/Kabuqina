@@ -1,9 +1,30 @@
 import { cn } from "../lib/cn";
 
-/** Kabuqina mascot — CSS coffee cup used in chat and the compact desktop pill. */
-export function CompanionCup({ className }: { className?: string }) {
+type CompanionCupVariant = "default" | "brand";
+
+export interface CompanionCupProps {
+  className?: string;
+  /** Brand cup: 3D ceramic body + latte fill (hero, pill, avatar). */
+  variant?: CompanionCupVariant;
+  /** Wispy steam — hero and compact pill only. */
+  steam?: boolean;
+}
+
+/** Kabuqina mascot — CSS coffee cup used in chat, hero, pill, and avatar. */
+export function CompanionCup({
+  className,
+  variant = "default",
+  steam = false,
+}: CompanionCupProps) {
   return (
-    <div className={cn("kq-companion-cup", className)} aria-hidden>
+    <div
+      className={cn(
+        "kq-companion-cup",
+        variant === "brand" && "kq-companion-cup--brand",
+        className,
+      )}
+      aria-hidden
+    >
       <div className="kq-companion-cup-body" />
       <div className="kq-companion-cup-handle" />
       <div className="kq-companion-cup-face">
@@ -12,6 +33,7 @@ export function CompanionCup({ className }: { className?: string }) {
       </div>
       <div className="kq-companion-cup-blush left" />
       <div className="kq-companion-cup-blush right" />
+      {steam ? <span className="kq-companion-cup-steam" aria-hidden /> : null}
     </div>
   );
 }

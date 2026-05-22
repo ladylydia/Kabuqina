@@ -22,7 +22,36 @@ export function takePendingChatSecretGateBypass(): boolean {
   return true;
 }
 
-export type ChatLocationState = { fromOnboarding?: boolean; draftPrompt?: string };
+let pendingOpenReminderSession = false;
+
+/** Survives location state strip + Hermes readiness wait (toast → chat). */
+export function armPendingOpenReminderSession(): void {
+  pendingOpenReminderSession = true;
+}
+
+export function takePendingOpenReminderSession(): boolean {
+  if (!pendingOpenReminderSession) return false;
+  pendingOpenReminderSession = false;
+  return true;
+}
+
+export type ChatLocationState = {
+  fromOnboarding?: boolean;
+  draftPrompt?: string;
+  openReminderSession?: boolean;
+};
+
+export function isOpenReminderSession(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    (state as ChatLocationState).openReminderSession === true
+  );
+}
+
+export const CHAT_OPEN_REMINDER_SESSION_STATE: { openReminderSession: true } = {
+  openReminderSession: true,
+};
 
 export function isFromOnboarding(state: unknown): state is { fromOnboarding: true } {
   return typeof state === "object" && state !== null && (state as ChatLocationState).fromOnboarding === true;

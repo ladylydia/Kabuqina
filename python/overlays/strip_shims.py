@@ -67,6 +67,11 @@ _STUBBED: Dict[str, Dict[str, Any]] = {
     # real symbols from ``.config``; a pre-registered stub would make that import
     # load the wrong module.
     #
+    # Do NOT stub ``gateway.platforms``: cron remote delivery imports
+    # ``gateway.platforms.base`` (``BasePlatformAdapter.extract_media``). An empty
+    # stub without ``__path__`` makes ``import gateway.platforms.base`` fail with
+    # ``TypeError: 'function' object is not iterable``.
+    #
     # web_server still needs no-op PIDs / status; keep only these leaf stubs:
     "gateway.status": {
         "get_running_pid": _noop,
@@ -78,7 +83,6 @@ _STUBBED: Dict[str, Dict[str, Any]] = {
     "gateway.run": {
         "main": _noop,
     },
-    "gateway.platforms": {},
 }
 
 
@@ -111,6 +115,22 @@ class _StubModule(types.ModuleType):
         return _noop
 
 
+def evict_gateway_platforms_stub() -> None:
+    """Drop a stale ``gateway.platforms`` stub so real submodules can load.
+
+    Cron ``_deliver_result`` and ``send_weixin_direct`` need
+    ``gateway.platforms.*`` on the web-child path. Older builds registered an
+    empty ``_StubModule`` here; evict it (and any stubbed children) on install
+    and before remote cron delivery.
+    """
+    for key in list(sys.modules.keys()):
+        if key != "gateway.platforms" and not key.startswith("gateway.platforms."):
+            continue
+        mod = sys.modules.get(key)
+        if mod is not None and getattr(mod, "__hermesdesk_stubbed__", False):
+            del sys.modules[key]
+
+
 def _evict_legacy_full_gateway_stub() -> None:
     """Remove the old empty ``gateway`` stub (pre-2025-04) from ``sys.modules``.
 
@@ -131,6 +151,7 @@ def _evict_legacy_full_gateway_stub() -> None:
 
 def install() -> None:
     _evict_legacy_full_gateway_stub()
+    evict_gateway_platforms_stub()
     for name, attrs in _STUBBED.items():
         if name not in sys.modules:
             sys.modules[name] = _StubModule(name, attrs)

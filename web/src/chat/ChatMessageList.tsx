@@ -16,11 +16,22 @@ interface ChatMessageListProps {
   onPickSuggestion?: (prompt: string) => void;
 }
 
+function AssistantStreamShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 justify-start">
+      <div className="kq-assistant-avatar" aria-hidden>
+        <CompanionCup variant="brand" />
+      </div>
+      <div className="kq-chat-assistant-column">{children}</div>
+    </div>
+  );
+}
+
 function TypingIndicator() {
   const { t } = useI18n();
   return (
-    <div className="flex justify-start">
-      <div className="kq-chat-bubble-assistant max-w-[min(100%,42rem)] rounded-2xl rounded-tl-sm px-4 py-3 dark:border-zinc-700/80 dark:bg-zinc-800/90">
+    <AssistantStreamShell>
+      <div className="kq-chat-bubble-assistant rounded-2xl rounded-tl-sm px-4 py-3 dark:border-zinc-700/80 dark:bg-zinc-800/90">
         <p className="mb-2 text-xs text-zinc-400 dark:text-zinc-500">
           {t("chat.typingStatus")}…
         </p>
@@ -30,7 +41,7 @@ function TypingIndicator() {
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--kq-color-primary)] dark:bg-zinc-600" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
-    </div>
+    </AssistantStreamShell>
   );
 }
 
@@ -62,7 +73,7 @@ function EmptyState({
         ];
   return (
     <div className="kq-empty-state flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6 py-8 sm:py-10">
-      <div className="flex w-full max-w-3xl translate-y-2 flex-col items-center text-center sm:translate-y-3">
+      <div className="flex w-full max-w-3xl -translate-y-1 flex-col items-center text-center">
         <div className="kq-empty-hero mb-7 flex flex-col items-center sm:mb-8">
           <picture className="sr-only">
             <source type="image/avif" srcSet={`${wordmarkBase}.avif`} />
@@ -70,7 +81,7 @@ function EmptyState({
             <img src={`${wordmarkBase}.webp`} alt={productName} width={260} height={80} decoding="async" />
           </picture>
           <h1 className="kq-empty-title">{productName}</h1>
-          <p className="kq-empty-subtitle mt-5 text-base sm:text-lg">
+          <p className="kq-empty-subtitle mt-4 text-base sm:text-lg">
             <span className="kq-hero-line" aria-hidden />
             <span className="kq-hero-heart" aria-hidden>♡</span>
             <span>{locale === "zh" ? "慢慢来，小娜陪你整理思路" : `${greetingParts[0]}${brand}${greetingParts[1]}`}</span>
@@ -78,12 +89,12 @@ function EmptyState({
           </p>
           <div className="kq-companion-hero-mat">
             <div className="kq-companion-big-cup">
-              <CompanionCup />
+              <CompanionCup variant="brand" steam />
             </div>
           </div>
         </div>
         <div
-          className="mt-1 flex w-full flex-wrap justify-center gap-2"
+          className="mt-3 grid w-full max-w-2xl grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2 justify-items-stretch sm:max-w-3xl"
           aria-label={t("chat.emptyActionsLabel")}
         >
           {actions.map((action) => {
@@ -98,13 +109,17 @@ function EmptyState({
                   }
                 }}
                 className={cn(
-                  "kq-empty-action inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-medium transition",
+                  "kq-empty-action inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition",
                   "text-[var(--kq-color-ink)] active:scale-[0.99]",
                   "dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200",
                   "dark:hover:border-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-100"
                 )}
               >
-                <Icon className={cn("h-4 w-4 shrink-0", action.iconClass)} strokeWidth={2.1} aria-hidden />
+                <Icon
+                  className={cn("kq-empty-action-icon h-4 w-4 shrink-0", action.iconClass)}
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
                 <span>{action.label}</span>
               </button>
             );
@@ -158,11 +173,9 @@ export function ChatMessageList({
             />
           ))}
           {progress?.running && (
-            <div className="flex justify-start">
-              <div className="min-w-0 flex-1 max-w-[min(100%,42rem)]">
-                <AgentProgress progress={progress} />
-              </div>
-            </div>
+            <AssistantStreamShell>
+              <AgentProgress progress={progress} />
+            </AssistantStreamShell>
           )}
           {pendingAssistant && (
             <ChatMessage
@@ -177,7 +190,7 @@ export function ChatMessageList({
           )}
           {sending && !progress?.running && !pendingVisibleText && <TypingIndicator />}
           {sendErr && (
-            <div className="hd-semantic-error rounded-lg px-3 py-2 text-sm">
+            <div className="hd-semantic-error rounded-[var(--radius-shell-lg)] px-3 py-2 text-sm">
               {sendErr}
             </div>
           )}

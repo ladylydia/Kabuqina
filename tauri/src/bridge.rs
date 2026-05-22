@@ -24,7 +24,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 
 /// "Back to shell chat" redirect must use the same `http` vs `https` scheme as
 /// the main webview's `tauri.localhost` origin.
@@ -63,6 +63,7 @@ struct State {
     app: AppHandle,
     /// Pending desktop delivery messages (frontend polls via `cmd_desktop_messages`).
     desktop_messages: Arc<Mutex<Vec<DesktopMessage>>>,
+    approval_store: Arc<crate::approval::ApprovalStore>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -78,6 +79,7 @@ pub struct DesktopMessage {
 pub async fn spawn(
     app: AppHandle,
     desktop_messages: Arc<Mutex<Vec<DesktopMessage>>>,
+    approval_store: Arc<crate::approval::ApprovalStore>,
 ) -> Result<Bridge> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
@@ -94,6 +96,7 @@ pub async fn spawn(
         desk_auth_token: desk_auth_token.clone(),
         app,
         desktop_messages,
+        approval_store,
     });
 
     let secret_url = format!("http://{addr}/secret/{secret_token}");
@@ -257,7 +260,7 @@ async fn handle_approval(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            ask_user_to_approve_messaging(&st.app, &target, &content_preview).await
+            ask_user_to_approve_messaging(&st.app, &st.approval_store, &target, &content_preview).await
         }
         "cron" => {
             let action = payload
@@ -280,8 +283,15 @@ async fn handle_approval(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            ask_user_to_approve_cron(&st.app, &action, &schedule, &description, &delivery_target)
-                .await
+            ask_user_to_approve_cron(
+                &st.app,
+                &st.approval_store,
+                &action,
+                &schedule,
+                &description,
+                &delivery_target,
+            )
+            .await
         }
         _ => {
             // Legacy shell command approval (and any unknown type defaults to shell)
@@ -300,7 +310,7 @@ async fn handle_approval(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            ask_user_to_approve(&st.app, &cmd, &cwd, &reason).await
+            ask_user_to_approve(&st.app, &st.approval_store, &cmd, &cwd, &reason).await
         }
     };
 
@@ -342,20 +352,24 @@ async fn handle_desktop_delivery(
 
     log::info!("desktop delivery: title={title:?} len={}", message.len());
 
-    // Q1 part A: native Windows toast notification. Body is truncated to a
-    // reasonable preview length (the full content lives in chat-stream).
+    // Q1 part A: native Windows toast (Kabuqina AUMID, not PowerShell in dev).
     {
-        use tauri_plugin_notification::NotificationExt;
         let preview = truncate_for_toast(&message, 200);
-        if let Err(e) = st
-            .app
-            .notification()
-            .builder()
-            .title(&title)
-            .body(&preview)
-            .show()
+        #[cfg(windows)]
+        crate::windows_notification::show_toast(&title, &preview);
+        #[cfg(not(windows))]
         {
-            log::warn!("desktop delivery: toast notification failed: {e}");
+            use tauri_plugin_notification::NotificationExt;
+            if let Err(e) = st
+                .app
+                .notification()
+                .builder()
+                .title(&title)
+                .body(&preview)
+                .show()
+            {
+                log::warn!("desktop delivery: toast notification failed: {e}");
+            }
         }
     }
 
@@ -485,84 +499,32 @@ async fn write_response(
 // Approval dialogs
 // ------------------------------------------------------------------
 
-async fn ask_user_to_approve(app: &AppHandle, cmd: &str, cwd: &str, reason: &str) -> bool {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-    let (tx, rx) = oneshot::channel();
-    let body = if reason.is_empty() {
-        format!("Command:\n{cmd}\n\nFolder:\n{cwd}")
-    } else {
-        format!("{reason}\n\nCommand:\n{cmd}\n\nFolder:\n{cwd}")
-    };
-    let title = "Kabuqina wants to run a command".to_string();
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let dlg = app_clone.dialog().message(body).title(title).buttons(
-            MessageDialogButtons::OkCancelCustom("Allow this once".into(), "Deny".into()),
-        );
-        dlg.show(move |allowed| {
-            let _ = tx.send(allowed);
-        });
-    });
-    rx.await.unwrap_or(false)
+async fn ask_user_to_approve(
+    app: &AppHandle,
+    store: &crate::approval::ApprovalStore,
+    cmd: &str,
+    cwd: &str,
+    reason: &str,
+) -> bool {
+    crate::approval::ask_shell(app, store, cmd, cwd, reason).await
 }
 
 async fn ask_user_to_approve_messaging(
     app: &AppHandle,
+    store: &crate::approval::ApprovalStore,
     target: &str,
     content_preview: &str,
 ) -> bool {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-    let (tx, rx) = oneshot::channel();
-    let preview_display = if content_preview.len() > 300 {
-        format!("{}…", &content_preview[..300])
-    } else {
-        content_preview.to_string()
-    };
-    let body = format!(
-        "AI wants to send a message:\n\nTarget: {target}\n\nContent preview:\n{preview_display}"
-    );
-    let title = "Kabuqina wants to send a message".to_string();
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let dlg = app_clone.dialog().message(body).title(title).buttons(
-            MessageDialogButtons::OkCancelCustom("Allow once".into(), "Deny".into()),
-        );
-        dlg.show(move |allowed| {
-            let _ = tx.send(allowed);
-        });
-    });
-    rx.await.unwrap_or(false)
+    crate::approval::ask_messaging(app, store, target, content_preview).await
 }
 
 async fn ask_user_to_approve_cron(
     app: &AppHandle,
+    store: &crate::approval::ApprovalStore,
     _action: &str,
     schedule: &str,
     description: &str,
     delivery_target: &str,
 ) -> bool {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-    let (tx, rx) = oneshot::channel();
-    let mut body = format!("AI wants to schedule a recurring task:\n\n");
-    if !description.is_empty() {
-        body.push_str(&format!("Task: {description}\n"));
-    }
-    body.push_str(&format!("Trigger: {schedule}\n"));
-    if !delivery_target.is_empty() && delivery_target != "desktop" {
-        body.push_str(&format!("Deliver to: {delivery_target}\n"));
-    } else if delivery_target == "desktop" {
-        body.push_str("Deliver to: Desktop (local notification)\n");
-    }
-    body.push_str("\nYou can manage or delete this task anytime in Settings → Scheduled Tasks.");
-    let title = "Kabuqina wants to schedule a task".to_string();
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let dlg = app_clone.dialog().message(body).title(title).buttons(
-            MessageDialogButtons::OkCancelCustom("Allow".into(), "Deny".into()),
-        );
-        dlg.show(move |allowed| {
-            let _ = tx.send(allowed);
-        });
-    });
-    rx.await.unwrap_or(false)
+    crate::approval::ask_cron(app, store, schedule, description, delivery_target).await
 }

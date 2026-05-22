@@ -107,7 +107,7 @@ export function SettingsGateway({
             </div>
           </div>
           {gatewayEligible && gatewayStarting && gatewayPlatforms ? (
-            <div className="rounded-md border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
+            <div className="rounded-[var(--radius-shell-lg)] border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
               <p className="font-medium text-zinc-700 dark:text-zinc-200 mb-1.5">{t("settings.gatewayStartingHint")}</p>
               {Object.entries(gatewayPlatforms).map(([key, p]) => (
                 <p key={key} className="flex items-center gap-1.5 mt-0.5 font-mono text-[0.7rem]">
@@ -141,7 +141,7 @@ export function SettingsGateway({
             </p>
           ) : null}
           {gatewayDiskState || gatewayDiskExit ? (
-            <div className="rounded-md border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
+            <div className="rounded-[var(--radius-shell-lg)] border border-zinc-200/90 bg-zinc-50/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/40">
               <p className="font-medium text-zinc-700 dark:text-zinc-200">{t("settings.gatewayDiskRecord")}</p>
               {gatewayDiskState ? (
                 <p className="mt-1 font-mono text-[0.7rem] text-zinc-600 dark:text-zinc-300">
@@ -165,7 +165,7 @@ export function SettingsGateway({
               key={key}
               type="button"
               onClick={() => nav(path)}
-              className="gateway-platform-nav kq-btn-secondary flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left active:scale-[0.99] dark:text-zinc-100"
+              className="gateway-platform-nav kq-btn-secondary flex w-full items-center gap-3 rounded-[var(--radius-shell-lg)] px-3 py-2.5 text-left active:scale-[0.99] dark:text-zinc-100"
             >
               <Icon className="size-4 shrink-0 text-[var(--kq-color-strong)] dark:text-[#D4C5E2]" />
               <span className="flex-1 text-sm font-medium">{label}</span>

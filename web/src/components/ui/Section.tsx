@@ -12,11 +12,11 @@ type Props = {
 export function Section({ icon: Icon, title, desc, children, className, action }: Props) {
   return (
     <section
-      className={`hd-glass-subtle rounded-[var(--radius-shell-lg)] p-5 sm:p-6 ${className ?? ""}`}
+      className={`hd-glass-subtle p-5 sm:p-6 ${className ?? ""}`}
     >
       <div className="flex items-start gap-3.5">
         {Icon && (
-          <div className="kq-icon-well mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl">
+          <div className="kq-icon-well mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-shell-lg)]">
             <Icon className="size-[1.125rem]" strokeWidth={2} />
           </div>
         )}

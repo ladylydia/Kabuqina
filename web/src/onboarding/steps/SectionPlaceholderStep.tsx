@@ -122,8 +122,8 @@ export function SectionPlaceholderStep({ id }: { id: PostPassSectionId }) {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h1 className="hd-page-title">{t(`setupSection.${id}.title`)}</h1>
-        <p className="hd-lead max-w-prose">{t(`setupSection.${id}.lead`)}</p>
+        <h1 className="hd-wizard-title">{t(`setupSection.${id}.title`)}</h1>
+        <p className="hd-wizard-lead">{t(`setupSection.${id}.lead`)}</p>
       </div>
       <div className="space-y-2">
         <SetupOptionsTable
@@ -134,13 +134,13 @@ export function SectionPlaceholderStep({ id }: { id: PostPassSectionId }) {
           modalSize={id === "gateway" ? "lg" : "md"}
         />
         {!canProceed ? (
-          <p className="text-sm text-amber-800 dark:text-amber-200" role="status">
+          <p className="hd-wizard-hint text-amber-800 dark:text-amber-200" role="status">
             {t("setupOptions.mustChoose")}
           </p>
         ) : null}
       </div>
       {saveErr ? (
-        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+        <p className="hd-wizard-body text-red-600 dark:text-red-400" role="alert">
           {t("setupOptions.errSave")} {saveErr}
         </p>
       ) : null}

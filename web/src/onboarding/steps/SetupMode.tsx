@@ -23,12 +23,12 @@ export function SetupMode() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h1 className="hd-page-title">{t("setupMode.title")}</h1>
-        <p className="hd-lead max-w-prose">{t("setupMode.lead")}</p>
+        <h1 className="hd-wizard-title">{t("setupMode.title")}</h1>
+        <p className="hd-wizard-lead">{t("setupMode.lead")}</p>
       </div>
 
       {draft.setupMode ? (
-        <p className="text-sm text-amber-800/90 dark:text-amber-200/90">{t("setupMode.againHint")}</p>
+        <p className="hd-wizard-hint text-amber-800/90 dark:text-amber-200/90">{t("setupMode.againHint")}</p>
       ) : null}
 
       <div className="space-y-3">
@@ -68,7 +68,7 @@ function ModeCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "hd-glass-subtle w-full rounded-[var(--radius-shell-lg)] p-5 text-left transition",
+        "hd-glass-subtle w-full p-5 text-left transition",
         recommended
           ? "border-amber-200/80 bg-amber-50/60 hover:border-amber-300/90 hover:bg-amber-50/80 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700/60 dark:hover:bg-amber-950/30"
           : "hover:border-[var(--kq-color-primary-light)]/70 hover:bg-[var(--kq-color-primary-pale)]/30 dark:hover:border-[#D4C5E2]/40 dark:hover:bg-[#D4C5E2]/10",
@@ -78,14 +78,14 @@ function ModeCard({
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+            <h2 className="hd-wizard-card-title">{title}</h2>
             {recommended && recommendedLabel ? (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                 {recommendedLabel}
               </span>
             ) : null}
           </div>
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{body}</p>
+          <p className="hd-wizard-muted">{body}</p>
         </div>
         <ArrowRight
           className={cn(

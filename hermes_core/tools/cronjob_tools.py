@@ -240,7 +240,19 @@ def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
         result["enabled_toolsets"] = job["enabled_toolsets"]
     if job.get("workdir"):
         result["workdir"] = job["workdir"]
+    job_mode = (job.get("mode") or "agent").strip().lower()
+    if job_mode in ("notify", "static", "message"):
+        result["mode"] = "notify"
+        if job.get("message"):
+            result["message"] = job["message"]
+    elif job.get("mode"):
+        result["mode"] = job_mode
     return result
+
+
+def _is_notify_mode(mode: Optional[str]) -> bool:
+    raw = (mode or "agent").strip().lower() if isinstance(mode, str) else "agent"
+    return raw in ("notify", "static", "message")
 
 
 def cronjob(
@@ -262,6 +274,8 @@ def cronjob(
     context_from: Optional[Union[str, List[str]]] = None,
     enabled_toolsets: Optional[List[str]] = None,
     workdir: Optional[str] = None,
+    mode: Optional[str] = None,
+    message: Optional[str] = None,
     task_id: str = None,
 ) -> str:
     """Unified cron job management tool."""
@@ -274,9 +288,21 @@ def cronjob(
             if not schedule:
                 return tool_error("schedule is required for create", success=False)
             canonical_skills = _canonical_skills(skill, skills)
-            if not prompt and not canonical_skills:
+            notify_mode = _is_notify_mode(mode)
+            if notify_mode:
+                body = (message or prompt or "").strip()
+                if not body:
+                    return tool_error(
+                        "notify mode requires message or prompt (fixed text to deliver)",
+                        success=False,
+                    )
+            elif not prompt and not canonical_skills:
                 return tool_error("create requires either prompt or at least one skill", success=False)
-            if prompt:
+            if prompt and not notify_mode:
+                scan_error = _scan_cron_prompt(prompt)
+                if scan_error:
+                    return tool_error(scan_error, success=False)
+            if notify_mode and prompt:
                 scan_error = _scan_cron_prompt(prompt)
                 if scan_error:
                     return tool_error(scan_error, success=False)
@@ -300,20 +326,22 @@ def cronjob(
                         )
 
             job = create_job(
-                prompt=prompt or "",
+                prompt=prompt or (message or ""),
                 schedule=schedule,
                 name=name,
                 repeat=repeat,
                 deliver=_normalize_deliver_param(deliver),
                 origin=_origin_from_env(),
-                skills=canonical_skills,
+                skills=canonical_skills if not notify_mode else None,
                 model=_normalize_optional_job_value(model),
                 provider=_normalize_optional_job_value(provider),
                 base_url=_normalize_optional_job_value(base_url, strip_trailing_slash=True),
-                script=_normalize_optional_job_value(script),
-                context_from=context_from,
+                script=_normalize_optional_job_value(script) if not notify_mode else None,
+                context_from=context_from if not notify_mode else None,
                 enabled_toolsets=enabled_toolsets or None,
                 workdir=_normalize_optional_job_value(workdir),
+                mode=mode,
+                message=message,
             )
             return json.dumps(
                 {
@@ -325,6 +353,7 @@ def cronjob(
                     "schedule": job["schedule_display"],
                     "repeat": _repeat_display(job),
                     "deliver": job.get("deliver", "local"),
+                    "mode": job.get("mode", "agent"),
                     "next_run_at": job["next_run_at"],
                     "job": _format_job(job),
                     "message": f"Cron job '{job['name']}' created.",
@@ -427,6 +456,12 @@ def cronjob(
                 # Empty string clears the field (restores old behaviour);
                 # otherwise pass raw — update_job() validates / normalizes.
                 updates["workdir"] = _normalize_optional_job_value(workdir) or None
+            if mode is not None:
+                updates["mode"] = mode.strip().lower() if isinstance(mode, str) else "agent"
+            if message is not None:
+                updates["message"] = _normalize_optional_job_value(message) or None
+                if _is_notify_mode(updates.get("mode") or job.get("mode")):
+                    updates["prompt"] = updates["message"] or job.get("prompt")
             if repeat is not None:
                 # Normalize: treat 0 or negative as None (infinite)
                 normalized_repeat = None if repeat <= 0 else repeat
@@ -457,6 +492,7 @@ CRONJOB_SCHEMA = {
     "description": """Manage scheduled cron jobs with a single compressed tool.
 
 Use action='create' to schedule a new job from a prompt or one or more skills.
+Use mode='notify' with message (or prompt) for fixed-text reminders that deliver at schedule time without running the LLM.
 Use action='list' to inspect jobs.
 Use action='update', 'pause', 'resume', 'remove', or 'run' to manage an existing job.
 
@@ -482,9 +518,17 @@ Important safety rule: cron-run sessions should not recursively schedule more cr
                 "type": "string",
                 "description": "Required for update/pause/resume/remove/run"
             },
+            "mode": {
+                "type": "string",
+                "description": "Job execution mode. Default 'agent' runs the LLM. 'notify' (aliases: static, message) delivers fixed text at schedule time with no LLM — use message or prompt as the body."
+            },
+            "message": {
+                "type": "string",
+                "description": "For notify mode: fixed text to deliver. If omitted, prompt is used as the body."
+            },
             "prompt": {
                 "type": "string",
-                "description": "For create: the full self-contained prompt. If skills are also provided, this becomes the task instruction paired with those skills."
+                "description": "For create: the full self-contained prompt. If skills are also provided, this becomes the task instruction paired with those skills. For notify mode, may be the fixed delivery body when message is omitted."
             },
             "schedule": {
                 "type": "string",
@@ -595,6 +639,8 @@ registry.register(
         context_from=args.get("context_from"),
         enabled_toolsets=args.get("enabled_toolsets"),
         workdir=args.get("workdir"),
+        mode=args.get("mode"),
+        message=args.get("message"),
         task_id=kw.get("task_id"),
     ))(),
     check_fn=check_cronjob_requirements,

@@ -11,6 +11,7 @@
 //! All business logic lives in Python. This crate is a thin process
 //! supervisor + secret/safety boundary.
 
+mod approval;
 mod bridge;
 mod capabilities;
 mod capture;
@@ -79,6 +80,8 @@ pub struct AppState {
     pub bridge_desktop_delivery_url: Arc<Mutex<Option<String>>>,
     /// Pending desktop delivery messages (Python cron → frontend).
     pub desktop_messages: Arc<tokio::sync::Mutex<Vec<bridge::DesktopMessage>>>,
+    /// Shell / messaging / cron approval requests awaiting webview response.
+    pub approval_store: Arc<approval::ApprovalStore>,
     /// Loopback port for Hermes `web_server` (set after Python writes `port.txt`).
     pub hermes_port: Arc<Mutex<Option<u16>>>,
     /// Set when embedded Python fails to start (shown in shell /chat instead of spinning forever).
@@ -97,6 +100,8 @@ pub fn run() {
     let bridge_addr = Arc::new(Mutex::new(None));
     let edge_browser = Arc::new(crate::edge_browser::EdgeSupervisor::new());
 
+    let approval_store = approval::ApprovalStore::new();
+
     let state = AppState {
         edge_browser: edge_browser.clone(),
         supervisor: supervisor.clone(),
@@ -110,6 +115,7 @@ pub fn run() {
         bridge_approval_url: Arc::new(Mutex::new(None)),
         bridge_desktop_delivery_url: Arc::new(Mutex::new(None)),
         desktop_messages: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+        approval_store: approval_store.clone(),
         hermes_port: Arc::new(Mutex::new(None)),
         hermes_bootstrap_error: Arc::new(Mutex::new(None)),
         desk_auth_token: Arc::new(Mutex::new(None)),
@@ -220,6 +226,7 @@ pub fn run() {
             pairing::cmd_pairing_revoke,
             pairing::cmd_pairing_clear_pending,
             cmd_desktop_messages,
+            approval::cmd_respond_approval,
             cron::cmd_cron_list,
             cron::cmd_cron_toggle,
             cron::cmd_cron_delete,
@@ -638,12 +645,12 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
     );
 
     // 2. Stand up the loopback bridge (secret handshake + shell approval + desktop delivery).
-    let desktop_q = {
+    let (desktop_q, approval_store) = {
         let state: tauri::State<AppState> = app.state();
-        state.desktop_messages.clone()
+        (state.desktop_messages.clone(), state.approval_store.clone())
     };
     let bridge_t0 = std::time::Instant::now();
-    let bridge_ok = bridge::spawn(app.clone(), desktop_q).await;
+    let bridge_ok = bridge::spawn(app.clone(), desktop_q, approval_store).await;
     log::info!("bootstrap bridge_ms={}", bridge_t0.elapsed().as_millis());
     if let Err(e) = bridge_ok {
         let msg = format!("{e:#}");
@@ -732,6 +739,9 @@ async fn bootstrap(app: tauri::AppHandle) -> anyhow::Result<()> {
 
     // 4. Register global screenshot shortcut (Ctrl+Alt+A).
     capture::register_global_shortcut(&app);
+
+    // Show the main window even if the webview's own show() hook fails (blank window).
+    reveal_main();
 
     log::info!("bootstrap total_ms={}", boot_t0.elapsed().as_millis());
     Ok(())

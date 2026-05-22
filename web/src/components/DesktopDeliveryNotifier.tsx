@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Bell, MessageCircle, X } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { createDesktopDeliveryNotice, type DesktopDeliveryMessage, type DesktopDeliveryNotice } from "../lib/desktopDelivery";
+import { CHAT_OPEN_REMINDER_SESSION_STATE } from "../lib/chatLocationState";
 import { useI18n } from "../lib/i18n";
 
 const EVENT_NAME = "desktop-delivery";
 const MAX_VISIBLE_NOTICES = 3;
-const AUTO_DISMISS_MS = 12000;
+const AUTO_DISMISS_MS = 45000;
 
 export function DesktopDeliveryNotifier() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const location = useLocation();
   const [notices, setNotices] = useState<DesktopDeliveryNotice[]>([]);
   const sequenceRef = useRef(0);
 
@@ -41,9 +41,7 @@ export function DesktopDeliveryNotifier() {
 
   const openChat = (id: string) => {
     setNotices((prev) => prev.filter((item) => item.id !== id));
-    if (location.pathname !== "/chat") {
-      nav("/chat");
-    }
+    nav("/chat", { state: CHAT_OPEN_REMINDER_SESSION_STATE });
   };
 
   return (
@@ -51,7 +49,7 @@ export function DesktopDeliveryNotifier() {
       {notices.map((notice) => (
         <div
           key={notice.id}
-          className="pointer-events-auto rounded-lg border border-zinc-200 bg-white p-3 shadow-xl shadow-zinc-950/10 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30"
+          className="pointer-events-auto rounded-[var(--radius-shell-lg)] border border-[var(--kq-color-primary-pale)] bg-white p-3 shadow-xl shadow-violet-950/15 ring-1 ring-[var(--kq-color-primary-pale)] dark:border-[#D4C5E2]/40 dark:bg-zinc-900 dark:shadow-black/40 dark:ring-[#D4C5E2]/20"
           role="status"
         >
           <div className="flex items-start gap-3">

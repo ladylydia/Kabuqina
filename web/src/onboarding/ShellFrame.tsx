@@ -1,17 +1,25 @@
 import { ReactNode, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { AppScaffold } from "../components/AppScaffold";
+import { useI18n } from "../lib/i18n";
 import { useDraft } from "../lib/store";
 import { cn } from "../lib/cn";
 import { getIndexInFlow, getStepsForMode, slugFromPathname, type ShellWizardStepId } from "./flowConfig";
 
 export function ShellFrame({ children }: { children: ReactNode }) {
   const loc = useLocation();
+  const { t } = useI18n();
   const draft = useDraft();
 
   const slug = useMemo((): ShellWizardStepId => slugFromPathname(loc.pathname), [loc.pathname]);
   const stepList = getStepsForMode(draft.setupMode);
   const idx = getIndexInFlow(slug, draft.setupMode);
+  const stepLabel = t(`onboarding.step.${slug}`);
+  const progressText = t("onboarding.progress", {
+    current: String(idx + 1),
+    total: String(stepList.length),
+    step: stepLabel,
+  });
 
   return (
     <AppScaffold className="flex h-full w-full flex-col">
@@ -22,7 +30,10 @@ export function ShellFrame({ children }: { children: ReactNode }) {
         )}
       >
         <div className="mx-auto flex max-w-[var(--hd-content-max)] items-center justify-end gap-3">
-          <div className="flex shrink-0 items-center sm:gap-3">
+          <div className="flex min-w-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <p className="hd-wizard-progress truncate" aria-live="polite">
+              {progressText}
+            </p>
             <ProgressDots index={idx} total={stepList.length} />
           </div>
         </div>
@@ -38,7 +49,7 @@ export function ShellFrame({ children }: { children: ReactNode }) {
 
 function ProgressDots({ index, total }: { index: number; total: number }) {
   return (
-    <div className="flex items-center gap-1.5" aria-hidden>
+    <div className="flex shrink-0 items-center gap-1.5" aria-hidden>
       {Array.from({ length: total }).map((_, i) => (
         <span
           key={i}

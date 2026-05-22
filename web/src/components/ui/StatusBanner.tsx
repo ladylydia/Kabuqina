@@ -64,7 +64,7 @@ export function StatusBanner({ variant, title, children, className }: Props) {
   return (
     <div
       className={cn(
-        "flex items-start gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm",
+        "flex items-start gap-2.5 rounded-[var(--radius-shell-lg)] border px-3.5 py-2.5 text-sm",
         meta.border,
         meta.bg,
         meta.text,

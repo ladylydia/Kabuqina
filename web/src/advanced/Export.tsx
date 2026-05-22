@@ -226,7 +226,7 @@ export function Export() {
         </div>
 
         {/* Format selector */}
-        <div className="rounded-xl border border-zinc-200/90 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
+        <div className="rounded-[var(--radius-shell-lg)] border border-zinc-200/90 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
           <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
             {t("export.formatLabel")}
           </label>

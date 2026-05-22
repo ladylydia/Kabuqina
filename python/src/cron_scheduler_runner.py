@@ -1,9 +1,10 @@
 """CronSchedulerRunner — run the upstream cron ticker inside the web child.
 
-The gateway process normally hosts the 60-second ticker thread, but many
+The gateway process normally hosts a 60-second ticker thread, but many
 HermesDesk users never start the gateway.  This module runs the same
-upstream ``cron.scheduler.tick()`` loop inside the web child so scheduled
-jobs fire regardless of gateway status.
+upstream ``cron.scheduler.tick()`` loop inside the web child (default
+15-second poll via ``HERMESDESK_CRON_TICK_SECONDS``) so scheduled jobs
+fire regardless of gateway status.
 
 The upstream ticker already owns a file-based lock (``cron/.tick.lock``),
 so running it in both the web child and the gateway is safe — only one
@@ -16,7 +17,7 @@ messages through the Tauri bridge.
 Startup:
 
     from cron_scheduler_runner import CronSchedulerRunner
-    runner = CronSchedulerRunner(interval=60)
+    runner = CronSchedulerRunner()
     runner.start()
 
 Shutdown:
@@ -27,9 +28,15 @@ Shutdown:
 from __future__ import annotations
 
 import logging
+import os
 import threading
 
 log = logging.getLogger("hermesdesk.cron.runner")
+
+# Desktop polls more often than upstream gateway (60s) so due jobs are picked
+# up sooner.  Delivery still happens only after run_job() finishes (LLM time).
+_DEFAULT_TICK_SECONDS = float(os.environ.get("HERMESDESK_CRON_TICK_SECONDS", "15"))
+_STARTUP_DELAY_SECONDS = float(os.environ.get("HERMESDESK_CRON_STARTUP_DELAY", "5"))
 
 
 class _DesktopDeliveryAdapter:
@@ -57,7 +64,9 @@ class _DesktopDeliveryAdapter:
 class CronSchedulerRunner:
     """Background thread that calls ``cron.scheduler.tick()`` every *interval* seconds."""
 
-    def __init__(self, interval: float = 60.0) -> None:
+    def __init__(self, interval: float | None = None) -> None:
+        if interval is None:
+            interval = _DEFAULT_TICK_SECONDS
         self._interval = interval
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -83,8 +92,9 @@ class CronSchedulerRunner:
         log.info("cron ticker stopped")
 
     def _run(self) -> None:
-        # Delay the first tick so the web server has time to start.
-        self._stop.wait(self._interval)
+        # Short startup delay (not a full interval) so the web stack can bind.
+        startup_delay = min(self._interval, max(1.0, _STARTUP_DELAY_SECONDS))
+        self._stop.wait(startup_delay)
 
         # Prune completed-history once per hour. ``RETAIN_COMPLETED_DAYS``
         # buys us plenty of slack, so we don't need a tight schedule.
@@ -113,6 +123,25 @@ class CronSchedulerRunner:
 
         while not self._stop.is_set():
             try:
+                try:
+                    from gateway_env_loader import ensure_gateway_env_for_delivery
+
+                    ensure_gateway_env_for_delivery()
+                except ImportError:
+                    import os
+                    from pathlib import Path
+
+                    home = (os.environ.get("HERMES_HOME") or "").strip()
+                    if home:
+                        try:
+                            from hermes_cli.env_loader import load_hermes_dotenv
+
+                            load_hermes_dotenv(hermes_home=Path(home))
+                        except Exception:
+                            log.exception(
+                                "cron ticker: gateway_env_loader missing and "
+                                "failed to load hermes-home .env"
+                            )
                 from cron.scheduler import tick as cron_tick
 
                 # First trip through the loop: cron.scheduler is now in

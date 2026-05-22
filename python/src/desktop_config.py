@@ -47,6 +47,7 @@ class DesktopConfig:
 
     # ── mode ────────────────────────────────────────────────────────────
     power_user: bool = False
+    desk_minimal: bool = False
 
     @property
     def runtime_mode(self) -> RuntimeMode:
@@ -78,6 +79,7 @@ def from_env() -> DesktopConfig:
         bridge_secret=_opt_str("HERMESDESK_BRIDGE_SECRET"),
         shell_chat_url=_opt_str("HERMESDESK_SHELL_CHAT_URL"),
         power_user=os.environ.get("HERMESDESK_POWER_USER") == "1",
+        desk_minimal=os.environ.get("HERMESDESK_DESK_MINIMAL") == "1",
     )
 
 

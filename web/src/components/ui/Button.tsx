@@ -10,7 +10,7 @@ export function Button({ variant = "primary", size = "md", className, ...rest }:
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-xl font-medium transition select-none",
+        "inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-shell-lg)] font-medium transition select-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variant === "primary" && "kq-btn-primary text-white dark:text-white",
         variant === "secondary" && "kq-btn-secondary",

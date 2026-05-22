@@ -2,11 +2,12 @@ import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../../lib/confirmDialog";
 import { AppScaffold } from "../../components/AppScaffold";
 import { BackButton } from "../../components/ui/BackButton";
 import { Button } from "../../components/ui/Button";
 import { Toggle } from "../../components/ui/Toggle";
+import { formatCronDateTime, formatCronSchedule } from "../../lib/formatCronTime";
 import { useI18n } from "../../lib/i18n";
 
 interface CronJobEntry {
@@ -21,6 +22,15 @@ interface CronJobEntry {
   state: string;
   completedAt: string | null;
   lastStatus: string | null;
+  lastDeliveryError: string | null;
+}
+
+function formatDeliverLabel(deliver: string, t: (key: string) => string): string {
+  const raw = (deliver || "local").trim().toLowerCase();
+  if (!raw || raw === "local" || raw === "desktop") {
+    return t("cron.deliverDesktop");
+  }
+  return deliver || t("cron.deliverDesktop");
 }
 
 interface CronJobListResponse {
@@ -38,7 +48,7 @@ function cronBackTarget(state: unknown): string | null {
 export function ScheduledTasksPage() {
   const nav = useNavigate();
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const cronBackTo = cronBackTarget(location.state);
   const backPath = cronBackTo === "/chat" ? "/chat" : "/settings";
   const backLabel = cronBackTo === "/chat" ? t("onboarding.backToChat") : t("settings.backToSettings");
@@ -86,9 +96,12 @@ export function ScheduledTasksPage() {
   };
 
   const handleDelete = async (jobId: string, jobName: string, fromCompleted: boolean) => {
-    const ok = await ask(t("cron.deleteAsk", { name: jobName }), {
+    const ok = await confirm({
       title: t("cron.deleteTitle"),
-      kind: "warning",
+      message: t("cron.deleteAsk", { name: jobName }),
+      confirmLabel: t("dialog.delete"),
+      cancelLabel: t("dialog.cancel"),
+      tone: "danger",
     });
     if (!ok) return;
     try {
@@ -106,7 +119,7 @@ export function ScheduledTasksPage() {
   const renderActiveCard = (job: CronJobEntry) => (
     <div
       key={job.id}
-      className="hd-glass-subtle rounded-xl px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900"
+      className="hd-glass-subtle px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -122,7 +135,7 @@ export function ScheduledTasksPage() {
           </div>
           <p className="mt-1 text-xs text-zinc-500">
             <span className="font-medium">{t("cron.schedule")}:</span>{" "}
-            {job.schedule}
+            {formatCronSchedule(job.schedule, locale)}
           </p>
           {job.prompt && (
             <p className="mt-0.5 text-xs text-zinc-400 truncate">
@@ -131,12 +144,18 @@ export function ScheduledTasksPage() {
           )}
           <p className="mt-0.5 text-xs text-zinc-400">
             <span className="font-medium">{t("cron.deliver")}:</span>{" "}
-            {job.deliver || "desktop"}
+            {formatDeliverLabel(job.deliver, t)}
           </p>
+          {job.lastDeliveryError && (
+            <p className="mt-0.5 text-xs text-rose-600 dark:text-rose-400">
+              <span className="font-medium">{t("cron.deliveryError")}:</span>{" "}
+              {job.lastDeliveryError}
+            </p>
+          )}
           {job.nextRunAt && (
             <p className="mt-0.5 text-xs text-zinc-400">
               <span className="font-medium">{t("cron.nextRun")}:</span>{" "}
-              {job.nextRunAt}
+              {formatCronDateTime(job.nextRunAt, locale)}
             </p>
           )}
         </div>
@@ -163,7 +182,7 @@ export function ScheduledTasksPage() {
     return (
       <div
         key={job.id}
-        className="hd-glass-subtle rounded-xl px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/50"
+        className="hd-glass-subtle px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/50"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -185,7 +204,7 @@ export function ScheduledTasksPage() {
             {job.completedAt && (
               <p className="mt-0.5 text-xs text-zinc-400">
                 <span className="font-medium">{t("cron.completedAt")}:</span>{" "}
-                {job.completedAt}
+                {formatCronDateTime(job.completedAt, locale)}
               </p>
             )}
           </div>
@@ -210,12 +229,19 @@ export function ScheduledTasksPage() {
           <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             {t("cron.lead")}
           </p>
+          <p className="mt-3 max-w-xl rounded-[var(--radius-shell-lg)] border border-[#e8e0ed]/90 bg-[#f8f3f8]/80 px-3.5 py-2.5 text-xs leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">{t("cron.tipLabel")}</span>
+            <span className="mx-1 text-zinc-400" aria-hidden>
+              ·
+            </span>
+            {t("cron.createTip")}
+          </p>
         </div>
 
         {loading ? (
           <p className="text-sm text-zinc-400">{t("cron.loading")}</p>
         ) : jobs.length === 0 && completed.length === 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white px-5 py-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-[var(--radius-shell-lg)] border border-zinc-200 bg-white px-5 py-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
             <p className="text-sm text-zinc-500">{t("cron.empty")}</p>
             <p className="mt-1 text-xs text-zinc-400">{t("cron.emptyHint")}</p>
           </div>

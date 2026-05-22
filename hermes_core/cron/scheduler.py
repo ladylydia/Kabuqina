@@ -795,6 +795,39 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     return "\n".join(parts)
 
 
+def _job_execution_mode(job: dict) -> str:
+    """Return ``agent`` (default) or ``notify`` (fixed-text delivery, no LLM)."""
+    raw = job.get("mode") or "agent"
+    if not isinstance(raw, str):
+        return "agent"
+    normalized = raw.strip().lower()
+    if normalized in ("notify", "static", "message"):
+        return "notify"
+    return "agent"
+
+
+def _run_notify_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
+    """Deliver a fixed message at schedule time without invoking the agent."""
+    job_id = job["id"]
+    job_name = job.get("name", job_id)
+    body = (job.get("message") or job.get("prompt") or "").strip()
+    if not body:
+        return False, "", "", "notify job requires non-empty message or prompt"
+    logger.info(
+        "Job '%s' (ID: %s): mode=notify, skipping agent",
+        job_name,
+        job_id,
+    )
+    now = _hermes_now()
+    doc = (
+        f"# Cron notify: {job_name}\n\n"
+        f"**Job ID:** {job_id}\n"
+        f"**Run Time:** {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"{body}\n"
+    )
+    return True, doc, body, None
+
+
 def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
     """
     Execute a single cron job.
@@ -802,8 +835,14 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
     Returns:
         Tuple of (success, full_output_doc, final_response, error_message)
     """
+    job_id = job["id"]
+    job_name = job["name"]
+
+    if _job_execution_mode(job) == "notify":
+        return _run_notify_job(job)
+
     from run_agent import AIAgent
-    
+
     # Initialize SQLite session store so cron job messages are persisted
     # and discoverable via session_search (same pattern as gateway/run.py).
     _session_db = None
@@ -812,9 +851,6 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
         _session_db = SessionDB()
     except Exception as e:
         logger.debug("Job '%s': SQLite session store not available: %s", job.get("id", "?"), e)
-    
-    job_id = job["id"]
-    job_name = job["name"]
 
     # Wake-gate: if this job has a pre-check script, run it BEFORE building
     # the prompt so a ``{"wakeAgent": false}`` response can short-circuit

@@ -38,6 +38,7 @@ pub struct CronJobEntry {
     pub state: String,
     pub completed_at: Option<String>,
     pub last_status: Option<String>,
+    pub last_delivery_error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -253,6 +254,10 @@ fn job_to_entry(job: &serde_json::Value) -> CronJobEntry {
             .map(|s| s.to_string()),
         last_status: job
             .get("last_status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        last_delivery_error: job
+            .get("last_delivery_error")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
     }

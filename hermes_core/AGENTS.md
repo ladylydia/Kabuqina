@@ -2,6 +2,13 @@
 
 Instructions for AI coding assistants and developers working on the hermes-agent codebase.
 
+## Kabuqina monorepo (read first)
+
+In the **Kabuqina** repo, this tree is **`hermes_core/`** — owned agent core, not a disposable upstream drop-in. We do **not** auto-sync from NousResearch/hermes-agent; we **do** commit product changes here when they belong in the agent (cron semantics, tools, gateway, etc.).
+
+- **Boundaries & low-risk core edits:** repo root [`AGENTS.md`](../AGENTS.md) — sections **「Core 与 overlay 分工」** / **「Core vs overlay boundaries」**.
+- **Desktop-only glue** (Tauri, DPAPI, overlays, `desk_server`): `python/overlays/`, `python/src/`, `tauri/`, `web/` — not duplicated in this file.
+
 ## Development Environment
 
 ```bash

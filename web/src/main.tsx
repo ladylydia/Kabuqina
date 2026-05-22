@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowTitleBar } from "./components/WindowTitleBar";
+import { ApprovalDialogHost } from "./components/ApprovalDialogHost";
+import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
 import { DesktopDeliveryNotifier } from "./components/DesktopDeliveryNotifier";
 import { DesktopDeliveryPoller } from "./components/DesktopDeliveryPoller";
 import { I18nProvider } from "./lib/i18n";
@@ -87,6 +89,8 @@ if (windowLabel === "capture-overlay") {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <DesktopDeliveryNotifier />
+              <ApprovalDialogHost />
+              <ConfirmDialogHost />
               <DesktopDeliveryPoller />
             </div>
           </div>

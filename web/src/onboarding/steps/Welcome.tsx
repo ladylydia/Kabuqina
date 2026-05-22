@@ -9,22 +9,22 @@ export function Welcome() {
   return (
     <div className="space-y-10">
       <div className="space-y-4">
-        <h1 className="hd-page-title">{t("welcome.title")}</h1>
-        <p className="hd-lead max-w-prose">{t("welcome.lead")}</p>
+        <h1 className="hd-wizard-title">{t("welcome.title")}</h1>
+        <p className="hd-wizard-lead">{t("welcome.lead")}</p>
       </div>
 
-      <ul className="hd-glass-subtle space-y-3.5 p-5 text-zinc-700 dark:text-zinc-300">
+      <ul className="hd-glass-subtle space-y-3.5 p-5">
         <li className="flex gap-3">
           <Bullet />
-          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li1")}</span>
+          <span className="hd-wizard-body">{t("welcome.li1")}</span>
         </li>
         <li className="flex gap-3">
           <Bullet />
-          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li2")}</span>
+          <span className="hd-wizard-body">{t("welcome.li2")}</span>
         </li>
         <li className="flex gap-3">
           <Bullet />
-          <span className="text-[0.95rem] leading-relaxed">{t("welcome.li3")}</span>
+          <span className="hd-wizard-body">{t("welcome.li3")}</span>
         </li>
       </ul>
 
@@ -41,6 +41,9 @@ export function Welcome() {
 
 function Bullet() {
   return (
-    <span aria-hidden className="mt-1 inline-block h-2 w-2 rounded-full bg-zinc-400 dark:bg-zinc-600" />
+    <span
+      aria-hidden
+      className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-[var(--kq-color-primary)] dark:bg-[#D4C5E2]"
+    />
   );
 }

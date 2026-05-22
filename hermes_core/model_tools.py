@@ -23,6 +23,7 @@ Public API (signatures preserved from the original 2,400-line version):
 import json
 import asyncio
 import logging
+import os
 import threading
 import time
 from typing import Dict, Any, List, Optional, Tuple
@@ -177,7 +178,48 @@ def _run_async(coro):
 # Tool Discovery  (importing each module triggers its registry.register calls)
 # =============================================================================
 
-discover_builtin_tools()
+_TOOLS_DISCOVERED = False
+_TOOLS_DISCOVER_LOCK = threading.Lock()
+
+# Backward-compat constants (populated by ensure_tools_discovered).
+# Must exist before the module-level ensure_tools_discovered() call below.
+TOOL_TO_TOOLSET_MAP: Dict[str, str] = {}
+TOOLSET_REQUIREMENTS: Dict[str, dict] = {}
+
+
+def _desk_minimal_mode() -> bool:
+    return os.environ.get("HERMESDESK_DESK_MINIMAL", "") == "1"
+
+
+def ensure_tools_discovered() -> None:
+    """Load built-in tools and plugins once (lazy when desk-minimal)."""
+    global _TOOLS_DISCOVERED
+    with _TOOLS_DISCOVER_LOCK:
+        if _TOOLS_DISCOVERED:
+            return
+        t0 = time.monotonic()
+        discover_builtin_tools()
+        try:
+            from hermes_cli.plugins import discover_plugins
+            discover_plugins()
+        except Exception as e:
+            logger.debug("Plugin discovery failed: %s", e)
+        TOOL_TO_TOOLSET_MAP.clear()
+        TOOL_TO_TOOLSET_MAP.update(registry.get_tool_to_toolset_map())
+        TOOLSET_REQUIREMENTS.clear()
+        TOOLSET_REQUIREMENTS.update(registry.get_toolset_requirements())
+        _TOOLS_DISCOVERED = True
+        logger.info(
+            "tool discovery complete in %.0fms (desk_minimal=%s)",
+            (time.monotonic() - t0) * 1000,
+            _desk_minimal_mode(),
+        )
+
+
+if _desk_minimal_mode():
+    pass
+else:
+    ensure_tools_discovered()
 
 # MCP tool discovery (external MCP servers from config) used to run here as
 # a module-level side effect.  It was removed because discover_mcp_tools()
@@ -192,21 +234,7 @@ discover_builtin_tools()
 #   - tui_gateway/server.py     -> inline on startup (no event loop)
 #   - acp_adapter/server.py     -> asyncio.to_thread on session init
 
-# Plugin tool discovery (user/project/pip plugins)
-try:
-    from hermes_cli.plugins import discover_plugins
-    discover_plugins()
-except Exception as e:
-    logger.debug("Plugin discovery failed: %s", e)
-
-
-# =============================================================================
-# Backward-compat constants  (built once after discovery)
-# =============================================================================
-
-TOOL_TO_TOOLSET_MAP: Dict[str, str] = registry.get_tool_to_toolset_map()
-
-TOOLSET_REQUIREMENTS: Dict[str, dict] = registry.get_toolset_requirements()
+# Plugin tool discovery (user/project/pip plugins) — see ensure_tools_discovered().
 
 # Resolved tool names from the last get_tool_definitions() call.
 # Used by code_execution_tool to know which tools are available in this session.
@@ -273,6 +301,7 @@ def get_tool_definitions(
     disabled_toolsets: List[str] = None,
     quiet_mode: bool = False,
 ) -> List[Dict[str, Any]]:
+    ensure_tools_discovered()
     """
     Get tool definitions for model API calls with toolset-based filtering.
 
@@ -666,6 +695,7 @@ def handle_function_call(
     Returns:
         Function result as a JSON string.
     """
+    ensure_tools_discovered()
     # Coerce string arguments to their schema-declared types (e.g. "42"→42)
     function_args = coerce_tool_args(function_name, function_args)
 

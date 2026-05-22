@@ -47,7 +47,7 @@ export function ConfigModalBody({ editing, section, loc, form, setForm, onClose,
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={onClose}
           >
             {t("setupOptions.cancelConfig")}
@@ -82,7 +82,7 @@ export function ConfigModalBody({ editing, section, loc, form, setForm, onClose,
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={onClose}
           >
             {t("setupOptions.cancelConfig")}
@@ -117,7 +117,7 @@ export function ConfigModalBody({ editing, section, loc, form, setForm, onClose,
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={onClose}
           >
             {t("setupOptions.cancelConfig")}
@@ -135,7 +135,7 @@ export function ConfigModalBody({ editing, section, loc, form, setForm, onClose,
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={onClose}
           >
             {t("setupOptions.cancelConfig")}
@@ -180,7 +180,7 @@ export function ConfigModalBody({ editing, section, loc, form, setForm, onClose,
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800/80">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={onClose}
           >
             {t("setupOptions.cancelConfig")}

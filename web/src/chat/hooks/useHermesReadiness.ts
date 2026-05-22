@@ -1,65 +1,34 @@
 import { useEffect, useState } from "react";
-import { cmdGetHermesBootstrapError, cmdGetHermesPort } from "../chat-api";
+import { getCachedHermesReadiness } from "../hermesReadinessCache";
+import { waitForHermesReadiness } from "../hermesReadinessPoll";
 import { useI18n } from "../../lib/i18n";
 
 export function useHermesReadiness() {
   const { t } = useI18n();
-  const [hermesReady, setHermesReady] = useState(false);
-  const [bootErr, setBootErr] = useState<string | null>(null);
+  const cached = getCachedHermesReadiness();
+  const [hermesReady, setHermesReady] = useState(cached.hermesReady);
+  const [hermesWarming, setHermesWarming] = useState(cached.hermesWarming);
+  const [bootErr, setBootErr] = useState<string | null>(cached.bootErr);
 
   useEffect(() => {
     let cancel = false;
-    const tick = async () => {
-      for (let i = 0; i < 120; i++) {
-        if (cancel) {
-          return;
-        }
-        try {
-          const bootFail = await cmdGetHermesBootstrapError();
-          if (bootFail) {
-            if (!cancel) {
-              setBootErr(formatBootError(bootFail, t));
-            }
-            return;
-          }
-          const p = await cmdGetHermesPort();
-          if (p != null) {
-            if (!cancel) {
-              setHermesReady(true);
-              setBootErr(null);
-            }
-            return;
-          }
-        } catch {
-          /* keep polling */
-        }
-        await new Promise((r) => setTimeout(r, 500));
+    const bootT0 = import.meta.env.DEV ? performance.now() : 0;
+    void (async () => {
+      const snap = await waitForHermesReadiness(t, () => cancel);
+      if (cancel) {
+        return;
       }
-      if (!cancel) {
-        const bootFail = await cmdGetHermesBootstrapError().catch(() => null);
-        setBootErr(
-          bootFail ? formatBootError(bootFail, t) : t("chat.errHermesTimeout"),
-        );
+      setHermesReady(snap.hermesReady);
+      setHermesWarming(snap.hermesWarming);
+      setBootErr(snap.bootErr);
+      if (import.meta.env.DEV && bootT0 > 0 && snap.hermesReady && !snap.hermesWarming) {
+        console.info(`[kabuqina] hermes_ready_ms=${Math.round(performance.now() - bootT0)}`);
       }
-    };
-    void tick();
+    })();
     return () => {
       cancel = true;
     };
   }, [t]);
 
-  return { hermesReady, bootErr } as const;
-}
-
-function formatBootError(detail: string, t: (key: string) => string): string {
-  const lower = detail.toLowerCase();
-  const proxyish =
-    lower.includes("timeout") ||
-    lower.includes("timed out") ||
-    lower.includes("proxy") ||
-    lower.includes("30s");
-  if (proxyish) {
-    return `${t("chat.errHermesBootFailed")}\n\n${detail}\n\n${t("chat.errHermesProxyHint")}`;
-  }
-  return `${t("chat.errHermesBootFailed")}\n\n${detail}`;
+  return { hermesReady, hermesWarming, bootErr } as const;
 }

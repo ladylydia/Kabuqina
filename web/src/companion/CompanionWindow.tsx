@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { CompanionCup } from "../components/CompanionCup";
+import { CompanionPillScene } from "../components/CompanionPillScene";
 import { cn } from "../lib/cn";
 import { useI18n } from "../lib/i18n";
 
 /** Pixels²: move more than sqrt(this) before we call `startDragging`, so plain double‑clicks open main. */
 const COMPACT_DRAG_SQ_THRESHOLD = 7 * 7;
-/** Match `.kq-companion-big-cup` / `.kq-companion-pill-cup` (5.4rem × 4.7rem). */
+/** Match `.kq-companion-pill-scene` (5.4rem × 5.35rem). */
 const PILL_REM_W = 5.4;
-const PILL_REM_H = 4.7;
+const PILL_REM_H = 5.35;
 
 function rootFontPx(): number {
   const px = parseFloat(getComputedStyle(document.documentElement).fontSize);
@@ -38,6 +38,14 @@ async function resizeCompanionWindow(width: number, height: number): Promise<voi
   }
 }
 
+async function placeCompanionWindow(): Promise<void> {
+  try {
+    await invoke("cmd_ensure_companion_position");
+  } catch (error) {
+    console.error("cmd_ensure_companion_position failed:", error);
+  }
+}
+
 export function CompanionWindow() {
   const { locale } = useI18n();
   const compactDragRef = useRef<{
@@ -56,7 +64,7 @@ export function CompanionWindow() {
   useEffect(() => {
     const sync = () => {
       const { w, h } = pillLogicalSize();
-      void resizeCompanionWindow(w, h);
+      void resizeCompanionWindow(w, h).then(() => placeCompanionWindow());
     };
     sync();
     const observer = new ResizeObserver(sync);
@@ -184,9 +192,7 @@ export function CompanionWindow() {
       }}
       onDoubleClick={openMain}
     >
-      <div className="kq-companion-pill-cup pointer-events-none">
-        <CompanionCup />
-      </div>
+      <CompanionPillScene className="pointer-events-none" />
     </div>
   );
 }

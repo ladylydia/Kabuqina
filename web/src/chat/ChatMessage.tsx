@@ -356,21 +356,25 @@ export function ChatMessage({ role, text, attachments, model, timestamp, streami
   return (
     <div className={cn("flex items-start gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
-        <div className="kq-assistant-avatar mt-0.5" aria-label="卡布奇娜">
-          <CompanionCup />
+        <div className="kq-assistant-avatar" aria-label="卡布奇娜">
+          <CompanionCup variant="brand" />
         </div>
       )}
       <div
         className={cn(
-          "max-w-[min(100%,42rem)] overflow-visible rounded-2xl px-4 py-2.5",
+          "kq-chat-assistant-column min-w-0 rounded-2xl px-4 py-2.5",
           isUser
-            ? "kq-chat-bubble-user rounded-tr-sm dark:bg-[#3B5BC7] dark:text-white"
+            ? "max-w-[min(100%,var(--kq-chat-column-max))] kq-chat-bubble-user rounded-tr-sm dark:bg-[#3B5BC7] dark:text-white"
             : "kq-chat-bubble-assistant rounded-tl-sm dark:border-zinc-700/80 dark:bg-zinc-800/90"
         )}
       >
         {isUser ? (
           <>
-            {text.trim() ? <p className="whitespace-pre-wrap text-sm leading-[1.6]">{text}</p> : null}
+            {text.trim() ? (
+              <p className="whitespace-pre-wrap break-words text-sm leading-[1.6] [overflow-wrap:anywhere]">
+                {text}
+              </p>
+            ) : null}
             <UserImageAttachments attachments={attachments} />
             {timeStr && (
               <div className="mt-1.5 text-right text-[11px] font-mono tabular-nums text-[var(--kq-color-muted)] dark:text-sky-200/70">
@@ -381,7 +385,7 @@ export function ChatMessage({ role, text, attachments, model, timestamp, streami
         ) : (
           <>
             {streaming ? (
-              <p className="whitespace-pre-wrap text-sm leading-[1.6] text-zinc-800 dark:text-zinc-200">
+              <p className="whitespace-pre-wrap break-words text-sm leading-[1.6] text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-200">
                 {text}
               </p>
             ) : (

@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { AppScaffold } from "./components/AppScaffold";
+import { BootPill } from "./components/BootPill";
+import { waitForHermesReadiness } from "./chat/hermesReadinessPoll";
 import { useI18n } from "./lib/i18n";
-import { cn } from "./lib/cn";
 import { clearAllowChatWithoutApi, getAllowChatWithoutApi } from "./lib/apiKeyGate";
 
 /**
- * App entry: saved API key → chat. No key but user chose “configure later” on pass step → chat.
- * Otherwise → onboarding.
+ * App entry: saved API key → chat (after Hermes ready). No key but user chose
+ * “configure later” on pass step → chat (after Hermes ready). Otherwise → onboarding.
  */
 export function Splash() {
   const { t } = useI18n();
@@ -19,52 +20,36 @@ export function Splash() {
     void (async () => {
       try {
         const has = await invoke<boolean>("cmd_has_secret");
-        if (cancelled) return;
-        if (has) {
-          clearAllowChatWithoutApi();
-          nav("/chat", { replace: true });
+        if (cancelled) {
           return;
         }
-        const allowLater = getAllowChatWithoutApi();
-        if (allowLater) {
+        const goChat = has || getAllowChatWithoutApi();
+        if (goChat) {
+          if (has) {
+            clearAllowChatWithoutApi();
+          }
+          await waitForHermesReadiness(t, () => cancelled);
+          if (cancelled) {
+            return;
+          }
           nav("/chat", { replace: true });
           return;
         }
         nav("/onboarding/welcome", { replace: true });
       } catch {
-        if (!cancelled) nav("/onboarding/mode", { replace: true });
+        if (!cancelled) {
+          nav("/onboarding/mode", { replace: true });
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [nav]);
+  }, [nav, t]);
 
   return (
     <AppScaffold className="flex h-full min-h-0 flex-col items-center justify-center">
-      <div
-        className={cn(
-          "hd-glass w-full max-w-sm px-8 py-10 text-center",
-          "sm:max-w-md sm:px-10"
-        )}
-      >
-        <img
-          src="/kabuqina_na_blue_128.png"
-          alt={t("brand")}
-          className="mx-auto mb-4 h-16 w-16 object-contain dark:opacity-95"
-          width={64}
-          height={64}
-          decoding="async"
-        />
-        <div className="text-2xl font-semibold tracking-tight text-[var(--kq-color-strong)] sm:text-3xl">{t("brand")}</div>
-        <p className="hd-hint mt-3 justify-center">
-          <span aria-hidden>✨</span>
-          {t("splash.waking")}
-        </p>
-        <div className="mx-auto mt-8 h-1 w-48 max-w-full overflow-hidden rounded-full bg-[var(--kq-color-primary-pale)] dark:bg-zinc-800">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-[var(--kq-color-primary)]/70 dark:bg-[#D4C5E2]" />
-        </div>
-      </div>
+      <BootPill />
     </AppScaffold>
   );
 }

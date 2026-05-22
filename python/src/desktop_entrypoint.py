@@ -294,6 +294,7 @@ def _verify_bundle_deps(log: logging.Logger) -> None:
 def main() -> int:
     _setup_logging()
     log = logging.getLogger("hermesdesk.entry")
+    boot_t0 = time.monotonic()
     log.info("starting HermesDesk Python (pid=%d)", os.getpid())
 
     # Mark this process as an interactive session BEFORE any Hermes import.
@@ -308,11 +309,25 @@ def main() -> int:
     os.environ.setdefault("HERMES_INTERACTIVE", "1")
 
     _wire_sys_path()
+    t_deps = time.monotonic()
     _verify_bundle_deps(log)
     hermes_home = _redirect_hermes_home()
     log.info("HERMES_HOME -> %s", hermes_home)
+    try:
+        from gateway_env_loader import ensure_gateway_env_loaded
+
+        ensure_gateway_env_loaded()
+    except Exception:
+        log.exception("failed to load hermes-home .env for messaging/cron delivery")
+    try:
+        from desktop_timezone import apply_desktop_timezone
+
+        apply_desktop_timezone(hermes_home)
+    except Exception:
+        log.exception("failed to apply desktop timezone")
     _wire_local_stt(log)
     _wire_tts_voice(log)
+    log.info("boot timing deps_ms=%.0f", (time.monotonic() - t_deps) * 1000)
 
     # 0. Contract version check.  Must match the Tauri shell's expectation.
     from desktop_contract import CONTRACT_VERSION as _EXPECTED_CONTRACT
@@ -333,17 +348,19 @@ def main() -> int:
 
     cfg = from_env()
     log.info(
-        "DesktopConfig: mode=%s provider=%s llm_host=%s workspace=%s",
-        cfg.runtime_mode.value, cfg.provider, cfg.llm_host, cfg.workspace,
+        "DesktopConfig: mode=%s provider=%s llm_host=%s workspace=%s desk_minimal=%s",
+        cfg.runtime_mode.value, cfg.provider, cfg.llm_host, cfg.workspace, cfg.desk_minimal,
     )
 
     # 1. Overlays first.
+    t_overlays = time.monotonic()
     try:
         from overlays import apply_all
     except ImportError:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from overlays import apply_all  # type: ignore[no-redef]
     apply_all()
+    log.info("boot timing overlays_ms=%.0f", (time.monotonic() - t_overlays) * 1000)
 
     # 1b. Eager-load real ``gateway.session_context`` so ``tools/approval`` + terminal
     #     use ContextVar state (not a stale stub left in sys.modules).
@@ -355,15 +372,16 @@ def main() -> int:
     except Exception as e:
         log.warning("gateway.session_context import failed: %s", e)
 
-    # 2. Import web_server before the port handshake. Import creates session state
-    #    (e.g. writes `hermes_web_session_token.txt` to HERMESDESK_DATA_DIR) that
-    #    the Tauri shell reads once `port.txt` is visible — if we wrote port first,
-    #    the shell could race and miss that file.
+    # 2. Import desk_server before the port handshake. Import creates session state
+    #    (SESSION_TOKEN mirrored to `hermes_web_session_token.txt`) that the Tauri
+    #    shell reads once `port.txt` is visible.
+    t_web = time.monotonic()
     try:
-        from hermes_cli import web_server  # type: ignore
+        import desk_server  # type: ignore
     except Exception:
-        log.exception("failed to import hermes_cli.web_server; aborting")
+        log.exception("failed to import desk_server; aborting")
         return 3
+    log.info("boot timing desk_server_import_ms=%.0f", (time.monotonic() - t_web) * 1000)
 
     # Main agent must know about Kabuqina power-user mode (terminal/code/MoA gated off by default).
     try:
@@ -430,12 +448,11 @@ def main() -> int:
         log.warning("failed to register desktop platform: %s", e)
 
     # Mirror SPA session token for the Tauri shell (reads same path as ``paths::ensure_data_dir``).
-    # web_server also writes this on import; we repeat here so an older bundled hermes without
-    # that block still works.
+    # desk_server generates SESSION_TOKEN at import; we mirror it here for the Tauri shell.
     _dd = (os.environ.get("HERMESDESK_DATA_DIR") or "").strip()
     if _dd:
         try:
-            tok = getattr(web_server, "_SESSION_TOKEN", None)
+            tok = getattr(desk_server, "SESSION_TOKEN", None) or getattr(desk_server, "_SESSION_TOKEN", None)
             if tok:
                 p = Path(_dd) / "hermes_web_session_token.txt"
                 p.write_text(str(tok), encoding="utf-8")
@@ -446,7 +463,10 @@ def main() -> int:
     # 3. Pick port and tell Tauri.
     port = _free_port()
     _write_handshake(port)
-    log.info("bound port %d, handshake written", port)
+    log.info("bound port %d, handshake written (boot timing port_write_ms=%.0f)", port, (time.monotonic() - boot_t0) * 1000)
+
+    if cfg.desk_minimal:
+        desk_server.start_desk_warm_background()
 
     # 3b. Start the cron scheduler ticker in a daemon thread so scheduled
     #     jobs fire even without the gateway process.
@@ -454,21 +474,21 @@ def main() -> int:
     try:
         from cron_scheduler_runner import CronSchedulerRunner
 
-        _cron_runner = CronSchedulerRunner(interval=60)
+        _cron_runner = CronSchedulerRunner()
         _cron_runner.start()
     except Exception:
         log.exception("failed to start cron ticker (scheduled tasks unavailable)")
 
-    # Upstream API (hermes >= 0.10): hermes_cli.web_server.start_server(host, port, ...)
+    # Kabuqina desk API: desk_server.start_server(host, port, open_browser=False)
     runner = (
-        getattr(web_server, "start_server", None)
-        or getattr(web_server, "run", None)
-        or getattr(web_server, "main", None)
+        getattr(desk_server, "start_server", None)
+        or getattr(desk_server, "run", None)
+        or getattr(desk_server, "main", None)
     )
     if runner is None:
         log.error(
-            "no start_server()/run()/main() entry in hermes_cli.web_server; "
-            "upstream API may have changed"
+            "no start_server()/run()/main() entry in desk_server; "
+            "check desk_server package"
         )
         return 4
 

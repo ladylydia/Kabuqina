@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../../lib/confirmDialog";
 import { useI18n } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
 import { StatusBanner } from "../../components/ui/StatusBanner";
@@ -179,9 +179,12 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
   }
 
   async function handleRemove() {
-    const ok = await ask(t("settings.removeConfigAsk"), {
+    const ok = await confirm({
       title: t("settings.removeConfigAskTitle"),
-      kind: "warning",
+      message: t("settings.removeConfigAsk"),
+      confirmLabel: t("dialog.remove"),
+      cancelLabel: t("dialog.cancel"),
+      tone: "warning",
     });
     if (!ok) return;
     setRemoving(true);
@@ -208,7 +211,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
       ) : null}
 
       {env?.configured && !showForm ? (
-        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
+        <div className="rounded-[var(--radius-shell-lg)] border border-emerald-200/90 bg-emerald-50/60 px-3 py-2.5 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/35">
           <p className="font-medium text-emerald-900 dark:text-emerald-100">{t("settings.emailAlreadyTitle")}</p>
           {env.addressHint ? (
             <p className="mt-1.5 font-mono text-xs text-emerald-950/90 dark:text-emerald-50/90">
@@ -233,7 +236,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
       ) : null}
 
       {showForm ? (
-        <div className="kq-info-panel space-y-3 rounded-lg px-3 py-3 dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
+        <div className="kq-info-panel space-y-3 px-3 py-3 dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
             {t("settings.emailFormLead")}
           </p>
@@ -294,7 +297,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
                   : t("settings.emailOauth2ShowAdvanced")}
               </button>
               {showOauthAdvanced || !oauthHasDefaultClientId ? (
-                <div className="space-y-2 rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900/70">
+                <div className="space-y-2 rounded-[var(--radius-shell-lg)] border border-zinc-200 bg-white/70 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900/70">
                   {!oauthHasDefaultClientId ? (
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {t("settings.emailOauth2NoBuiltInApp")}
@@ -320,7 +323,7 @@ export function SettingsEmailBlock({ className }: { className?: string }) {
                   />
                 </div>
               ) : null}
-              <div className="rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
+              <div className="rounded-[var(--radius-shell-lg)] border border-zinc-200 bg-white/70 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
                 <div className="flex flex-wrap items-center gap-2">
                   <PlatformButton
                     disabled={oauthBusy || (!oauthHasDefaultClientId && !oauth2ClientId.trim())}

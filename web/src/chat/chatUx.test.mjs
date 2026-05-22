@@ -60,6 +60,25 @@ assert.deepEqual(
 assert.deepEqual(
   deriveSessionPresentation(
     {
+      id: "hermesdesk-reminders",
+      title: "定时任务记录",
+      preview: "⏰ 喝水",
+      last_active: Math.floor(now.getTime() / 1000),
+    },
+    "zh",
+    now,
+  ),
+  {
+    label: "小娜提醒",
+    group: "今天",
+    kind: "reminder",
+    icon: "alarm",
+  },
+);
+
+assert.deepEqual(
+  deriveSessionPresentation(
+    {
       id: "intro-1",
       title: "你是谁？",
       preview: "你是谁？",
@@ -114,12 +133,6 @@ assert.doesNotMatch(
   sidebarSource,
   /data-action-priority="low"[\s\S]*t\("chat\.exportButton"\)|nav\("\/export"\)/,
   "Export chat should move out of the left rail.",
-);
-
-assert.match(
-  sidebarSource,
-  /data-action-priority="primary"[\s\S]*t\("cron\.title"\)/,
-  "Scheduled tasks should remain the primary sidebar utility action.",
 );
 
 assert.match(
@@ -343,20 +356,49 @@ assert.match(
 
 assert.match(
   chatInputSource,
-  /kq-input-footer[\s\S]*justify-center[\s\S]*chat\.hint[\s\S]*settings\.powerTitle/,
-  "The input hint and power-user toggle should be centered below the composer.",
+  /kq-input-footer[\s\S]*justify-center[\s\S]*chat\.hint/,
+  "The input hint should stay centered below the composer.",
 );
 
-assert.match(
+assert.doesNotMatch(
   chatInputSource,
-  /kq-power-toggle[\s\S]*tone="kabuqina"/,
-  "The input footer power-user control should use the same lavender accent as the chat UI.",
+  /settings\.powerTitle|kq-power-toggle/,
+  "Power-user toggle should not live in the chat input footer.",
+);
+
+const togglePowerSource = fs.readFileSync(new URL("../lib/useTogglePowerUser.ts", import.meta.url), "utf8");
+assert.match(togglePowerSource, /confirm\([\s\S]*tone:\s*"warning"/);
+assert.doesNotMatch(togglePowerSource, /plugin-dialog/);
+assert.match(titleBarSource, /useTogglePowerUser/);
+assert.match(
+  fs.readFileSync(new URL("../main.tsx", import.meta.url), "utf8"),
+  /ConfirmDialogHost/,
+  "App shell should mount the in-app confirm dialog host.",
+);
+assert.match(
+  chatPageSource,
+  /handleDelete[\s\S]*confirm\([\s\S]*chat\.deleteTitle[\s\S]*tone:\s*"danger"/,
+  "Session delete should use the in-app confirm dialog.",
+);
+assert.doesNotMatch(chatPageSource, /window\.confirm/);
+assert.match(
+  titleBarSource,
+  /kq-titlebar-power[\s\S]*settings\.powerTitle[\s\S]*togglePowerUser/,
+  "Power-user toggle should sit in the titlebar beside capabilities.",
+);
+
+assert.match(messageListSource, /kq-empty-action-icon/);
+assert.match(messageListSource, /strokeWidth=\{2\.25\}/);
+assert.match(
+  messageListSource,
+  /kq-color-icon-book[\s\S]*kq-color-icon-folder[\s\S]*kq-color-icon-alarm[\s\S]*kq-color-icon-pen/,
+  "Empty-state quick actions should use unified colorful icon strokes.",
 );
 
 assert.match(
   messageListSource,
-  /kq-color-icon-book[\s\S]*kq-color-icon-folder[\s\S]*kq-color-icon-alarm[\s\S]*kq-color-icon-pen/,
-  "Empty-state quick actions should use colorful icons like the reference.",
+  /grid-cols-\[repeat\(auto-fit,minmax\(10\.5rem,1fr\)\)\]/,
+  "Empty-state quick actions should wrap on narrow screens.",
 );
 
 assert.match(
@@ -430,9 +472,9 @@ assert.match(
 );
 
 assert.match(
-  workspacePanelSource,
-  /kq-section-heading[\s\S]*text-sm[\s\S]*leading-snug/,
-  "Workspace section headings should use clearer lavender capsule headings with readable size.",
+  indexCssSource,
+  /\.kq-section-heading[\s\S]*border-left:\s*3px[\s\S]*background:\s*rgba\(243,\s*237,\s*246/,
+  "Workspace section headings should use a subtle left accent instead of heavy lavender pills.",
 );
 
 assert.match(
@@ -443,8 +485,8 @@ assert.match(
 
 assert.match(
   workspacePanelSource,
-  /kq-color-icon-folder[\s\S]*workspaceOrganizeDesktop[\s\S]*kq-color-icon-download[\s\S]*chat\.exportButton/,
-  "Workspace quick actions should use colorful icons.",
+  /nav\("\/settings\/cron"[\s\S]*kq-color-icon-alarm[\s\S]*cron\.title[\s\S]*kq-color-icon-folder[\s\S]*workspaceOrganizeDesktop[\s\S]*kq-color-icon-download[\s\S]*chat\.exportButton/,
+  "Workspace quick actions should use colorful icons with scheduled tasks first.",
 );
 
 assert.doesNotMatch(
@@ -455,14 +497,20 @@ assert.doesNotMatch(
 
 assert.match(
   sidebarSource,
-  /kq-sidebar-group-label[\s\S]*kq-sidebar-session-label/,
-  "Sidebar history labels should use larger, clearer typography classes.",
+  /kq-sidebar-group-divided[\s\S]*kq-sidebar-group-label[\s\S]*kq-sidebar-session-label/,
+  "Sidebar history groups should use dividers and stronger group labels.",
 );
 
 assert.match(
   sidebarSource,
-  /kq-reminder-card[\s\S]*kq-reminder-icon[\s\S]*cron\.title/,
-  "The bottom reminder card should use the Kabuqina reminder styling.",
+  /REMINDER_SESSION_ID[\s\S]*kq-color-icon-alarm/,
+  "Only the fixed Nana reminder log session should use the colorful alarm icon.",
+);
+
+assert.doesNotMatch(
+  sidebarSource,
+  /kq-reminder-card|cron\.title/,
+  "Scheduled tasks entry should not live in the sidebar footer.",
 );
 
 assert.match(
@@ -478,4 +526,53 @@ assert.match(
 );
 assert.match(titleBarSource, /onShowCompanion[\s\S]*cmd_show_companion/);
 assert.match(indexCssSource, /kq-titlebar-companion-btn/);
-assert.match(indexCssSource, /kq-power-toggle/);
+assert.match(indexCssSource, /kq-titlebar-power/);
+assert.match(indexCssSource, /--radius-shell-lg:\s*0\.75rem/);
+assert.match(indexCssSource, /kq-workspace-card[\s\S]*border-radius:\s*var\(--radius-shell-lg\)/);
+assert.match(indexCssSource, /hd-glass-subtle[\s\S]*border-radius:\s*var\(--radius-shell-lg\)/);
+
+const {
+  getCachedHermesReadiness,
+  snapshotFromBootState,
+  updateHermesReadinessCache,
+} = await importTs("./hermesReadinessCache.ts");
+const useHermesReadinessSource = fs.readFileSync(
+  new URL("./hooks/useHermesReadiness.ts", import.meta.url),
+  "utf8",
+);
+
+assert.deepEqual(getCachedHermesReadiness(), {
+  hermesReady: false,
+  hermesWarming: false,
+  bootErr: null,
+});
+
+assert.deepEqual(snapshotFromBootState({ port: 12345, warming: false }), {
+  hermesReady: true,
+  hermesWarming: false,
+  bootErr: null,
+});
+
+assert.deepEqual(updateHermesReadinessCache({ port: 12345, warming: false }, null), {
+  hermesReady: true,
+  hermesWarming: false,
+  bootErr: null,
+});
+
+assert.deepEqual(getCachedHermesReadiness(), {
+  hermesReady: true,
+  hermesWarming: false,
+  bootErr: null,
+});
+
+assert.match(
+  useHermesReadinessSource,
+  /getCachedHermesReadiness[\s\S]*updateHermesReadinessCache/,
+  "Chat readiness hook should seed UI from a route-surviving cache.",
+);
+
+const reminderSessionSource = fs.readFileSync(new URL("./reminderSession.ts", import.meta.url), "utf8");
+const chatPageReminderSource = fs.readFileSync(new URL("./ChatPage.tsx", import.meta.url), "utf8");
+assert.match(reminderSessionSource, /hermesdesk-reminders/);
+assert.match(chatPageReminderSource, /openReminderSession[\s\S]*REMINDER_SESSION_ID/);
+assert.match(workspacePanelSource, /\/settings\/cron/);

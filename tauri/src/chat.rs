@@ -266,6 +266,11 @@ pub async fn cmd_chat_send(
     let res = req.json(&body).send().await.map_err(|e| e.to_string())?;
     let status = res.status();
     let v: Value = res.json().await.map_err(|e| e.to_string())?;
+    if status.as_u16() == 503 {
+        if v.get("status").and_then(Value::as_str) == Some("warming") {
+            return Err("desk_warming".into());
+        }
+    }
     if !status.is_success() {
         return Err(v.to_string());
     }
@@ -296,6 +301,9 @@ pub async fn cmd_chat_send_stream(
     let status = res.status();
     if !status.is_success() {
         let text = res.text().await.unwrap_or_else(|e| e.to_string());
+        if status.as_u16() == 503 && text.contains("warming") {
+            return Err("desk_warming".into());
+        }
         return Err(text);
     }
 
@@ -662,4 +670,43 @@ pub async fn cmd_delete_session(app: AppHandle, id: String) -> Result<Value, Str
         return Err(v.to_string());
     }
     Ok(v)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HermesDeskBootState {
+    pub port: Option<u16>,
+    pub warming: bool,
+}
+
+/// Port + desk-minimal warm state for the shell boot UI.
+#[tauri::command]
+pub async fn cmd_get_hermes_desk_boot_state(app: AppHandle) -> Result<HermesDeskBootState, String> {
+    let state: tauri::State<AppState> = app.state();
+    let port = *state.hermes_port.lock().await;
+    let Some(port) = port else {
+        return Ok(HermesDeskBootState {
+            port: None,
+            warming: false,
+        });
+    };
+    let client = http_client();
+    let url = format!("http://127.0.0.1:{port}/api/status");
+    match client.get(&url).send().await {
+        Ok(res) if res.status().is_success() => {
+            let body: Value = res.json().await.unwrap_or(Value::Null);
+            let warming = body
+                .get("desk_warming")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            Ok(HermesDeskBootState {
+                port: Some(port),
+                warming,
+            })
+        }
+        _ => Ok(HermesDeskBootState {
+            port: Some(port),
+            warming: true,
+        }),
+    }
 }

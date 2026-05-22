@@ -419,6 +419,17 @@ def _normalize_workdir(workdir: Optional[str]) -> Optional[str]:
     return str(resolved)
 
 
+def _normalize_job_mode(mode: Optional[str]) -> str:
+    """``agent`` (default) or ``notify`` (fixed-text delivery, no LLM)."""
+    raw = (mode or "agent")
+    if not isinstance(raw, str):
+        return "agent"
+    normalized = raw.strip().lower()
+    if normalized in ("notify", "static", "message"):
+        return "notify"
+    return "agent"
+
+
 def create_job(
     prompt: str,
     schedule: str,
@@ -435,6 +446,8 @@ def create_job(
     context_from: Optional[Union[str, List[str]]] = None,
     enabled_toolsets: Optional[List[str]] = None,
     workdir: Optional[str] = None,
+    mode: Optional[str] = None,
+    message: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new cron job.
@@ -466,10 +479,28 @@ def create_job(
                 terminal/file/code_exec tools use it as their working directory
                 (via TERMINAL_CWD).  When unset, the old behaviour is preserved
                 (no context files injected, tools use the scheduler's cwd).
+        mode: ``agent`` (default) runs the LLM; ``notify`` delivers fixed text
+              without invoking the agent (aliases: ``static``, ``message``).
+        message: Fixed body for ``notify`` jobs.  When omitted, ``prompt`` is used.
 
     Returns:
         The created job dict
     """
+    normalized_mode = _normalize_job_mode(mode)
+    normalized_message = (
+        str(message).strip() if isinstance(message, str) and str(message).strip() else None
+    )
+    prompt_stripped = (prompt or "").strip()
+    if normalized_mode == "notify":
+        body = normalized_message or prompt_stripped
+        if not body:
+            raise ValueError("notify jobs require a non-empty message or prompt")
+        normalized_message = body
+        prompt_stripped = body
+    elif not prompt_stripped and not skill and not skills:
+        # agent mode: allow skills-only jobs (validated below via normalized_skills)
+        pass
+
     parsed_schedule = parse_schedule(schedule)
 
     # Normalize repeat: treat 0 or negative values as None (infinite)
@@ -508,11 +539,18 @@ def create_job(
     else:
         context_from = None
 
-    label_source = (prompt or (normalized_skills[0] if normalized_skills else None)) or "cron job"
+    label_source = (
+        normalized_message
+        or prompt_stripped
+        or (normalized_skills[0] if normalized_skills else None)
+        or "cron job"
+    )
     job = {
         "id": job_id,
         "name": name or label_source[:50].strip(),
-        "prompt": prompt,
+        "mode": normalized_mode,
+        "message": normalized_message,
+        "prompt": prompt_stripped if normalized_mode == "notify" else prompt,
         "skills": normalized_skills,
         "skill": normalized_skills[0] if normalized_skills else None,
         "model": normalized_model,

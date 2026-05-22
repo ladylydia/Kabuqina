@@ -1,6 +1,9 @@
 import type { Locale } from "../lib/i18n-core";
 import type { SessionRow } from "./chat-api";
 
+/** Fixed cron reminder log session — keep in sync with `reminderSession.ts`. */
+const REMINDER_LOG_SESSION_ID = "hermesdesk-reminders";
+
 export type SessionKind = "reminder" | "file" | "image" | "chat";
 export type SessionIcon = "alarm" | "file" | "image" | "message";
 
@@ -104,11 +107,23 @@ function labelFor(session: SessionRow, kind: SessionKind, locale: Locale): strin
   return raw.replace(/\s+/g, " ").slice(0, 36);
 }
 
+function reminderLogLabel(locale: Locale): string {
+  return locale === "en" ? "Nana reminder" : "小娜提醒";
+}
+
 export function deriveSessionPresentation(
   session: SessionRow,
   locale: Locale,
   now = new Date(),
 ): SessionPresentation {
+  if (session.id === REMINDER_LOG_SESSION_ID) {
+    return {
+      label: reminderLogLabel(locale),
+      group: groupFor(session, locale, now),
+      kind: "reminder",
+      icon: "alarm",
+    };
+  }
   const text = textOf(session);
   const kind = kindFor(text);
   const icon: SessionIcon =

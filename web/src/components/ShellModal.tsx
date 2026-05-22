@@ -54,7 +54,7 @@ export function ShellModal({ open, title, onClose, children, size = "md" }: Shel
         aria-modal
         aria-labelledby="shell-modal-title"
         className={cn(
-          "relative z-10 flex max-h-[min(85vh,720px)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--kq-color-border)] bg-white/95 shadow-[var(--kq-shadow-soft)] backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950",
+          "relative z-10 flex max-h-[min(85vh,720px)] w-full flex-col overflow-hidden rounded-[var(--radius-shell-lg)] border border-[var(--kq-color-border)] bg-white/95 shadow-[var(--kq-shadow-soft)] backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950",
           maxW
         )}
         onClick={(e) => e.stopPropagation()}

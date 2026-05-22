@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { usePowerUser, setPowerUser } from "../lib/powerUser";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Maximize2, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { AppScaffold } from "../components/AppScaffold";
+import { BootPill } from "../components/BootPill";
+import { confirm } from "../lib/confirmDialog";
 import { useI18n } from "../lib/i18n";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
@@ -14,10 +14,14 @@ import { WorkspacePanel, type WorkspaceActivity, type WorkspaceItem } from "./Wo
 import { runDesktopOrganize } from "./desktop-organizer-api";
 import {
   armPendingChatSecretGateBypass,
+  armPendingOpenReminderSession,
   getDraftPrompt,
   isFromOnboarding,
+  isOpenReminderSession,
+  takePendingOpenReminderSession,
   takePendingChatSecretGateBypass,
 } from "../lib/chatLocationState";
+import { drainDesktopDeliveries } from "../lib/desktopDeliveryFeed";
 import { getAllowChatWithoutApi } from "../lib/apiKeyGate";
 import { ShellModal } from "../components/ShellModal";
 import { clearDraft } from "../lib/store";
@@ -29,6 +33,7 @@ import { useWorkbenchLayout } from "./hooks/useWorkbenchLayout";
 import { type CaptureDonePayload } from "../capture/capture-api";
 import type { AgentProgressState } from "./hooks/useAgentProgress";
 import type { DeskAttachmentPayload, UiMsg } from "./chat-api";
+import { REMINDER_SESSION_ID } from "./reminderSession";
 
 type WorkspaceState = {
   goal: string | null;
@@ -159,11 +164,12 @@ export function ChatPage() {
   const { t, locale } = useI18n();
   const nav = useNavigate();
   const location = useLocation();
-  const powerUser = usePowerUser();
   const workbench = useWorkbenchLayout();
 
-  const { hermesReady, bootErr } = useHermesReadiness();
-  const { sessions, listLoading, loadSessions, deleteSession } = useSessions({ hermesReady });
+  const { hermesReady, hermesWarming, bootErr } = useHermesReadiness();
+  const { sessions, listLoading, loadSessions, deleteSession } = useSessions({
+    hermesReady: hermesReady && !hermesWarming,
+  });
   const {
     activeSessionId,
     setActiveSessionId,
@@ -178,6 +184,8 @@ export function ChatPage() {
     onNewChat,
     onPickSession,
     onDeleteSession,
+    openReminderSession,
+    refreshActiveThread,
   } = useChatState({ loadSessions });
   const {
     input,
@@ -207,6 +215,22 @@ export function ChatPage() {
   );
 
   useEffect(() => {
+    if (isOpenReminderSession(location.state)) {
+      armPendingOpenReminderSession();
+      nav("/chat", { replace: true, state: {} });
+      return;
+    }
+    if (!takePendingOpenReminderSession()) {
+      return;
+    }
+    if (!hermesReady || hermesWarming) {
+      armPendingOpenReminderSession();
+      return;
+    }
+    void openReminderSession(t("cron.reminderLogEmpty"));
+  }, [hermesReady, hermesWarming, location.state, nav, openReminderSession, t]);
+
+  useEffect(() => {
     if (isFromOnboarding(location.state)) {
       armPendingChatSecretGateBypass();
       clearDraft();
@@ -230,17 +254,6 @@ export function ChatPage() {
   }, [nav, location.state]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const v = await invoke<boolean>("cmd_get_power_user");
-        setPowerUser(!!v);
-      } catch {
-        /* optional */
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
     const draft = getDraftPrompt(location.state);
     if (!draft) return;
     setInput(draft);
@@ -258,59 +271,38 @@ export function ChatPage() {
     };
   }, [onAddCaptureAttachment]);
 
-  // Poll for desktop deliveries (cron job output, send_message to "desktop")
-  // and inject them into the chat stream as system-style assistant messages.
-  // Toast notifications fire from the Rust side (bridge.rs); this effect is
-  // the in-app counterpart so the user sees the full content even if they
-  // missed the toast.
+  // Refresh sidebar + reminder transcript when cron/desktop deliveries arrive.
   useEffect(() => {
+    if (!hermesReady || hermesWarming) {
+      return;
+    }
     let cancelled = false;
-    const streamHeader = t("cron.streamTitle");
-    const tick = async () => {
-      try {
-        const msgs = await invoke<Array<{ title: string; message: string }>>(
-          "cmd_desktop_messages",
-        );
-        if (cancelled || !msgs || msgs.length === 0) return;
-        const now = Date.now();
-        setMessages((prev) => [
-          ...prev,
-          ...msgs.map((m, idx) => ({
-            id: `cron-${now}-${idx}`,
-            role: "assistant" as const,
-            text: `**${streamHeader}: ${m.title || ""}**\n\n${m.message || ""}`,
-            timestamp: now / 1000,
-          })),
-        ]);
-      } catch (e) {
-        console.debug("cmd_desktop_messages poll skipped:", e);
+    const syncReminderFeed = async (force = false) => {
+      const msgs = await drainDesktopDeliveries();
+      if (cancelled) {
+        return;
+      }
+      if (!force && msgs.length === 0) {
+        return;
+      }
+      await loadSessions({ silent: true });
+      if (activeSessionId === REMINDER_SESSION_ID) {
+        await refreshActiveThread();
       }
     };
-    void tick();
+    void syncReminderFeed(true);
+    const unlisten = listen("desktop-delivery", () => {
+      void syncReminderFeed(true);
+    });
     const handle = window.setInterval(() => {
-      void tick();
+      void syncReminderFeed(false);
     }, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(handle);
+      unlisten.then((fn) => fn());
     };
-  }, [setMessages, t]);
-
-  const togglePowerUser = useCallback(async (next: boolean) => {
-    if (next) {
-      const ok = await ask(t("settings.powerAsk"), {
-        title: t("settings.powerAskTitle"),
-        kind: "warning",
-      });
-      if (!ok) return;
-    }
-    try {
-      await invoke("cmd_set_power_user", { enabled: next });
-      setPowerUser(next);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [t]);
+  }, [activeSessionId, hermesReady, hermesWarming, loadSessions, refreshActiveThread]);
 
   const handleOrganizeDesktop = useCallback(async () => {
     const now = Date.now();
@@ -361,9 +353,14 @@ export function ChatPage() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(t("chat.confirmDelete"))) {
-      return;
-    }
+    const ok = await confirm({
+      title: t("chat.deleteTitle"),
+      message: t("chat.confirmDelete"),
+      confirmLabel: t("dialog.delete"),
+      cancelLabel: t("dialog.cancel"),
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteSession(id);
       await onDeleteSession(id);
@@ -406,16 +403,10 @@ export function ChatPage() {
     );
   }
 
-  if (!hermesReady) {
+  if (!hermesReady || hermesWarming) {
     return (
       <AppScaffold surface="chat" className="flex h-full flex-col items-center justify-center">
-        <p className="hd-hint">
-          <span aria-hidden>⏳</span>
-          {t("chat.waitingHermes")}
-        </p>
-        <div className="mt-5 h-1 w-40 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-zinc-400 dark:bg-zinc-600" />
-        </div>
+        <BootPill />
       </AppScaffold>
     );
   }
@@ -431,7 +422,7 @@ export function ChatPage() {
         <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
+            className="rounded-[var(--radius-shell-lg)] border border-zinc-300/90 px-4 py-2 text-sm dark:border-zinc-600"
             onClick={() => setApiRequiredOpen(false)}
           >
             {t("chat.apiRequiredClose")}
@@ -518,8 +509,6 @@ export function ChatPage() {
             onRemoveAttachment={onRemoveAttachment}
             onFilesPicked={onAddFiles}
             onStop={onStopAgent}
-            powerUser={powerUser}
-            onTogglePowerUser={togglePowerUser}
           />
         </main>
         {workbench.showRightPanel && (

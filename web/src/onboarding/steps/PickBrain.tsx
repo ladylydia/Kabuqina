@@ -51,10 +51,10 @@ export function PickBrain() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h1 className="hd-page-title" id={`${groupId}-label`}>
+        <h1 className="hd-wizard-title" id={`${groupId}-label`}>
           {t("brain.title")}
         </h1>
-        <p className="hd-lead max-w-prose">{t("brain.lead")}</p>
+        <p className="hd-wizard-lead">{t("brain.lead")}</p>
       </div>
 
       <div className="space-y-3" role="radiogroup" aria-labelledby={`${groupId}-label`}>
@@ -63,7 +63,7 @@ export function PickBrain() {
           onSelect={() => setChoice("deepseek")}
           title={
             <div className="flex items-baseline justify-between gap-3">
-              <div className="font-medium">DeepSeek</div>
+              <div className="hd-wizard-card-title">DeepSeek</div>
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                 {t("brain.recommended")}
               </span>
@@ -76,7 +76,7 @@ export function PickBrain() {
         <BrainOption
           selected={choice === "custom"}
           onSelect={() => setChoice("custom")}
-          title={<div className="font-medium">{t("brain.customTitle")}</div>}
+          title={<div className="hd-wizard-card-title">{t("brain.customTitle")}</div>}
           description={t("brain.customBody")}
         />
       </div>
@@ -115,7 +115,7 @@ function BrainOption({
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "hd-glass-subtle flex w-full gap-3 rounded-[var(--radius-shell-lg)] p-5 text-left transition",
+        "hd-glass-subtle flex w-full gap-3 p-5 text-left transition",
         recommendedHover
           ? selected
             ? "border-amber-400/90 bg-amber-50/70 ring-2 ring-amber-400/35 dark:border-amber-700/70 dark:bg-amber-950/35 dark:ring-amber-600/35"
@@ -148,7 +148,7 @@ function BrainOption({
       </span>
       <div className="min-w-0 flex-1">
         {title}
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
+        <p className="hd-wizard-muted mt-2">{description}</p>
       </div>
     </button>
   );

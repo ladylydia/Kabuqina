@@ -232,19 +232,26 @@ export function GetAccessPass() {
   const canSubmit = continuingWithSaved ? true : isCustom ? Boolean(key.trim() && baseUrl.trim() && modelId.trim()) : Boolean(key.trim());
   const f = "w-full rounded-[var(--radius-shell)] border border-zinc-300/90 bg-white/90 px-4 py-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
+  const leadText = isCustom
+    ? t("pass.customLead1")
+    : effectiveProvider
+      ? t("pass.providerLead", { label: effectiveProvider.label })
+      : t("pass.lead");
+
   return (<div className="space-y-8">
     <div className="space-y-3">
-      <h1 className="hd-page-title">{provider?.id === "deepseek" ? "Deepseek API Key" : provider?.id === "custom" ? "自定义AI模型" : t("pass.title")}</h1>
+      <h1 className="hd-wizard-title">{t("pass.title")}</h1>
+      <p className="hd-wizard-lead">{leadText}</p>
     </div>
 
-    {!isCustom && (<ol className="hd-glass-subtle list-decimal space-y-2.5 pl-6 pr-4 py-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+    {!isCustom && (<ol className="hd-glass-subtle list-decimal space-y-2.5 pl-6 pr-4 py-4 hd-wizard-body">
       <li>{t("pass.steps.s1", { label: provider.label })}</li>
       <li>{t("pass.steps.s2")}</li>
       <li>{t("pass.steps.s3")}</li>
     </ol>)}
 
     {isCustom && (<div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelProvider")}</label>
+      <label className="hd-wizard-label">{t("pass.labelProvider")}</label>
       <select value={dropdownProvider} onChange={(e) => {
         const v = e.target.value as typeof dropdownProvider;
         setDropdownProvider(v);
@@ -268,29 +275,29 @@ export function GetAccessPass() {
     </div>)}
 
     {isCustom && dropdownProvider === "custom" && (<div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelCustomProviderId")}</label>
+      <label className="hd-wizard-label">{t("pass.labelCustomProviderId")}</label>
       <input type="text" autoComplete="off" spellCheck={false} value={customProviderId}
         onChange={(e) => { setCustomProviderId(e.target.value); updateDraft({ customProviderId: e.target.value }); }}
         placeholder={t("pass.phCustomProviderId")} className={f} />
-      <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t("pass.customProviderHint")}</p>
+      <p className="hd-wizard-hint">{t("pass.customProviderHint")}</p>
     </div>)}
 
     {isCustom && (<div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelApiUrl")}</label>
+      <label className="hd-wizard-label">{t("pass.labelApiUrl")}</label>
       <input type="url" autoComplete="off" spellCheck={false} value={baseUrl}
         onChange={(e) => { setBaseUrl(e.target.value); updateDraft({ customBaseUrl: e.target.value }); }}
         placeholder={t("pass.phApiUrl")} className={f} />
     </div>)}
 
     {isCustom && (<div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t("pass.labelModel")}</label>
+      <label className="hd-wizard-label">{t("pass.labelModel")}</label>
       <input type="text" autoComplete="off" spellCheck={false} value={modelId}
         onChange={(e) => { setModelId(e.target.value); updateDraft({ customModel: e.target.value }); }}
         placeholder={t("pass.phModel")} className={f} />
     </div>)}
 
     <div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{isCustom ? t("pass.labelKeyCustom") : t("pass.labelKey")}</label>
+      <label className="hd-wizard-label">{isCustom ? t("pass.labelKeyCustom") : t("pass.labelKey")}</label>
       <div className="relative">
         <input type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)}
           placeholder={preview?.hasSecret ? t("pass.keyPlaceholderSaved") : effectiveProvider?.keyPrefixHint ? `${effectiveProvider.keyPrefixHint}\u2026` : t("pass.phKey")}
@@ -312,9 +319,9 @@ export function GetAccessPass() {
         )}
       </div>
       {validationStatus === "invalid" && validationMessage && (
-        <p className="text-sm text-red-600 dark:text-red-400">{validationMessage}</p>
+        <p className="hd-wizard-body text-red-600 dark:text-red-400">{validationMessage}</p>
       )}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="hd-wizard-body text-red-600 dark:text-red-400">{error}</p>}
     </div>
 
     {!isCustom && (<button type="button" onClick={openSignup}
@@ -329,7 +336,7 @@ export function GetAccessPass() {
         <WizardFooterActions>
           <button
             type="button"
-            className="rounded-[var(--radius-shell-lg)] px-4 py-2.5 text-sm text-zinc-600 underline-offset-2 hover:underline dark:text-zinc-400"
+            className="hd-wizard-hint rounded-[var(--radius-shell-lg)] px-4 py-2.5 underline-offset-2 hover:underline"
             onClick={() => {
               setAllowChatWithoutApi();
               nav("/chat", { replace: true });

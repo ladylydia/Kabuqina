@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirmDialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { StatusBanner } from "./ui/StatusBanner";
@@ -56,9 +56,12 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
   }
 
   async function handleRemove() {
-    const ok = await ask(t("settings.removeConfigAsk"), {
+    const ok = await confirm({
       title: t("settings.removeConfigAskTitle"),
-      kind: "warning",
+      message: t("settings.removeConfigAsk"),
+      confirmLabel: t("dialog.remove"),
+      cancelLabel: t("dialog.cancel"),
+      tone: "warning",
     });
     if (!ok) return;
     setRemoving(true);
@@ -114,7 +117,7 @@ export function TelegramSettingsBlock({ className }: { className?: string }) {
       ) : null}
 
       {showForm ? (
-        <div className="kq-info-panel space-y-3 rounded-lg px-3 py-3 dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
+        <div className="kq-info-panel space-y-3 px-3 py-3 dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
             {t("settings.telegramFormLead")}
           </p>

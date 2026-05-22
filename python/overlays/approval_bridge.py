@@ -177,6 +177,8 @@ def _install_messaging_wraps() -> None:
             context_from: str | list[str] | None = None,
             enabled_toolsets: list[str] | None = None,
             workdir: str | None = None,
+            mode: str | None = None,
+            message: str | None = None,
             task_id: str | None = None,
         ) -> str:
             # Q2 smart default: for create/update with no explicit remote
@@ -216,6 +218,8 @@ def _install_messaging_wraps() -> None:
                 context_from=context_from,
                 enabled_toolsets=enabled_toolsets,
                 workdir=workdir,
+                mode=mode,
+                message=message,
                 task_id=task_id,
             )
 
@@ -254,6 +258,8 @@ def _install_messaging_wraps() -> None:
                         context_from=args.get("context_from"),
                         enabled_toolsets=args.get("enabled_toolsets"),
                         workdir=args.get("workdir"),
+                        mode=args.get("mode"),
+                        message=args.get("message"),
                         task_id=kw.get("task_id"),
                     )
                 entry.handler = _wrapped_handler

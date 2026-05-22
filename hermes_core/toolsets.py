@@ -46,6 +46,8 @@ _HERMES_CORE_TOOLS = [
     "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
     # Text-to-speech
     "text_to_speech",
+    # Wall clock (no terminal required)
+    "get_current_time",
     # Planning & memory
     "todo", "memory",
     # Session history search
@@ -154,6 +156,12 @@ TOOLSETS = {
     "tts": {
         "description": "Text-to-speech: convert text to audio with Edge TTS (free), ElevenLabs, OpenAI, or xAI",
         "tools": ["text_to_speech"],
+        "includes": []
+    },
+
+    "clock": {
+        "description": "Current date and time in the user's configured timezone",
+        "tools": ["get_current_time"],
         "includes": []
     },
     

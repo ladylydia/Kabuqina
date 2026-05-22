@@ -126,7 +126,7 @@ export function AgentProgress({ progress }: { progress: AgentProgressState | nul
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[42rem] rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-2 shadow-sm",
+        "w-fit max-w-full rounded-2xl rounded-tl-sm border border-zinc-200/80 bg-white/85 px-3 py-2 shadow-sm",
         "dark:border-zinc-700/70 dark:bg-zinc-900/70"
       )}
       role="status"

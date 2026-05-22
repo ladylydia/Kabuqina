@@ -132,15 +132,15 @@ class TestNetworkPolicy(unittest.TestCase):
 class TestToolPolicy(unittest.TestCase):
     def test_default_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=False)
-        self.assertEqual(len(tools), 10)
+        self.assertEqual(len(tools), 11)
         self.assertEqual(
             tools,
-            ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser", "cronjob", "messaging"],
+            ["web", "file", "vision", "image_gen", "tts", "skills", "clock", "todo", "browser", "cronjob", "messaging"],
         )
 
     def test_power_user_mode_tools(self):
         tools = ToolPolicy.resolve(power_user=True)
-        self.assertEqual(len(tools), 13)
+        self.assertEqual(len(tools), 14)
         self.assertTrue("terminal" in tools)
         self.assertTrue("browser" in tools)
         self.assertTrue("cronjob" in tools)
@@ -157,7 +157,7 @@ class TestToolPolicy(unittest.TestCase):
         tools = ToolPolicy.gateway_keep_list()
         self.assertEqual(
             tools,
-            ["web", "file", "vision", "image_gen", "tts", "skills", "todo", "browser", "cronjob", "messaging"],
+            ["web", "file", "vision", "image_gen", "tts", "skills", "clock", "todo", "browser", "cronjob", "messaging"],
         )
 
     def test_is_power_user_from_env(self):

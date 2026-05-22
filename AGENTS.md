@@ -1,8 +1,8 @@
 # Kabuqina — 开发指南
 
 > **仅 Windows** 的 Tauri 2 桌面应用，包装 [Hermes Agent](https://github.com/NousResearch/hermes-agent)。
-> 上游代码冻结在 `hermes_core/`：不自动同步、不是 submodule、不再维护 patch 文件。
-> 冻结 agent core 内部说明见 `hermes_core/AGENTS.md`。
+> `hermes_core/` 为**自有 agent core**（源自上游快照）：**不自动同步**上游、不是 submodule、不再维护 patch 文件；**可以且将会**在仓库内长期独立演进，改 core 须谨慎、见下文「Core 与 overlay 分工」。
+> Core 内部模块说明见 `hermes_core/AGENTS.md`。
 
 **路线记录：** 本仓库已从“patched submodule”迁移为自有 monorepo，并使用 policy-layer 架构。完整迁移记录见 `docs/depatching-plan.md`。
 
@@ -77,7 +77,7 @@ Python entrypoint 会在导入任何 Hermes 模块前调用 `overlays.apply_all(
 
 由 `HERMESDESK_POWER_USER=1` 控制（Rust 在启动 Python child 前设置）。在 Settings 中切换会 **重启 Python child**，并通过 `default_toolset.py` 重写整个 toolset config。
 
-非超级用户默认工具：`web, file, vision, image_gen, tts, skills, todo, browser, cronjob, messaging`。
+非超级用户默认工具：`web, file, vision, image_gen, tts, skills, clock, todo, browser, cronjob, messaging`。
 超级用户额外增加：`terminal, code_execution, moa`。
 
 ## 上游 intake 策略
@@ -89,6 +89,47 @@ Python entrypoint 会在导入任何 Hermes 模块前调用 `overlays.apply_all(
   - commit message: `chore: cherry-pick <hash> <subject>`
   - 记录到 `DECISIONS.md`
 - 不做 batch merge。不更新 submodule。不维护 patch files。
+- **不计划**整包替换 `hermes_core/`；产品能力以在 core 内小步提交为主，overlay 只承载桌面壳与策略注入。
+
+## Core 与 overlay 分工（`hermes_core`）
+
+Kabuqina 是 monorepo：**agent / gateway / cron / tools 的语义与实现**归 `hermes_core/`；**Windows 桌面壳、凭据、沙箱、投递桥**归 `python/` + `tauri/` + `web/`。不要为「将来能拔掉 core」而把本属于 core 的逻辑塞进 overlay——overlay 是**集成层**，不是第二套 agent。
+
+### 放哪里
+
+| 层 | 路径 | 职责（放这里） | 不要放这里 |
+|----|------|----------------|------------|
+| **Agent core** | `hermes_core/` | 对话循环、`run_agent`、工具与 toolset、cron 调度语义（如 `mode: notify`）、gateway 平台适配、provider、session、skills | Tauri/DPAPI、loopback HMAC、`HERMES_HOME` 重定向、Windows toast |
+| **Policy（目标形态）** | `python/src/*_policy.py` | 可测试、可注入的策略对象（路径、网络、工具集、审批后端） | 大块 monkey-patch；长期应减少 overlay 包装 |
+| **Overlays（集成胶水）** | `python/overlays/` | 启动顺序、`strip_shims`、从 Tauri 拉密钥、桌面 LLM 种子、**cron → 桌面通知桥**、审批 UI 桥、gateway 平台插件裁剪 | 与上游等价的 cron「是否跑 LLM」分支（应在 `cron/scheduler.py`） |
+| **桌面 Python 服务** | `python/src/`（`desk_server/`、`desktop_entrypoint.py` 等） | loopback API、时区引导、`gateway_env_loader`、bundle 入口 | 复制一份 scheduler |
+| **Rust shell** | `tauri/src/` | 子进程监督、凭据库、gateway 多 profile 启动、`USER_PREFS` → profile 的 `_host_prefs.md` | Python 业务逻辑 |
+| **Web shell** | `web/src/` | Onboarding、/chat、设置 UI；**不是** Hermes React dashboard | Agent 工具实现 |
+
+### 决策规则（改 core 还是 overlay？）
+
+1. **web child 与 gateway child 都应一致的行为** → 优先改 **`hermes_core`**（单处实现，避免 web 装了 overlay、gateway 漏装）。
+2. **仅 Kabuqina 桌面存在**（toast、Tauri 审批、`desktop_delivery` POST）→ **`python/overlays/` 或 `python/src/`**。
+3. **能写成 policy 注入、且不必改上游函数体** → 先 **`python/src/` policy**；稳定后删对应 `# DEPRECATED` overlay。
+4. **必须 wrap 已导入的 Hermes 函数且短期无法下沉** → overlay，但 issue/注释里写**迁往 core 或 policy 的条件**。
+
+### 谨慎修改 `hermes_core` 的 checklist
+
+- **默认兼容**：新字段有默认值；旧 job / 旧 config 不迁移也能跑（例：`mode` 缺省 = `agent`）。
+- **小 diff**：优先在函数**入口早返回**（如 `cron.scheduler.run_job`），避免牵动 `AIAgent` 主路径。
+- **不改契约除非必要**：`tick()` → `_deliver_result` 这类稳定管道尽量复用；新能力尽量只换「产出正文的步骤」。
+- **测试落在 `hermes_core/tests/`**：行为契约用单元测试钉住；Kabuqina 集成测放 `python/tests/`。
+- **可观测**：一条 INFO 日志说明走了哪条分支（如 `mode=notify, skipping agent`）。
+- **记录**：非琐碎语义变更写入 `DECISIONS.md`（字段名、与相近功能的区别）。
+- **上游 cherry-pick**：仅安全/CVE/provider breaking；`chore: cherry-pick <hash>`，不 batch merge。
+
+### 示例：定时「固定文案提醒」（`mode: notify`）
+
+| 部分 | 位置 |
+|------|------|
+| `mode: notify`、不调用 `AIAgent`、`message` 字段 | `hermes_core/cron/scheduler.py`、`cron/jobs.py`、`tools/cronjob_tools.py` |
+| `deliver=desktop` → Windows 通知 + /chat | `python/overlays/cron_desktop_delivery.py` |
+| 更短 tick、时区 | `python/src/cron_scheduler_runner.py`、`desktop_timezone.py` |
 
 ## 常用命令
 
@@ -108,8 +149,8 @@ cd python; python -m unittest discover -s tests -p "test_*.py" -v; cd ..
 # Lint web/
 cd web; npm run lint
 
-# 重新生成 Tauri icons（source PNG: web/public/kabuqina_na_blue_256.png）
-cd tauri; cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
+# 重新生成 Tauri icons（source PNG: web/public/kabuqina_na_256.png）
+cd tauri; cargo tauri icon ..\web\public\kabuqina_na_256.png
 ```
 
 ## Windows 特有注意事项
@@ -149,8 +190,8 @@ cd tauri; cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
 # Kabuqina — Development Guide (English)
 
 > **Windows-only** Tauri 2 desktop app wrapping [Hermes Agent](https://github.com/NousResearch/hermes-agent).
-> The upstream code is frozen in `hermes_core/` — no automatic sync, no submodule, no patches.
-> For internals of the frozen agent core, see `hermes_core/AGENTS.md`.
+> `hermes_core/` is our **owned agent core** (forked from an upstream snapshot): no automatic upstream sync, no submodule, no patch files — **we evolve it in-tree**; change core carefully; see **Core vs overlay boundaries** below.
+> Module-level notes: `hermes_core/AGENTS.md`.
 
 **Roadmap:** This repo has migrated from a patched submodule model to an owned monorepo with policy-layer architecture. See `docs/depatching-plan.md` for the full migration record.
 
@@ -225,7 +266,7 @@ Overlays `windows_safety` and `secret_loader` were removed in Phase 4 (no‑op a
 
 Controlled by `HERMESDESK_POWER_USER=1` (Rust sets it before spawning the Python child). Toggling it in Settings **restarts the Python child** — the entire toolset config is rewritten via `default_toolset.py`.
 
-Without power user: `web, file, vision, image_gen, tts, skills, todo, browser, cronjob, messaging` toolsets.
+Without power user: `web, file, vision, image_gen, tts, skills, clock, todo, browser, cronjob, messaging` toolsets.
 With power user: adds `terminal, code_execution, moa`.
 
 ## Upstream intake policy
@@ -237,6 +278,47 @@ With power user: adds `terminal, code_execution, moa`.
   - Commit message: `chore: cherry-pick <hash> <subject>`
   - Log in `DECISIONS.md`
 - No batch merges. No submodule updates. No patch files.
+- We do **not** plan to replace `hermes_core/` wholesale; ship product behavior via small, reviewed core commits; overlays stay integration-only.
+
+## Core vs overlay boundaries (`hermes_core`)
+
+Kabuqina is a monorepo: **agent / gateway / cron / tools semantics** live in `hermes_core/`; **Windows shell, secrets, sandbox, delivery bridges** live in `python/` + `tauri/` + `web/`. Do not park core-worthy logic in overlays “just in case” we swap the core — overlays are the **integration layer**, not a second agent.
+
+### Where code belongs
+
+| Layer | Path | Put here | Do not put here |
+|-------|------|----------|-----------------|
+| **Agent core** | `hermes_core/` | Conversation loop, `run_agent`, tools/toolsets, cron semantics (e.g. `mode: notify`), gateway adapters, providers, sessions, skills | Tauri/DPAPI, loopback HMAC, `HERMES_HOME` redirect, Windows toasts |
+| **Policy (target shape)** | `python/src/*_policy.py` | Testable injectable policies (paths, network, toolsets, approval backend) | Large monkey-patches; shrink overlays over time |
+| **Overlays (glue)** | `python/overlays/` | Boot order, `strip_shims`, Tauri secret fetch, desktop LLM seed, **cron → desktop notify bridge**, approval UI bridge, gateway plugin trimming | Upstream-equivalent “skip LLM” cron branches (belong in `cron/scheduler.py`) |
+| **Desktop Python** | `python/src/` (`desk_server/`, `desktop_entrypoint.py`, …) | Loopback API, timezone bootstrap, `gateway_env_loader`, bundle entrypoints | A second scheduler copy |
+| **Rust shell** | `tauri/src/` | Child supervision, credential vault, multi-profile gateway, `USER_PREFS` → profile `_host_prefs.md` | Python business logic |
+| **Web shell** | `web/src/` | Onboarding, /chat, settings — **not** the Hermes React dashboard | Agent tool implementations |
+
+### Decision rules (core vs overlay?)
+
+1. **Same behavior in web child and gateway child** → prefer **`hermes_core`** (one implementation; avoids overlay only on web).
+2. **Desktop-only** (toast, Tauri approval, `desktop_delivery` POST) → **`python/overlays/` or `python/src/`**.
+3. **Injectable policy without editing Hermes bodies** → **`python/src/` policy** first; delete matching `# DEPRECATED` overlay when stable.
+4. **Must monkey-patch an imported symbol short-term** → overlay, with a note on **when to move to core or policy**.
+
+### Checklist for low-risk `hermes_core` changes
+
+- **Backward compatible**: new fields default safely; old jobs/config need no migration (`mode` defaults to `agent`).
+- **Small diffs**: early return at function entry (e.g. `cron.scheduler.run_job`); avoid touching the `AIAgent` hot path.
+- **Reuse pipelines**: keep `tick()` → `_deliver_result` stable; swap only how job output is produced.
+- **Tests in `hermes_core/tests/`** for contracts; Kabuqina integration tests in `python/tests/`.
+- **Observable**: one INFO log per branch (e.g. `mode=notify, skipping agent`).
+- **Document**: non-trivial semantics in `DECISIONS.md`.
+- **Upstream cherry-picks**: security/CVE/provider breaks only; `chore: cherry-pick <hash>`; no batch merges.
+
+### Example: scheduled fixed-text notify (`mode: notify`)
+
+| Piece | Location |
+|-------|----------|
+| `mode: notify`, skip `AIAgent`, `message` field | `hermes_core/cron/scheduler.py`, `cron/jobs.py`, `tools/cronjob_tools.py` |
+| `deliver=desktop` → toast + /chat | `python/overlays/cron_desktop_delivery.py` |
+| Faster tick, timezone | `python/src/cron_scheduler_runner.py`, `desktop_timezone.py` |
 
 ## Key commands
 
@@ -256,8 +338,8 @@ cd python; python -m unittest discover -s tests -p "test_*.py" -v; cd ..
 # Lint web/
 cd web; npm run lint
 
-# Regenerate Tauri icons (source PNG: web/public/kabuqina_na_blue_256.png)
-cd tauri; cargo tauri icon ..\web\public\kabuqina_na_blue_256.png
+# Regenerate Tauri icons (source PNG: web/public/kabuqina_na_256.png)
+cd tauri; cargo tauri icon ..\web\public\kabuqina_na_256.png
 ```
 
 ## Windows-specific gotchas

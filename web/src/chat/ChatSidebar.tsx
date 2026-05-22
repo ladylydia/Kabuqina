@@ -8,10 +8,10 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import type { SessionRow } from "./chat-api";
 import { cn } from "../lib/cn";
+import { REMINDER_SESSION_ID } from "./reminderSession";
 import { deriveSessionPresentation, type SessionIcon } from "./sessionPresentation";
 
 export interface ChatSidebarProps {
@@ -36,7 +36,6 @@ export function ChatSidebar({
   onDeleteSession,
 }: ChatSidebarProps) {
   const { t, locale } = useI18n();
-  const nav = useNavigate();
   const grouped = sessions.reduce<Array<{ group: string; rows: Array<{ session: SessionRow; label: string; icon: SessionIcon }> }>>(
     (acc, session) => {
       const presentation = deriveSessionPresentation(session, locale);
@@ -97,10 +96,13 @@ export function ChatSidebar({
             </p>
           ) : null
         )}
-        {grouped.map((group) => (
-          <div key={group.group} className="pt-1">
+        {grouped.map((group, groupIndex) => (
+          <div
+            key={group.group}
+            className={cn("kq-sidebar-group pt-1", groupIndex > 0 && "kq-sidebar-group-divided")}
+          >
             {!collapsed && (
-              <p className="kq-sidebar-group-label px-1.5 pb-1 pt-2 dark:text-zinc-500">
+              <p className="kq-sidebar-group-label px-1.5 pb-1 pt-2 dark:text-zinc-400">
                 {group.group}
               </p>
             )}
@@ -133,7 +135,11 @@ export function ChatSidebar({
                     <Icon
                       className={cn(
                         "h-4 w-4 shrink-0",
-                        active ? "text-[var(--kq-color-ink)] dark:text-sky-400" : "text-[var(--kq-color-muted)] dark:text-zinc-500",
+                        s.id === REMINDER_SESSION_ID
+                          ? "kq-color-icon-alarm"
+                          : active
+                            ? "text-[var(--kq-color-ink)] dark:text-sky-400"
+                            : "text-[var(--kq-color-muted)] dark:text-zinc-500",
                       )}
                       strokeWidth={2.2}
                       aria-hidden
@@ -166,36 +172,6 @@ export function ChatSidebar({
             })}
           </div>
         ))}
-      </div>
-      <div className={cn(
-        "shrink-0 space-y-1.5 border-t border-[#e8e0ed]/80 bg-white/35 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/50",
-        collapsed ? "px-2" : "px-3",
-      )}>
-        <button
-          type="button"
-          data-action-priority="primary"
-          onClick={() => nav("/settings/cron", { state: { cronBackTo: "/chat" } })}
-          className={cn(
-            "kq-reminder-card group inline-flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left text-[15px] font-semibold leading-snug",
-            "transition-[border-color,background-color,color,box-shadow,transform] duration-150 ease-out",
-            "active:scale-[0.99]",
-            "dark:border-zinc-600 dark:bg-zinc-800/85 dark:text-zinc-100",
-            "dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50",
-            collapsed && "justify-center px-0",
-          )}
-          title={t("cron.title")}
-          aria-label={t("cron.title")}
-        >
-          <AlarmClock
-            className={cn(
-              "kq-reminder-icon h-[1.05rem] w-[1.05rem] shrink-0 transition-colors duration-150 ease-out",
-              "group-hover:text-[var(--kq-color-strong)] dark:text-zinc-400 dark:group-hover:text-zinc-100",
-            )}
-            strokeWidth={2.25}
-            aria-hidden
-          />
-          {!collapsed && <span className="block leading-snug">{t("cron.title")}</span>}
-        </button>
       </div>
     </aside>
   );

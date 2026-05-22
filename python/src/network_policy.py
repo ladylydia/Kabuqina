@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Iterable
 from urllib.parse import urlparse
 
 log = logging.getLogger("hermesdesk.net")
@@ -54,6 +55,13 @@ class NetworkPolicy:
                 f"To grant access, add the host in Settings or enable "
                 f"HERMESDESK_NET_OPEN=1."
             )
+
+    def extend_hosts(self, hosts: Iterable[str]) -> None:
+        """Add messaging / gateway API hosts (cron ``_send_to_platform`` egress)."""
+        for raw in hosts:
+            h = (raw or "").strip().lower()
+            if h:
+                self._allow.add(h)
 
     @property
     def allowed_hosts(self) -> set[str]:

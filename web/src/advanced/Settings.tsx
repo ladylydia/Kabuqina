@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { Activity, ArrowDown, ArrowUp } from "lucide-react";
 import { AppScaffold } from "../components/AppScaffold";
 import { BackButton } from "../components/ui/BackButton";
 import { Section } from "../components/ui/Section";
 import { useI18n } from "../lib/i18n";
-import { usePowerUser, setPowerUser } from "../lib/powerUser";
+import { useTogglePowerUser } from "../lib/useTogglePowerUser";
 import { useFontSize } from "../lib/ui-prefs";
 import { useGatewayStatus } from "../features/gateway/useGatewayStatus";
 import { SettingsLLM } from "./settings/SettingsLLM";
@@ -32,7 +31,7 @@ export function Settings() {
   const nav = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status | null>(null);
-  const powerUser = usePowerUser();
+  const { powerUser, togglePowerUser } = useTogglePowerUser();
   const { size: fontSize, setSize: setFontSize } = useFontSize();
   const [autoStartGateway, setAutoStartGateway] = useState(true);
   const gatewayStatus = useGatewayStatus();
@@ -51,12 +50,6 @@ export function Settings() {
         invoke<{ running: boolean }>("cmd_python_status"),
       ]);
       setStatus({ workspace, hasSecret, pythonRunning: pyStat.running });
-      try {
-        const v = await invoke<boolean>("cmd_get_power_user");
-        setPowerUser(!!v);
-      } catch {
-        /* optional */
-      }
       try {
         const ag = await invoke<boolean>("cmd_get_auto_start_gateway");
         setAutoStartGateway(!!ag);
@@ -103,22 +96,6 @@ export function Settings() {
     setProxyCustom("");
     void saveProxy();
   }, [saveProxy]);
-
-  async function togglePowerUser(next: boolean) {
-    if (next) {
-      const ok = await ask(t("settings.powerAsk"), {
-        title: t("settings.powerAskTitle"),
-        kind: "warning",
-      });
-      if (!ok) return;
-    }
-    try {
-      await invoke("cmd_set_power_user", { enabled: next });
-      setPowerUser(next);
-    } catch (e) {
-      console.error(e);
-    }
-  }
 
   return (
     <AppScaffold className="h-full overflow-y-auto" ref={scrollRef}>

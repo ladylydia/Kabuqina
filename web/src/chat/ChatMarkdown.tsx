@@ -20,7 +20,7 @@ export default function ChatMarkdown({ text, className = "" }: Props) {
   }, [isDark]);
   return (
     <div
-      className={`chat-md text-sm leading-[1.6] text-zinc-800 dark:text-zinc-200 ${className}`}
+      className={`chat-md min-w-0 max-w-full text-sm leading-[1.6] text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-200 ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -36,7 +36,11 @@ export default function ChatMarkdown({ text, className = "" }: Props) {
               {children}
             </a>
           ),
-          p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+          p: ({ children }) => (
+            <p className="mb-2 last:mb-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {children}
+            </p>
+          ),
           ul: ({ children }) => (
             <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>
           ),

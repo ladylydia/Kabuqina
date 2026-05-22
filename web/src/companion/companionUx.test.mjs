@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const companionSource = fs.readFileSync(new URL("./CompanionWindow.tsx", import.meta.url), "utf8");
+const pillSceneSource = fs.readFileSync(new URL("../components/CompanionPillScene.tsx", import.meta.url), "utf8");
+const bootPillSource = fs.readFileSync(new URL("../components/BootPill.tsx", import.meta.url), "utf8");
+const splashSource = fs.readFileSync(new URL("../Splash.tsx", import.meta.url), "utf8");
+const chatPageSource = fs.readFileSync(new URL("../chat/ChatPage.tsx", import.meta.url), "utf8");
 const mainSource = fs.readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
 const indexCssSource = fs.readFileSync(new URL("../index.css", import.meta.url), "utf8");
 const titleBarSource = fs.readFileSync(new URL("../components/WindowTitleBar.tsx", import.meta.url), "utf8");
@@ -14,11 +18,9 @@ assert.doesNotMatch(
   "Compact pill should render the CSS coffee cup, not a PNG mascot.",
 );
 
-assert.match(
-  companionSource,
-  /CompanionCup[\s\S]*kq-companion-pill-cup/,
-  "CompanionWindow should wrap the shared CompanionCup in the pill layout.",
-);
+assert.match(companionSource, /CompanionPillScene/, "Companion window should reuse the shared pill scene.");
+assert.match(pillSceneSource, /kq-companion-pill-mat/, "Pill scene should include a coaster mat wrapper.");
+assert.match(pillSceneSource, /kq-companion-pill-cup[\s\S]*<CompanionCup/, "Pill cup should sit above the mat.");
 
 assert.match(
   cupSource,
@@ -28,20 +30,26 @@ assert.match(
 
 assert.match(
   companionSource,
-  /PILL_REM_W = 5\.4[\s\S]*PILL_REM_H = 4\.7/,
-  "Pill window size should track the same 5.4rem × 4.7rem cup as the empty chat hero.",
+  /PILL_REM_W = 5\.4[\s\S]*PILL_REM_H = 5\.35/,
+  "Pill window size should track the pill scene (cup + compact mat).",
 );
 
 assert.match(
   indexCssSource,
   /kq-companion-pill-float/,
-  "Pill cup should use a gentle floating animation.",
+  "Pill scene should use a gentle floating animation.",
+);
+
+assert.match(
+  indexCssSource,
+  /kq-companion-pill-mat::before/,
+  "Pill scene should include a compact gingham coaster.",
 );
 
 assert.match(
   companionSource,
-  /cmd_resize_companion/,
-  "CompanionWindow should resize via cmd_resize_companion.",
+  /cmd_resize_companion[\s\S]*cmd_ensure_companion_position/,
+  "CompanionWindow should resize then place the pill on the desktop.",
 );
 
 assert.match(
@@ -78,4 +86,24 @@ assert.match(
   titleBarSource,
   /cmd_show_companion/,
   "Title bar star should shrink the app into the compact pill.",
+);
+
+assert.match(bootPillSource, /CompanionPillScene/, "Boot pill should reuse the companion pill scene.");
+assert.match(bootPillSource, /boot\.starting/, "Boot pill should show a unified starting label.");
+assert.match(
+  fs.readFileSync(new URL("../components/ApprovalDialogHost.tsx", import.meta.url), "utf8"),
+  /hermes-approval-request[\s\S]*cmd_respond_approval/,
+  "Approval dialog should listen for bridge events and respond via Tauri command.",
+);
+assert.match(splashSource, /BootPill/, "Splash should use the boot pill instead of staged splash copy.");
+assert.match(splashSource, /waitForHermesReadiness/, "Splash should wait for Hermes before entering chat.");
+assert.match(
+  chatPageSource,
+  /BootPill/,
+  "Chat should use the boot pill for warm-up instead of separate waiting strings.",
+);
+assert.doesNotMatch(
+  chatPageSource,
+  /chat\.waitingHermesWarm/,
+  "Chat warm-up should not expose a second waiting message.",
 );

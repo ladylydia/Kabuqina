@@ -19,7 +19,7 @@ import urllib.request
 log = logging.getLogger("hermesdesk.desktop.delivery")
 
 REMINDER_SESSION_ID = "hermesdesk-reminders"
-REMINDER_SESSION_TITLE = "已提醒"
+REMINDER_SESSION_TITLE = "小娜提醒"
 
 
 def format_reminder_content(title: str, message: str) -> str:

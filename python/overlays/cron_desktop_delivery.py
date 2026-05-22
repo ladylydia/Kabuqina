@@ -31,6 +31,31 @@ log = logging.getLogger("hermesdesk.cron.delivery")
 _INSTALLED = False
 
 
+def _ensure_gateway_env_loaded_for_delivery() -> None:
+    """Load ``HERMES_HOME/.env`` + messaging API hosts before remote cron delivery."""
+    try:
+        from gateway_env_loader import ensure_gateway_env_for_delivery
+
+        ensure_gateway_env_for_delivery()
+        return
+    except ImportError:
+        pass
+    import os
+
+    home = (os.environ.get("HERMES_HOME") or "").strip()
+    if not home:
+        log.warning("cron delivery: HERMES_HOME unset; all remote bots will fail")
+        return
+    try:
+        from hermes_cli.env_loader import load_hermes_dotenv
+
+        paths = load_hermes_dotenv(hermes_home=Path(home))
+        if paths:
+            log.info("cron delivery: loaded %s", ", ".join(str(p) for p in paths))
+    except Exception:
+        log.exception("cron delivery: failed to load hermes-home .env")
+
+
 def _resolve_desktop_targets(deliver_value: str) -> tuple[bool, str]:
     """Decide whether this delivery should also fire a desktop notification.
 
@@ -122,7 +147,35 @@ def install() -> None:
         forwarded_job = dict(job)
         forwarded_job["deliver"] = remaining
         try:
+            _ensure_gateway_env_loaded_for_delivery()
+            try:
+                from overlays.strip_shims import evict_gateway_platforms_stub
+
+                evict_gateway_platforms_stub()
+            except Exception:
+                pass
+            try:
+                from cron.scheduler import _resolve_delivery_targets
+
+                targets = _resolve_delivery_targets(forwarded_job)
+                if not targets:
+                    log.error(
+                        "Job '%s': no remote targets resolved for deliver=%r — "
+                        "set *_HOME_CHANNEL in hermes-home/.env or use "
+                        "deliver=\"platform:chat_id\"",
+                        job.get("id", "?"),
+                        remaining,
+                    )
+            except Exception:
+                log.debug("cron delivery: target preflight skipped", exc_info=True)
             remote_error = _orig_deliver_result(forwarded_job, content, adapters=adapters, loop=loop)
+            if remote_error:
+                log.error(
+                    "Job '%s': remote delivery failed (deliver=%r): %s",
+                    job.get("id", "?"),
+                    remaining,
+                    remote_error,
+                )
         except Exception as e:
             log.exception("Job '%s': upstream _deliver_result raised on remote targets", job.get("id", "?"))
             remote_error = f"remote delivery error: {e}"

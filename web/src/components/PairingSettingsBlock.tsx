@@ -126,7 +126,7 @@ export function PairingSettingsBlock({
             {snapshot!.pending.map((p) => (
               <div
                 key={`${p.platform}-${p.code}`}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/20"
+                className="flex flex-wrap items-center gap-2 rounded-[var(--radius-shell-lg)] border border-amber-200/80 bg-amber-50/50 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/20"
               >
                 <code className="text-sm font-mono text-amber-900 dark:text-amber-100">
                   {p.code}
@@ -155,7 +155,7 @@ export function PairingSettingsBlock({
             {snapshot!.approved.map((a) => (
               <div
                 key={`${a.platform}-${a.userId}`}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200/80 bg-emerald-50/50 px-3 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+                className="flex flex-wrap items-center gap-2 rounded-[var(--radius-shell-lg)] border border-emerald-200/80 bg-emerald-50/50 px-3 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/20"
               >
                 <span className="text-sm text-emerald-900 dark:text-emerald-100">
                   {a.userName || a.userId}

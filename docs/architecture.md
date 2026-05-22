@@ -6,8 +6,7 @@ Kabuqina is a thin Windows-native wrapper around the open-source
 [Hermes Agent](https://github.com/NousResearch/hermes-agent). A Tauri 2
 shell (Rust + WebView2) supervises **one long-lived embedded Python 3.11
 process** (`desktop_entrypoint.py`) that runs a stripped, sandboxed Hermes
-core (`hermes_cli.web_server` on loopback). The WebView2 window **starts on
-the Tauri-hosted shell** (`web/` — Splash, onboarding, `/chat`, Settings); when the user opens the full console, the same webview navigates to Hermes’ React UI at `http://127.0.0.1:RANDOM`. Optionally, Tauri supervises a **second** Python child (`python -m gateway.run`) for messaging adapters when credentials exist under `hermes-home/.env`. Short-lived QR/token helper scripts may run as extra Python children during onboarding. LLM provider keys live in Windows Credential Manager (DPAPI); Hermes config is redirected to **`HERMES_HOME`** inside the app data dir (see `desktop_entrypoint.py`). File ops are jailed to a workspace folder and risky tools stay off until **power user** mode.
+core (`desk_server` on loopback — Kabuqina-owned HTTP API, not `hermes_cli.web_server`). The WebView2 window runs the **Kabuqina shell** (`web/` — Splash, onboarding, `/chat`, Settings, Capabilities) exclusively; all chat traffic uses `/api/desk/*` proxied through Tauri. Optionally, Tauri supervises a **second** Python child (`python -m gateway.run`) for messaging adapters when credentials exist under `hermes-home/.env`. Short-lived QR/token helper scripts may run as extra Python children during onboarding. LLM provider keys live in Windows Credential Manager (DPAPI); Hermes config is redirected to **`HERMES_HOME`** inside the app data dir (see `desktop_entrypoint.py`). File ops are jailed to a workspace folder and risky tools stay off until **power user** mode.
 
 ## Process model
 
@@ -19,9 +18,8 @@ flowchart TD
   Tauri --> PySup["python_supervisor"]
   PySup --> PyChild["python.exe<br/>desktop_entrypoint.py"]
   PyChild --> Overlays["overlays.apply_all()"]
-  Overlays --> Hermes["hermes_cli.web_server"]
-  Hermes --> Loop["127.0.0.1:RANDOM"]
-  WebView -->|"user opens dashboard"| Loop
+  Overlays --> DeskServer["desk_server"]
+  Hermes --> Loop["127.0.0.1:RANDOM<br/>/api/desk/*"]
   WebView -->|"Splash /chat /settings"| ShellUI["bundled shell UI<br/>web/"]
   Tauri --> GwSup["gateway_supervisor<br/>(optional)"]
   GwSup --> GwChild["python -m gateway.run<br/>messaging adapters"]
@@ -75,7 +73,8 @@ Further product notes: [gateway-desk-weixin-strategy.md](gateway-desk-weixin-str
 | [tauri/src/secrets.rs](../tauri/src/secrets.rs)                         | Provider config + DPAPI-backed key storage                                            |
 | [tauri/src/paths.rs](../tauri/src/paths.rs)                             | Workspace + bundle + data dir resolution; settings                                    |
 | [tauri/src/tray.rs](../tauri/src/tray.rs)                               | System tray + menu                                                                    |
-| [python/src/desktop_entrypoint.py](../python/src/desktop_entrypoint.py) | Python entry — overlays, port handshake, boots Hermes web_server                       |
+| [python/src/desktop_entrypoint.py](../python/src/desktop_entrypoint.py) | Python entry — overlays, port handshake, boots `desk_server`                       |
+| [python/src/desk_server/](../python/src/desk_server/) | Kabuqina product HTTP API (`/api/desk/*`, sessions, capabilities) — decoupled from upstream dashboard |
 | [python/src/](../python/src/)                                           | Policy layer (path_policy, secret_store, approval_backend, network_policy, tool_policy, gateway_policy) |
 | [python/overlays/](../python/overlays/)                                 | Runtime monkey-patches wrapping policy objects (to be removed per-policy)               |
 | [web/src/main.tsx](../web/src/main.tsx)                                 | Shell router: Splash, onboarding, `/chat`, `/settings`                               |
@@ -94,7 +93,7 @@ T+200ms  bridge.spawn() picks a free loopback port, generates tokens
 T+250ms  python_supervisor::Supervisor::spawn() starts desktop_entrypoint.py
 T+500ms  Python: overlays.apply_all()
 T+700ms  Python: picks unused TCP port, writes port.txt
-T+750ms  Python: hermes_cli.web_server.run(host=127.0.0.1, port=N)
+T+750ms  Python: desk_server.start_server(host=127.0.0.1, port=N)
 T+800ms  Tauri: wait_for_port() reads port.txt → stores N (Hermes dashboard URL base)
 T+820ms  If auto-start gateway enabled and .env has messaging keys → gateway_supervisor spawns gateway.run
 T+850ms  WebView stays on Tauri shell (Splash routes to /chat or onboarding — no forced jump to Hermes)

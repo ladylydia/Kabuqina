@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { confirm } from "../lib/confirmDialog";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { StatusBanner } from "./ui/StatusBanner";
@@ -159,9 +159,12 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
   }
 
   async function handleRemove() {
-    const ok = await ask(t("settings.removeConfigAsk"), {
+    const ok = await confirm({
       title: t("settings.removeConfigAskTitle"),
-      kind: "warning",
+      message: t("settings.removeConfigAsk"),
+      confirmLabel: t("dialog.remove"),
+      cancelLabel: t("dialog.cancel"),
+      tone: "warning",
     });
     if (!ok) return;
     setRemoving(true);
@@ -219,7 +222,7 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
 
       {/* ── Choose mode: radio select ── */}
       {viewMode === "choose" && !env?.configured ? (
-        <div className="rounded-lg border border-dashed border-zinc-300/80 px-3 py-2.5 text-sm dark:border-zinc-700/80">
+        <div className="rounded-[var(--radius-shell-lg)] border border-dashed border-zinc-300/80 px-3 py-2.5 text-sm dark:border-zinc-700/80">
           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 mb-2">
             {t("settings.wecomQrTitle")}
           </p>
@@ -274,7 +277,7 @@ export function WeComSettingsBlock({ className }: { className?: string }) {
 
       {/* QR progress */}
       {qrPolling && qrView?.progress?.phase ? (
-        <div className="kq-info-panel rounded-lg px-3 py-2.5 text-sm dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
+        <div className="kq-info-panel px-3 py-2.5 text-sm dark:border-[#D4C5E2]/20 dark:bg-[#D4C5E2]/10">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">{qrPhaseLabel(qrView.progress.phase)}</p>
           {qrView.progress.message ? (
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{qrView.progress.message}</p>

@@ -13,6 +13,10 @@
 
 </div>
 
+> **License notice:** Source code is [MIT](./LICENSE). The **Kabuqina / 卡布奇娜 name,
+> logos, mascot, and icons** are **proprietary** and **not** included under MIT.
+> See [BRAND.md](./BRAND.md) and [assets/brand/LICENSE](./assets/brand/LICENSE).
+
 ---
 
 ## 简体中文
@@ -161,7 +165,7 @@ Set-Location tauri; cargo tauri dev
 
 ### 协议
 
-[**MIT**](LICENSE)。Hermes 亦为 MIT，见其 [hermes_core/LICENSE](./hermes_core/LICENSE)。致谢 [Nous Research](https://nousresearch.com)。
+[**MIT**](LICENSE)（**仅源代码**）。品牌视觉资产（logo、mascot、图标）与 README 截图 **不在 MIT 范围内**，见 [BRAND.md](./BRAND.md)。Hermes 亦为 MIT，见其 [hermes_core/LICENSE](./hermes_core/LICENSE)。致谢 [Nous Research](https://nousresearch.com)。
 
 ---
 
@@ -295,4 +299,4 @@ Set-Location tauri; cargo tauri dev
 
 ### License
 
-**MIT** — [LICENSE](LICENSE). Hermes: [hermes_core/LICENSE](hermes_core/LICENSE). Thanks to **[Nous Research](https://nousresearch.com)**.
+**MIT** for **source code** only — [LICENSE](LICENSE). **Brand assets** (name, logos, mascot, icons) and README screenshots are **proprietary** — [BRAND.md](BRAND.md). Hermes: [hermes_core/LICENSE](hermes_core/LICENSE). Thanks to **[Nous Research](https://nousresearch.com)**.

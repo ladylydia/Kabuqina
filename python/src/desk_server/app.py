@@ -1,0 +1,27 @@
+"""FastAPI application factory for Kabuqina desk server."""
+from __future__ import annotations
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from desk_server.auth import install_middleware
+from desk_server.routes import capabilities_routes, chat, sessions, status, voice
+from hermes_cli import __version__
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="Kabuqina Desk", version=__version__)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    install_middleware(app)
+
+    for mod in (status, chat, sessions, voice, capabilities_routes):
+        app.include_router(mod.router)
+
+    return app
