@@ -26,8 +26,10 @@ SOFTWARE.
 
 This MIT License applies to **source code and documentation text** in this
 repository. It does **not** apply to Kabuqina **brand assets** (logos, mascot,
-icons, wordmarks) or **UI/marketing screenshots**. Those are proprietary; see
-[BRAND.md](./BRAND.md), [assets/brand/LICENSE](./assets/brand/LICENSE), and
+icons, wordmarks, `kabuqina_*` / `mascot_*` files, vector masters) or the
+**brand generator scripts** in `Na_logo/`, nor to **UI/marketing screenshots**.
+Those are proprietary; see [BRAND.md](./BRAND.md),
+[assets/brand/LICENSE](./assets/brand/LICENSE), and
 [assets/ui/LICENSE](./assets/ui/LICENSE).
 
 ---

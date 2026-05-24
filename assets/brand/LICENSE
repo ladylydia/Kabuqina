@@ -1,16 +1,27 @@
 Copyright (c) 2026 ladylydia <lilyreso@gmail.com>
 https://github.com/ladylydia
 
-All visual assets identified as Kabuqina brand assets in this repository,
-including but not limited to the Kabuqina / 卡布奇娜 name, wordmarks, logos,
-mascot (including the coffee-cup companion), product icons, favicons, and
-app icon sets, are proprietary and protected by copyright and trademark law.
+All visual assets and brand tooling identified as Kabuqina brand assets in this
+repository, including but not limited to:
+
+- The Kabuqina / 卡布奇娜 name, wordmarks, and logos (kabuqina_na_*)
+- The coffee-cup mascot and derivative exports (kabuqina_mascot*, mascot_*)
+- Product icons, favicons, social preview images, and app icon sets (including
+  tauri/icons/ generated from brand sources)
+- Vector masters (e.g. kabuqina_mascot.svg) and raster distribution copies under
+  Na_logo/ and web/public/
+- Brand asset generator scripts in Na_logo/ (generate_mascot.py,
+  generate_na_mark.py, fix_mascot_png_alpha.py), including their geometry,
+  palette definitions, export parameters, and generated output
+
+are proprietary and protected by copyright and trademark law.
 
 They are NOT covered by the MIT License governing the source code in this
 repository. See the root LICENSE file and BRAND.md for the split.
 
-You may NOT use, reproduce, modify, or distribute these brand assets without
-prior written permission, except as required to run an unmodified copy of the
-official Kabuqina application binary you obtained from an authorized source.
+You may NOT use, reproduce, modify, or distribute these brand assets or generator
+scripts without prior written permission, except as required to run an unmodified
+copy of the official Kabuqina application binary you obtained from an authorized
+source.
 
 For licensing inquiries: lilyreso@gmail.com

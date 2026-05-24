@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 ladylydia. All Rights Reserved.
+# NOT MIT — proprietary brand tooling. See assets/brand/LICENSE.
 """Remove baked checkerboard / flat backdrop from mascot PNG exports."""
 
 from __future__ import annotations
