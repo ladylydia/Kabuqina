@@ -101,7 +101,28 @@ def _scale(layout: Layout, size: int) -> dict[str, float]:
     return {k: getattr(layout, k) * s for k in layout.__dataclass_fields__}
 
 
-def render_svg(layout: Layout = LAYOUT) -> str:
+def render_cup_defs(id_prefix: str) -> str:
+    p = id_prefix
+    return f"""
+    <linearGradient id="{p}bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{_hex(COLORS['body_top'])}"/>
+      <stop offset="45%" stop-color="{_hex(COLORS['body_mid'])}"/>
+      <stop offset="100%" stop-color="{_hex(COLORS['body_bottom'])}"/>
+    </linearGradient>
+    <linearGradient id="{p}rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="{_hex(COLORS['rim_top'])}"/>
+      <stop offset="100%" stop-color="{_hex(COLORS['rim_bottom'])}"/>
+    </linearGradient>
+    <radialGradient id="{p}latteGrad" cx="50%" cy="32%" rx="46%" ry="58%">
+      <stop offset="0%" stop-color="{_hex(COLORS['latte_center'])}"/>
+      <stop offset="35%" stop-color="{_hex(COLORS['latte_mid'])}"/>
+      <stop offset="68%" stop-color="{_hex(COLORS['latte_outer'])}"/>
+      <stop offset="100%" stop-color="{_hex(COLORS['latte_edge'])}"/>
+    </radialGradient>"""
+
+
+def render_cup_shapes(id_prefix: str, layout: Layout = LAYOUT, *, steam: bool = False) -> str:
+    p = id_prefix
     rim_x, rim_w = _rim_box(layout)
     g = _scale(layout, 100)
     bx, by, bw, bh, br = g["body_x"], g["body_y"], g["body_w"], g["body_h"], g["body_br"]
@@ -137,41 +158,44 @@ def render_svg(layout: Layout = LAYOUT) -> str:
         f"{hx:.2f} {hy + hh * 0.88:.2f}"
     )
 
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Kabuqina mascot">
-  <title>Kabuqina mascot</title>
-  <defs>
-    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="{_hex(COLORS['body_top'])}"/>
-      <stop offset="45%" stop-color="{_hex(COLORS['body_mid'])}"/>
-      <stop offset="100%" stop-color="{_hex(COLORS['body_bottom'])}"/>
-    </linearGradient>
-    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="{_hex(COLORS['rim_top'])}"/>
-      <stop offset="100%" stop-color="{_hex(COLORS['rim_bottom'])}"/>
-    </linearGradient>
-    <radialGradient id="latteGrad" cx="50%" cy="32%" rx="46%" ry="58%">
-      <stop offset="0%" stop-color="{_hex(COLORS['latte_center'])}"/>
-      <stop offset="35%" stop-color="{_hex(COLORS['latte_mid'])}"/>
-      <stop offset="68%" stop-color="{_hex(COLORS['latte_outer'])}"/>
-      <stop offset="100%" stop-color="{_hex(COLORS['latte_edge'])}"/>
-    </radialGradient>
-  </defs>
+    steam_markup = ""
+    if steam:
+        steam_markup = """
+    <g opacity="0.88">
+      <ellipse cx="28" cy="8" rx="5.5" ry="13" fill="rgba(255,255,255,0.72)"/>
+      <ellipse cx="52" cy="12" rx="4.5" ry="11" fill="rgba(255,255,255,0.62)"/>
+      <ellipse cx="74" cy="9" rx="5" ry="12" fill="rgba(255,255,255,0.68)"/>
+    </g>"""
+
+    return f"""
   <path d="{handle_path}" fill="none" stroke="{_hex(COLORS['handle'])}" stroke-width="{hs:.2f}"
         stroke-linecap="round"/>
-  <path d="{body_path}" fill="url(#bodyGrad)" stroke="{_hex(COLORS['body_border'][:3])}"
+  <path d="{body_path}" fill="url(#{p}bodyGrad)" stroke="{_hex(COLORS['body_border'][:3])}"
         stroke-opacity="0.32" stroke-width="0.35"/>
   <rect x="{rx:.2f}" y="{ry:.2f}" width="{rw:.2f}" height="{rh:.2f}" rx="{rh / 2:.2f}"
-        fill="url(#rimGrad)" stroke="{_hex(COLORS['rim_border'][:3])}" stroke-opacity="0.24"
+        fill="url(#{p}rimGrad)" stroke="{_hex(COLORS['rim_border'][:3])}" stroke-opacity="0.24"
         stroke-width="0.3"/>
   <ellipse cx="{latte_x + latte_w / 2:.2f}" cy="{latte_y + latte_h / 2:.2f}"
-           rx="{latte_w / 2:.2f}" ry="{latte_h / 2:.2f}" fill="url(#latteGrad)"/>
+           rx="{latte_w / 2:.2f}" ry="{latte_h / 2:.2f}" fill="url(#{p}latteGrad)"/>
   <ellipse cx="{blx:.2f}" cy="{by_bl:.2f}" rx="{blw / 2:.2f}" ry="{blh / 2:.2f}"
            fill="{_hex(COLORS['blush'][:3])}" fill-opacity="0.32"/>
   <ellipse cx="{brx:.2f}" cy="{by_bl:.2f}" rx="{blw / 2:.2f}" ry="{blh / 2:.2f}"
            fill="{_hex(COLORS['blush'][:3])}" fill-opacity="0.32"/>
   <circle cx="{ex:.2f}" cy="{ey:.2f}" r="{er:.2f}" fill="{_hex(COLORS['eye'])}"/>
-  <circle cx="{ex + eg:.2f}" cy="{ey:.2f}" r="{er:.2f}" fill="{_hex(COLORS['eye'])}"/>
+  <circle cx="{ex + eg:.2f}" cy="{ey:.2f}" r="{er:.2f}" fill="{_hex(COLORS['eye'])}"/>{steam_markup}"""
+
+
+def render_cup_group(id_prefix: str, layout: Layout = LAYOUT, *, steam: bool = False) -> tuple[str, str]:
+    return render_cup_defs(id_prefix), render_cup_shapes(id_prefix, layout, steam=steam)
+
+
+def render_svg(layout: Layout = LAYOUT) -> str:
+    defs, shapes = render_cup_group("", layout)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Kabuqina mascot">
+  <title>Kabuqina mascot</title>
+  <defs>{defs}
+  </defs>{shapes}
 </svg>
 """
 

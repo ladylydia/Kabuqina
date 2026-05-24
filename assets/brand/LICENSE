@@ -6,13 +6,17 @@ repository, including but not limited to:
 
 - The Kabuqina / 卡布奇娜 name, wordmarks, and logos (kabuqina_na_*)
 - The coffee-cup mascot and derivative exports (kabuqina_mascot*, mascot_*)
+- Scene and coaster vector composites (kabuqina_hero_scene.svg,
+  kabuqina_pill_scene.svg, kabuqina_coaster_hero.svg, kabuqina_coaster_pill.svg,
+  kabuqina_social_preview.svg, and related exports)
 - Product icons, favicons, social preview images, and app icon sets (including
   tauri/icons/ generated from brand sources)
 - Vector masters (e.g. kabuqina_mascot.svg) and raster distribution copies under
   Na_logo/ and web/public/
 - Brand asset generator scripts in Na_logo/ (generate_mascot.py,
-  generate_na_mark.py, fix_mascot_png_alpha.py), including their geometry,
-  palette definitions, export parameters, and generated output
+  generate_mascot_scenes.py, generate_na_mark.py, fix_mascot_png_alpha.py),
+  including their geometry, palette definitions, export parameters, and
+  generated output
 
 are proprietary and protected by copyright and trademark law.
 

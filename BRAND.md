@@ -5,7 +5,7 @@ Kabuqina uses a **dual license** model:
 | What | License | Where |
 | ---- | ------- | ----- |
 | **Source code** (Rust, Python policy layer, web app, scripts, docs as text) | [MIT](./LICENSE) | Repository root |
-| **Brand assets** (name, logos, mascot, icons, `Na_logo/` generator scripts) | [All Rights Reserved](./assets/brand/LICENSE) | [assets/brand/](./assets/brand/) |
+| **Brand assets** (name, logos, mascot, scene/coaster SVGs, icons, `Na_logo/` generator scripts) | [All Rights Reserved](./assets/brand/LICENSE) | [assets/brand/](./assets/brand/) |
 | **UI screenshots / promo images** | [All Rights Reserved](./assets/ui/LICENSE) | [assets/ui/](./assets/ui/) |
 | **Hermes Agent snapshot** | MIT (upstream) | [hermes_core/LICENSE](./hermes_core/LICENSE) |
 
