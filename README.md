@@ -39,7 +39,7 @@
 ### 界面截图
 
 <p align="center">
-  <img src="Na_logo/chat_Chinese.png" alt="壳内对话界面（中文）" width="520" /><br/>
+  <img src="Na_logo/chat_Chinese.png" alt="壳内对话界面（中文）" width="860" /><br/>
   <sub>壳内对话（<code>/chat</code>）</sub>
 </p>
 
@@ -185,7 +185,7 @@ Unsigned builds may trigger SmartScreen — see [code-signing.md](./docs/code-si
 ### Screenshots
 
 <p align="center">
-  <img src="Na_logo/chat_English.png" alt="In-shell chat (English)" width="520" /><br/>
+  <img src="Na_logo/chat_English.png" alt="In-shell chat (English)" width="860" /><br/>
   <sub>In-shell chat (<code>/chat</code>)</sub>
 </p>
 
