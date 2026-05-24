@@ -8,9 +8,9 @@ import { useI18n } from "../lib/i18n";
 
 /** Pixels²: move more than sqrt(this) before we call `startDragging`, so plain double‑clicks open main. */
 const COMPACT_DRAG_SQ_THRESHOLD = 7 * 7;
-/** Match `.kq-companion-pill-scene` (5.4rem × 5.35rem). */
-const PILL_REM_W = 5.4;
-const PILL_REM_H = 5.35;
+/** Match `.kq-companion-pill-scene` (6.2rem × 6.15rem). */
+const PILL_REM_W = 6.2;
+const PILL_REM_H = 6.15;
 
 function rootFontPx(): number {
   const px = parseFloat(getComputedStyle(document.documentElement).fontSize);

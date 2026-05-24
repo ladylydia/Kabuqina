@@ -4,6 +4,7 @@ import { useI18n } from "../lib/i18n";
 import type { UiMsg } from "./chat-api";
 import { AgentProgress } from "./AgentProgress";
 import { ChatMessage } from "./ChatMessage";
+import { AssistantAvatar } from "../components/AssistantAvatar";
 import { CompanionCup } from "../components/CompanionCup";
 import { cn } from "../lib/cn";
 import type { AgentProgressState } from "./hooks/useAgentProgress";
@@ -19,9 +20,7 @@ interface ChatMessageListProps {
 function AssistantStreamShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 justify-start">
-      <div className="kq-assistant-avatar" aria-hidden>
-        <CompanionCup variant="brand" />
-      </div>
+      <AssistantAvatar labeled={false} />
       <div className="kq-chat-assistant-column">{children}</div>
     </div>
   );

@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $Repo) { $Repo = "your-org/hermesdesk" }
+if (-not $Repo) { $Repo = "Kabuqina/Kabuqina" }
 
 $msi = Get-ChildItem -Path $BundleDir -Filter "*.msi" | Select-Object -First 1
 $sig = Get-ChildItem -Path $BundleDir -Filter "*.msi.sig" | Select-Object -First 1

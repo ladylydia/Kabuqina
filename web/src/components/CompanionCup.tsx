@@ -25,8 +25,8 @@ export function CompanionCup({
       )}
       aria-hidden
     >
-      <div className="kq-companion-cup-body" />
       <div className="kq-companion-cup-handle" />
+      <div className="kq-companion-cup-body" />
       <div className="kq-companion-cup-face">
         <div className="kq-companion-cup-eye" />
         <div className="kq-companion-cup-eye" />

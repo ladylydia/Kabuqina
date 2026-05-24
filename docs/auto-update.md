@@ -27,7 +27,7 @@ cargo tauri signer generate -w ~/.tauri/Kabuqina.key
 3. The action attaches `*.msi`, `*.msi.sig`, and `latest.json` to the
    GitHub release.
 4. Existing installs check
-   `https://github.com/your-org/Kabuqina/releases/latest/download/latest.json`
+   `https://github.com/Kabuqina/Kabuqina/releases/latest/download/latest.json`
    on launch and from the tray menu, then prompt the user with a small
    "Update Kabuqina?" dialog.
 

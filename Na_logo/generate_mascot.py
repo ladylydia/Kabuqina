@@ -45,9 +45,7 @@ class Layout:
     body_w: float = 0.675
     body_h: float = 0.59
     body_br: float = 0.31
-    rim_x: float = 0.072
     rim_y: float = 0.16
-    rim_w: float = 0.725
     rim_h: float = 0.21
     handle_x: float = 0.68
     handle_y: float = 0.37
@@ -67,6 +65,13 @@ class Layout:
 
 
 LAYOUT = Layout()
+
+# Rim sits ±0.05rem on the 2rem CSS cup → 0.025 per side on a 0–1 canvas.
+RIM_OVERHANG = 0.025
+
+
+def _rim_box(layout: Layout) -> tuple[float, float]:
+    return layout.body_x - RIM_OVERHANG, layout.body_w + 2 * RIM_OVERHANG
 
 
 def _hex(rgb: tuple[int, ...]) -> str:
@@ -95,9 +100,10 @@ def _scale(layout: Layout, size: int) -> dict[str, float]:
 
 
 def render_svg(layout: Layout = LAYOUT) -> str:
+    rim_x, rim_w = _rim_box(layout)
     g = _scale(layout, 100)
     bx, by, bw, bh, br = g["body_x"], g["body_y"], g["body_w"], g["body_h"], g["body_br"]
-    rx, ry, rw, rh = g["rim_x"], g["rim_y"], g["rim_w"], g["rim_h"]
+    rx, ry, rw, rh = rim_x * 100, g["rim_y"], rim_w * 100, g["rim_h"]
     hx, hy, hw, hh = g["handle_x"], g["handle_y"], g["handle_w"], g["handle_h"]
     hs = g["handle_stroke"]
     ex = g["eye_left_x"]
@@ -205,6 +211,7 @@ def _draw_handle(draw: ImageDraw.ImageDraw, size: int, layout: Layout) -> None:
 def render_png(size: int, layout: Layout = LAYOUT) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     g = _scale(layout, size)
+    rim_x, rim_w = _rim_box(layout)
 
     _draw_handle(ImageDraw.Draw(img), size, layout)
 
@@ -223,7 +230,7 @@ def render_png(size: int, layout: Layout = LAYOUT) -> Image.Image:
     img = Image.alpha_composite(img, body_layer)
 
     draw = ImageDraw.Draw(img)
-    rx, ry, rw, rh = g["rim_x"], g["rim_y"], g["rim_w"], g["rim_h"]
+    rx, ry, rw, rh = rim_x * size, g["rim_y"], rim_w * size, g["rim_h"]
     draw.rounded_rectangle(
         (rx, ry, rx + rw, ry + rh),
         radius=rh / 2,

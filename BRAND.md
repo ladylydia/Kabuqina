@@ -30,4 +30,4 @@ and [assets/ui/README.md](./assets/ui/README.md), not by directory name alone.
 ## Licensing contact
 
 Email: **lilyreso@gmail.com**  
-GitHub: [@ladylydia](https://github.com/ladylydia) · issues on [Kabuqina](https://github.com/ladylydia/Kabuqina/issues) (label: licensing)
+GitHub: [@ladylydia](https://github.com/ladylydia) · issues on [Kabuqina](https://github.com/Kabuqina/Kabuqina/issues) (label: licensing)

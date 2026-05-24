@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { Check, Copy, Volume2 } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { CompanionCup } from "../components/CompanionCup";
+import { AssistantAvatar } from "../components/AssistantAvatar";
 import { cmdTtsSpeak, type DeskAttachmentPayload } from "./chat-api";
 
 const ChatMarkdown = lazy(() => import("./ChatMarkdown"));
@@ -355,11 +355,7 @@ export function ChatMessage({ role, text, attachments, model, timestamp, streami
 
   return (
     <div className={cn("flex items-start gap-3", isUser ? "justify-end" : "justify-start")}>
-      {!isUser && (
-        <div className="kq-assistant-avatar" aria-label="卡布奇娜">
-          <CompanionCup variant="brand" />
-        </div>
-      )}
+      {!isUser && <AssistantAvatar />}
       <div
         className={cn(
           "kq-chat-assistant-column min-w-0 rounded-2xl px-4 py-2.5",

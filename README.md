@@ -5,7 +5,7 @@
 **Windows 上好安装的桌面 AI 助手** · 向导配置 · BYO API Key · 基于 [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-%230078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/ladylydia/Kabuqina)
+[![Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-%230078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/Kabuqina/Kabuqina)
 [![Tauri](https://img.shields.io/badge/Tauri-2-ffc131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![App](https://img.shields.io/badge/app-0.1.0-6c757d?style=flat-square)](./tauri/tauri.conf.json)
 
@@ -39,13 +39,8 @@
 ### 界面截图
 
 <p align="center">
-  <img src="Na_logo/chat_Chiness.png" alt="壳内对话界面（中文）" width="520" /><br/>
+  <img src="Na_logo/chat_Chinese.png" alt="壳内对话界面（中文）" width="520" /><br/>
   <sub>壳内对话（<code>/chat</code>）</sub>
-</p>
-
-<p align="center">
-  <img src="Na_logo/API_Chinese.png" alt="API Key 配置向导（中文）" width="520" /><br/>
-  <sub>LLM / API Key 引导</sub>
 </p>
 
 ### 安装（最终用户）
@@ -126,7 +121,7 @@ Kabuqina/
 **环境：** Rust **1.80+**、Node **20+**、PowerShell **7+**。Release 建议使用 **Developer PowerShell**（MSVC）；说明见 [embedded-python-bundled](./docs/embedded-python-bundled.md)。
 
 ```powershell
-git clone https://github.com/ladylydia/Kabuqina.git
+git clone https://github.com/Kabuqina/Kabuqina.git
 cd Kabuqina
 
 # Python 运行时（首次会下载独立 CPython）；可选：验证加 -Verify
@@ -194,11 +189,6 @@ Unsigned builds may trigger SmartScreen — see [code-signing.md](./docs/code-si
   <sub>In-shell chat (<code>/chat</code>)</sub>
 </p>
 
-<p align="center">
-  <img src="Na_logo/API_English.png" alt="API key onboarding (English)" width="520" /><br/>
-  <sub>LLM / API key onboarding</sub>
-</p>
-
 ### At a glance
 
 |           |                                                                                                                 |
@@ -264,7 +254,7 @@ Kabuqina/
 **Needs:** Rust **1.80+**, Node **20+**, PowerShell **7+**. Prefer **Developer PowerShell** for release builds — [embedded-python-bundled.md](./docs/embedded-python-bundled.md).
 
 ```powershell
-git clone https://github.com/ladylydia/Kabuqina.git
+git clone https://github.com/Kabuqina/Kabuqina.git
 cd Kabuqina
 
 .\python\build_bundle.ps1

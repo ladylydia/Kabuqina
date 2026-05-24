@@ -79,7 +79,7 @@
     "updater": {
       "active": false,
       "endpoints": [
-        "https://github.com/ladylydia/Kabuqina/releases/latest/download/latest.json"
+        "https://github.com/Kabuqina/Kabuqina/releases/latest/download/latest.json"
       ],
       "dialog": false,
       "pubkey": ""

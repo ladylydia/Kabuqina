@@ -165,11 +165,16 @@ assert.doesNotMatch(
   "Desktop organizing should not regress to a prompt-only shortcut.",
 );
 
+const assistantAvatarSource = fs.readFileSync(
+  new URL("../components/AssistantAvatar.tsx", import.meta.url),
+  "utf8",
+);
 assert.match(
   chatMessageSource,
-  /CompanionCup[\s\S]*kq-assistant-avatar/,
-  "Assistant messages should render a simple Xiaona avatar for a more companionable feel.",
+  /<AssistantAvatar/,
+  "Assistant messages should render the mascot avatar beside the bubble.",
 );
+assert.match(assistantAvatarSource, /kabuqina_mascot\.svg[\s\S]*kq-assistant-avatar/);
 
 assert.doesNotMatch(
   chatMessageSource,
@@ -193,6 +198,9 @@ const chatInputSource = fs.readFileSync(new URL("./ChatInput.tsx", import.meta.u
 const appScaffoldSource = fs.readFileSync(new URL("../components/AppScaffold.tsx", import.meta.url), "utf8");
 const titleBarSource = fs.readFileSync(new URL("../components/WindowTitleBar.tsx", import.meta.url), "utf8");
 const indexCssSource = fs.readFileSync(new URL("../index.css", import.meta.url), "utf8");
+
+assert.match(indexCssSource, /kq-assistant-avatar-image[\s\S]*object-fit:\s*contain/);
+assert.match(indexCssSource, /kq-assistant-avatar-image[\s\S]*drop-shadow/);
 
 assert.match(
   chatPageSource,
@@ -232,8 +240,14 @@ assert.match(
 
 assert.match(
   chatPageSource,
-  /PanelLeftOpen[\s\S]*chat\.activeWork/,
-  "The left-rail expand button should sit on the left side of the center header.",
+  /PanelLeftOpen/,
+  "The left-rail expand button should remain available in the center header.",
+);
+
+assert.doesNotMatch(
+  chatPageSource,
+  /chat\.activeWork/,
+  "The center header should not render the redundant active-work label.",
 );
 
 assert.doesNotMatch(

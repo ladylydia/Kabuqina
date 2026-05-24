@@ -24,13 +24,13 @@ assert.match(pillSceneSource, /kq-companion-pill-cup[\s\S]*<CompanionCup/, "Pill
 
 assert.match(
   cupSource,
-  /kq-companion-cup-body[\s\S]*kq-companion-cup-handle[\s\S]*kq-companion-cup-face/,
+  /kq-companion-cup-handle[\s\S]*kq-companion-cup-body[\s\S]*kq-companion-cup-face/,
   "CompanionCup should render the Kabuqina coffee cup structure.",
 );
 
 assert.match(
   companionSource,
-  /PILL_REM_W = 5\.4[\s\S]*PILL_REM_H = 5\.35/,
+  /PILL_REM_W = 6\.2[\s\S]*PILL_REM_H = 6\.15/,
   "Pill window size should track the pill scene (cup + compact mat).",
 );
 

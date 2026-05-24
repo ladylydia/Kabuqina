@@ -22,7 +22,7 @@
         stroke-linecap="round"/>
   <path d="M 14.00 27.00 L 14.00 55.00 Q 14.00 86.00 45.00 86.00 L 50.50 86.00 Q 81.50 86.00 81.50 55.00 L 81.50 27.00 Z" fill="url(#bodyGrad)" stroke="#6b5580"
         stroke-opacity="0.32" stroke-width="0.35"/>
-  <rect x="7.20" y="16.00" width="72.50" height="21.00" rx="10.50"
+  <rect x="11.50" y="16.00" width="72.50" height="21.00" rx="10.50"
         fill="url(#rimGrad)" stroke="#6b5580" stroke-opacity="0.24"
         stroke-width="0.3"/>
   <ellipse cx="47.75" cy="34.67"

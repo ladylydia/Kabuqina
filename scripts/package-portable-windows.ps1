@@ -1,6 +1,6 @@
 # scripts/package-portable-windows.ps1
 #
-# Stage a unzip-and-run Kabuqina folder + .zip - no MSI/NSIS.
+# Stage a unzip-and-run Kabuqina folder + .7z - no MSI/NSIS.
 # Requires a release build: `cd tauri; cargo build --release` (or partial `cargo tauri build`
 # after the Rust link step succeeds, even if the WiX/MSI step fails).
 #
@@ -11,7 +11,7 @@ param(
     [string]$RustReleaseDir = "",
     # Fresh Python bundle from build_bundle.ps1 (preferred over stale tauri/target copy).
     [string]$PythonRuntimeDir = "",
-    # Where to drop Kabuqina-<ver>-win64-portable.zip
+    # Where to drop Kabuqina-<ver>-win64-portable.7z
     [string]$OutDir = ""
 )
 
@@ -70,6 +70,20 @@ function Copy-DirFast {
     if ($code -gt 7) {
         throw "robocopy failed copying $Source to $Destination (exit code $code)."
     }
+}
+
+function Resolve-7Zip {
+    $cmd = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+
+    foreach ($candidate in @(
+        (Join-Path ${env:ProgramFiles} "7-Zip\7z.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "7-Zip\7z.exe")
+    )) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+
+    throw "7z.exe not found. Install 7-Zip or add 7z.exe to PATH, then rerun this script."
 }
 
 $root = [string](Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -159,17 +173,21 @@ foreach ($docName in @("README.md", "LICENSE")) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$zipPath = Join-Path $OutDir "$pkgBasename.zip"
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -Force -LiteralPath $zipPath
+$sevenZip = Resolve-7Zip
+$archivePath = Join-Path $OutDir "$pkgBasename.7z"
+if (Test-Path -LiteralPath $archivePath) {
+    Remove-Item -Force -LiteralPath $archivePath
 }
 
-Write-Host "Compressing to $zipPath" -ForegroundColor Cyan
-Compress-Archive -Path $itemDir -DestinationPath $zipPath -CompressionLevel Optimal
+Write-Host "Compressing to $archivePath" -ForegroundColor Cyan
+& $sevenZip a -t7z -mx=9 -mmt=on $archivePath $itemDir | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "7-Zip failed creating $archivePath (exit code $LASTEXITCODE)."
+}
 
 Write-Host ""
 Write-Host "Portable package ready." -ForegroundColor Green
 Write-Host "  Folder: $itemDir"
-Write-Host "  Zip:    $zipPath"
+Write-Host "  7z:     $archivePath"
 Write-Host ""
-Write-Host "Recipients: unzip anywhere and run kabuqina.exe (Windows 10 or 11 x64; WebView2 required)." -ForegroundColor DarkGray
+Write-Host "Recipients: extract anywhere and run kabuqina.exe (Windows 10 or 11 x64; WebView2 required)." -ForegroundColor DarkGray

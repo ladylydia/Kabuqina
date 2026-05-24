@@ -466,9 +466,6 @@ export function ChatPage() {
                   <PanelLeftOpen className="h-4 w-4" />
                 </button>
               )}
-              <p className="truncate text-xs font-medium uppercase text-[var(--kq-color-muted)] dark:text-zinc-500">
-                {t("chat.activeWork")}
-              </p>
             </div>
             <div className="flex items-center gap-1">
               {!workbench.showRightPanel && (
