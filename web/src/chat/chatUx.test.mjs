@@ -352,8 +352,8 @@ for (const className of ["kq-titlebar-brand", "kq-titlebar-link", "kq-titlebar-l
 
 assert.match(
   messageListSource,
-  /productName[\s\S]*kq-empty-title[\s\S]*\u6162\u6162\u6765\uff0c\u5c0f\u5a1c\u966a\u4f60\u6574\u7406\u601d\u8def[\s\S]*kq-companion-hero-mat[\s\S]*kq-companion-big-cup/,
-  "The empty chat state should show Kabuqina as the title with Xiaona's companion subtitle.",
+  /productName[\s\S]*kq-empty-title[\s\S]*\u6162\u6162\u6765\uff0c\u5c0f\u5a1c\u966a\u4f60\u6574\u7406\u601d\u8def[\s\S]*kabuqina_hero_scene\.svg[\s\S]*kq-companion-hero-scene/,
+  "The empty chat state should show Kabuqina and render the exported hero scene SVG.",
 );
 
 assert.match(

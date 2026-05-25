@@ -10,22 +10,23 @@ const chatPageSource = fs.readFileSync(new URL("../chat/ChatPage.tsx", import.me
 const mainSource = fs.readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
 const indexCssSource = fs.readFileSync(new URL("../index.css", import.meta.url), "utf8");
 const titleBarSource = fs.readFileSync(new URL("../components/WindowTitleBar.tsx", import.meta.url), "utf8");
-const cupSource = fs.readFileSync(new URL("../components/CompanionCup.tsx", import.meta.url), "utf8");
 
 assert.doesNotMatch(
   companionSource,
   /companion_compact\.png|intrinsicLogicalDimsForAsset|<img/,
-  "Compact pill should render the CSS coffee cup, not a PNG mascot.",
+  "Compact pill should render the CSS scene, not a PNG mascot.",
 );
 
 assert.match(companionSource, /CompanionPillScene/, "Companion window should reuse the shared pill scene.");
-assert.match(pillSceneSource, /kq-companion-pill-mat/, "Pill scene should include a coaster mat wrapper.");
-assert.match(pillSceneSource, /kq-companion-pill-cup[\s\S]*<CompanionCup/, "Pill cup should sit above the mat.");
-
 assert.match(
-  cupSource,
-  /kq-companion-cup-handle[\s\S]*kq-companion-cup-body[\s\S]*kq-companion-cup-face/,
-  "CompanionCup should render the Kabuqina coffee cup structure.",
+  pillSceneSource,
+  /kq-companion-pill-mat[\s\S]*CompanionCup[\s\S]*variant="brand"[\s\S]*steam/,
+  "Pill scene should render the original CSS mat and brand cup.",
+);
+assert.doesNotMatch(
+  pillSceneSource,
+  /KabuqinaSceneSvg/,
+  "Pill scene should not use the SVG pill scene.",
 );
 
 assert.match(
@@ -38,12 +39,6 @@ assert.match(
   indexCssSource,
   /kq-companion-pill-float/,
   "Pill scene should use a gentle floating animation.",
-);
-
-assert.match(
-  indexCssSource,
-  /kq-companion-pill-mat::before/,
-  "Pill scene should include a compact gingham coaster.",
 );
 
 assert.match(

@@ -1,0 +1,49 @@
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { KabuqinaSceneSvg } from "./KabuqinaSceneSvg";
+
+const brandDir = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.resolve(brandDir, "../../../public");
+
+const heroTitle = "Kabuqina chat hero — cup on gingham coaster";
+const pillTitle = "Kabuqina companion pill";
+
+const heroMarkup = renderToStaticMarkup(
+  createElement(KabuqinaSceneSvg, {
+    variant: "hero",
+    embedded: true,
+    decorative: false,
+    title: heroTitle,
+    "aria-label": heroTitle,
+  }),
+);
+
+const pillMarkup = renderToStaticMarkup(
+  createElement(KabuqinaSceneSvg, {
+    variant: "pill",
+    embedded: true,
+    decorative: false,
+    title: pillTitle,
+    "aria-label": pillTitle,
+  }),
+);
+
+function formatSvgMarkup(markup: string): string {
+  return markup
+    .replace(/></g, ">\n<")
+    .replace(/(<\/(?:svg|defs|g)>)/g, "$1\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+const heroSvg = `<?xml version="1.0" encoding="UTF-8"?>\n${formatSvgMarkup(heroMarkup)}\n`;
+const pillSvg = `<?xml version="1.0" encoding="UTF-8"?>\n${formatSvgMarkup(pillMarkup)}\n`;
+const heroPath = path.join(publicDir, "kabuqina_hero_scene.svg");
+const pillPath = path.join(publicDir, "kabuqina_pill_scene.svg");
+
+writeFileSync(heroPath, heroSvg, "utf8");
+writeFileSync(pillPath, pillSvg, "utf8");
+console.log(`Wrote ${heroPath}`);
+console.log(`Wrote ${pillPath}`);

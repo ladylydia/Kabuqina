@@ -24,6 +24,7 @@ import { EmailPage } from "./advanced/pages/EmailPage";
 import { ScheduledTasksPage } from "./advanced/pages/ScheduledTasks";
 import { OverlayWindow } from "./capture/OverlayWindow";
 import { CompanionWindow } from "./companion/CompanionWindow";
+import { BrandSvgPreview } from "./components/brand/BrandSvgPreview";
 import { applyFontSize } from "./lib/ui-prefs";
 import "./index.css";
 
@@ -86,6 +87,7 @@ if (windowLabel === "capture-overlay") {
                 <Route path="/settings/email" element={<EmailPage />} />
                 <Route path="/settings/cron" element={<ScheduledTasksPage />} />
                 <Route path="/chat" element={<ChatPage />} />
+                <Route path="/brand-svg-preview" element={<BrandSvgPreview />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <DesktopDeliveryNotifier />

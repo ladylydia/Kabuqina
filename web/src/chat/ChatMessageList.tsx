@@ -5,7 +5,6 @@ import type { UiMsg } from "./chat-api";
 import { AgentProgress } from "./AgentProgress";
 import { ChatMessage } from "./ChatMessage";
 import { AssistantAvatar } from "../components/AssistantAvatar";
-import { CompanionCup } from "../components/CompanionCup";
 import { cn } from "../lib/cn";
 import type { AgentProgressState } from "./hooks/useAgentProgress";
 
@@ -86,11 +85,14 @@ function EmptyState({
             <span>{locale === "zh" ? "慢慢来，小娜陪你整理思路" : `${greetingParts[0]}${brand}${greetingParts[1]}`}</span>
             <span className="kq-hero-line" aria-hidden />
           </p>
-          <div className="kq-companion-hero-mat">
-            <div className="kq-companion-big-cup">
-              <CompanionCup variant="brand" steam />
-            </div>
-          </div>
+          <img
+            src="/kabuqina_hero_scene.svg"
+            alt="Kabuqina chat hero — cup on gingham coaster"
+            className="kq-companion-hero-scene"
+            width={775}
+            height={685}
+            decoding="async"
+          />
         </div>
         <div
           className="mt-3 grid w-full max-w-2xl grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2 justify-items-stretch sm:max-w-3xl"

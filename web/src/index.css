@@ -471,6 +471,13 @@
     margin: 0.85rem auto 0;
     perspective: 480px;
   }
+  .kq-companion-hero-scene {
+    display: block;
+    width: 8.85rem;
+    height: auto;
+    margin: 0.85rem auto 0;
+    overflow: visible;
+  }
   /* Gingham coaster — tilted plane with visible thickness */
   .kq-companion-hero-mat::before {
     content: "";
